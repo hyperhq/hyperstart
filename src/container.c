@@ -131,8 +131,10 @@ static int container_setup_mount(struct hyper_container *container)
 		return -1;
 	}
 
-	unlink("/dev/ptmx");
-	link("/dev/pts/ptmx", "/dev/ptmx");
+	if (unlink("/dev/ptmx") < 0)
+		perror("remove /dev/ptmx failed");
+	if (symlink("/dev/pts/ptmx", "/dev/ptmx") < 0)
+		perror("link /dev/pts/ptmx to /dev/ptmx failed");
 
 	for (i = 0; i < container->maps_num; i++) {
 		struct stat st;
