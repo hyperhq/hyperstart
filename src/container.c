@@ -411,6 +411,8 @@ int hyper_start_container(struct hyper_container *container)
 		goto fail;
 	}
 
+	container->exec.pid = pid;
+
 	/* wait for ready message */
 	if (hyper_get_type_block(arg.pipe[0], &type) < 0 || type != READY) {
 		fprintf(stdout, "wait for container started failed\n");
@@ -420,7 +422,6 @@ int hyper_start_container(struct hyper_container *container)
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
 
-	container->exec.pid = pid;
 	fprintf(stdout, "container %s init pid is %d\n", container->id, pid);
 	return 0;
 

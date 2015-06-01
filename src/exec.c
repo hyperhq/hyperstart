@@ -132,7 +132,7 @@ int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 		return -1;
 	}
 
-	if (ioctl(fd, TIOCSCTTY, NULL) < 0) {
+	if (e->seq && (ioctl(fd, TIOCSCTTY, NULL) < 0)) {
 		perror("ioctl pty device for execcmd failed");
 		return -1;
 	}
