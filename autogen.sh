@@ -60,5 +60,5 @@ autoheader
 automake --add-missing
 
 echo
-echo "type '$srcdir/configure' and 'make' to compile hyperinit."
+echo "type '$srcdir/configure' and 'make' to compile hyperstart."
 echo
