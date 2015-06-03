@@ -11,6 +11,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include "syscall.h"
 
 #include "hyper.h"
 #include "util.h"
@@ -384,7 +385,7 @@ int hyper_container_execcmd(struct hyper_pod *pod)
 		goto fail;
 	}
 
-	if (setns(fd, CLONE_NEWNS) < 0) {
+	if (syscall(SYS_setns, fd, CLONE_NEWNS) < 0) {
 		perror("enter mnt ns failed");
 		goto fail;
 	}
