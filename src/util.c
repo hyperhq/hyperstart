@@ -22,6 +22,28 @@ char *read_cmdline(void)
 	return NULL;
 }
 
+int hyper_list_dir(char *path)
+{
+	struct dirent **list;
+	struct dirent *dir;
+	int i, num;
+
+	fprintf(stdout, "list %s\n", path);
+	num = scandir(path, &list, NULL, NULL);
+	if (num < 0) {
+		perror("scan path failed");
+		return -1;
+	}
+
+	for (i = 0; i < num; i++) {
+		dir = list[i];
+		fprintf(stdout, "%s get %s\n", path, dir->d_name);
+	}
+
+	free(list);
+	return 0;
+}
+
 int hyper_mkdir(char *hyper_path)
 {
 	struct stat st;
