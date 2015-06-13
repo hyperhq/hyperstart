@@ -316,7 +316,9 @@ void hyper_shutdown(struct hyper_pod *pod)
 
 	hyper_send_msg(ctl.chan.fd, FINISH, pod->c_num * 4, data);
 
-	hyper_unmount_all();
 	hyper_kill_all();
+
+	hyper_unmount_all();
+
 	reboot(LINUX_REBOOT_CMD_POWER_OFF);
 }
