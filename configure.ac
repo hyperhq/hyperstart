@@ -4,6 +4,7 @@
 AC_PREREQ([2.69])
 AC_INIT([hyperstart], [0.1], [www.hyper.sh])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
+AM_EXTRA_RECURSIVE_TARGETS([cbfs])
 AC_CONFIG_SRCDIR([src/init.c])
 AC_CONFIG_HEADERS([config.h])
 
