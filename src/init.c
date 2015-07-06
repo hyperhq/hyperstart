@@ -518,7 +518,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 		return -1;
 	}
 
-	if (mount(pod->tag, "/tmp/hyper/shared", "9p", MS_MGC_VAL, "trans=virtio") < 0) {
+	if (mount(pod->tag, "/tmp/hyper/shared", "9p", MS_MGC_VAL, "trans=virtio,cache=loose") < 0) {
 		perror("fail to mount 9p shared dir");
 		return -1;
 	}
