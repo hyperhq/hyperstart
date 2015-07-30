@@ -8,6 +8,7 @@ initrd-local:
 else
 initrd-local:
 	bash ./make-initrd.sh
-cbfs:
-	bash ./make-initrd.sh cbfs
 endif
+
+cbfs-local:
+	bash ./make-initrd.sh cbfs
