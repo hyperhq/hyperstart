@@ -14,8 +14,9 @@
 #include <sys/reboot.h>
 #include <linux/reboot.h>
 
-#include "net.h"
 #include "util.h"
+#include "hyper.h"
+#include "../config.h"
 
 char *read_cmdline(void)
 {
@@ -86,6 +87,102 @@ int hyper_mkdir(char *hyper_path)
 	return 0;
 }
 
+#if WITH_VBOX
+
+#include <termios.h>
+int hyper_open_channel(char *channel, int mode)
+{
+	struct termios term;
+	int fd = open(channel, O_RDWR | O_CLOEXEC | mode);
+	fprintf(stdout, "open %s get %d\n", channel, fd);
+
+	if (fd < 0) {
+		perror("fail to open channel device");
+		return -1;
+	}
+
+	bzero(&term, sizeof(term));
+
+	cfmakeraw(&term);
+	term.c_cflag |= CLOCAL | CREAD| CRTSCTS;
+	term.c_cc[VTIME] = 0;
+	term.c_cc[VMIN] = 0;
+
+	cfsetispeed(&term, B115200);
+	cfsetospeed(&term, B115200);
+
+	tcsetattr(fd, TCSANOW, &term);
+
+	return fd;
+}
+
+static const char *moderror(int err)
+{
+	switch (err) {
+	case ENOEXEC:
+		return "Invalid module format";
+	case ENOENT:
+		return "Unknown symbol in module";
+	case ESRCH:
+		return "Module has wrong symbol version";
+	case EINVAL:
+		return "Invalid parameters";
+	default:
+		return strerror(err);
+	}
+}
+
+extern long init_module (void *, unsigned long, const char *);
+
+int hyper_insmod(char *module)
+{
+	size_t size, offset = 0, rc;
+	struct stat st;
+	char *buf = NULL;
+	int ret;
+
+	int fd = open(module, O_RDONLY);
+	if (fd == -1) {
+		fprintf (stderr, "insmod: open: %s: %m\n", module);
+		return -1;
+	}
+
+	if (fstat(fd, &st) == -1) {
+		perror ("insmod: fstat");
+		goto err;
+	}
+
+	size = st.st_size;
+	buf = malloc(size);
+	if (buf == NULL)
+		goto err;
+
+	do {
+		rc = read(fd, buf + offset, size - offset);
+		if (rc == -1) {
+			perror ("insmod: read");
+			goto err;
+		}
+		offset += rc;
+	} while (offset < size);
+
+	if (init_module(buf, size, "") != 0) {
+		fprintf (stderr, "insmod: init_module: %s: %s\n", module, moderror(errno));
+		goto err;
+	}
+
+	ret = 0;
+out:
+	close(fd);
+	if (buf)
+		free(buf);
+
+	return ret;
+err:
+	ret = -1;
+	goto out;
+}
+#else
 int hyper_open_channel(char *channel, int mode)
 {
 	struct dirent **list;
@@ -133,7 +230,7 @@ int hyper_open_channel(char *channel, int mode)
 		fprintf(stdout, "open hyper channel %s\n", path);
 		fd = open(path, O_RDWR | O_CLOEXEC | mode);
 		if (fd < 0)
-			perror("fail to open channel deice");
+			perror("fail to open channel device");
 
 		break;
 	}
@@ -142,32 +239,20 @@ int hyper_open_channel(char *channel, int mode)
 	return fd;
 }
 
+int hyper_insmod(char *module)
+{
+	return 0;
+}
+#endif
+
 int hyper_open_serial_dev(char *tty)
 {
 	int fd = open(tty, O_RDWR | O_CLOEXEC | O_NOCTTY);
 
-	if (fd < 0) {
+	if (fd < 0)
 		perror("fail to open tty device");
-		return -1;
-	}
 
 	return fd;
-}
-
-int hyper_open_serial(char *tty)
-{
-	char path[256];
-
-	memset(path, 0, sizeof(path));
-
-	if (snprintf(path, sizeof(path), "/dev/%s", tty) < 0) {
-		fprintf(stderr, "get channel device %s path failed\n", tty);
-		return -1;
-	}
-
-	fprintf(stdout, "open hyper tty %s\n", path);
-
-	return hyper_open_serial_dev(path);
 }
 
 int hyper_setfd_cloexec(int fd)
@@ -306,7 +391,7 @@ void hyper_kill_all(void)
 	closedir(dp);
 }
 
-void hyper_shutdown(struct hyper_pod *pod)
+int hyper_send_finish(struct hyper_pod *pod)
 {
 	int i;
 	uint8_t *data = calloc(pod->c_num, 4);
@@ -314,7 +399,12 @@ void hyper_shutdown(struct hyper_pod *pod)
 	for (i = 0; i < pod->c_num; i++)
 		hyper_set_be32(data + (i * 4), pod->c[i].exec.code);
 
-	hyper_send_msg(ctl.chan.fd, FINISH, pod->c_num * 4, data);
+	return hyper_send_msg(ctl.chan.fd, FINISH, pod->c_num * 4, data);
+}
+
+void hyper_shutdown(struct hyper_pod *pod)
+{
+	hyper_send_finish(pod);
 
 	hyper_kill_all();
 

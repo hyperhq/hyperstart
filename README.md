@@ -11,3 +11,13 @@ clone this repo, and make sure have build-essentials installed. Go into the work
     > make
 
 Then you can find `hyper-initrd.img` in build directory, together with a pre-build kernel.
+
+If you want to get the boot disk file for VirtaulBox, please reconfigure with flag --with-vbox,
+
+    > ./configure --with-vbox
+    > make
+
+Note: This will need you to input your password to mount pseudo vbox image.
+
+Then you can find `hyper-vbox-bootimage.iso` in build directory, booting from this iso will
+bring you to the hyper world.

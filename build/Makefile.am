@@ -1,7 +1,13 @@
 bin_PROGRAMS=hyper_daemon
 hyper_daemon_SOURCES=hyper_daemon.c ../src/net.c
-all-local:
-	bash ./make-initrd.sh
+all-local: initrd
 
-cbfs-local:
+if WITH_VBOX
+initrd-local:
+	bash ./make-initrd.sh vbox
+else
+initrd-local:
+	bash ./make-initrd.sh
+cbfs:
 	bash ./make-initrd.sh cbfs
+endif

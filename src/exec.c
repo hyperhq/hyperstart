@@ -19,14 +19,14 @@
 
 static int pts_loop(struct hyper_event *de)
 {
-	int size = 0;
-	uint8_t buf[512];
-	uint8_t seq[12];
+	int size = 0, i;
+	struct hyper_buf *buf = &ctl.tty.wbuf;
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
 
-	fprintf(stdout, "%s\n", __func__);
-	while (1) {
-		size = read(de->fd, buf, sizeof(buf));
+	dprintf("%s\n", __func__);
+	while (buf->get + 12 < buf->size) {
+		size = read(de->fd, buf->data + buf->get + 12, buf->size - buf->get - 12);
+		dprintf("%s: read %d data\n", __func__, size);
 		if (size <= 0) {
 			if (errno == EINTR)
 				continue;
@@ -37,13 +37,18 @@ static int pts_loop(struct hyper_event *de)
 			return -1;
 		}
 
-		hyper_set_be64(seq, exec->seq);
-		hyper_set_be32(seq + 8, size + 12);
+		hyper_set_be64(buf->data + buf->get, exec->seq);
+		hyper_set_be32(buf->data + buf->get + 8, size + 12);
+		buf->get += size + 12;
 
-		if (hyper_send_data(de->to, seq, 12) < 0)
-			continue;
+		dprintf("%s: seq %" PRIu64" len %" PRIu32"\n", __func__, exec->seq, size);
+		for (i = 0; i < size; i++)
+			dprintf("%0x ", buf->data[i]);
+	}
 
-		hyper_send_data(de->to, buf, size);
+	if (hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT) < 0) {
+		fprintf(stderr, "modify ctl tty event to in & out failed\n");
+		return -1;
 	}
 
 	return 0;
@@ -51,7 +56,10 @@ static int pts_loop(struct hyper_event *de)
 
 struct hyper_event_ops pts_ops = {
 	.read		= pts_loop,
+	.write		= hyper_event_write,
 	.hup		= hyper_event_hup,
+	.wbuf_size	= 512,
+	/* don't need read buff, the pts data will store in tty buffer */
 };
 
 int hyper_setup_exec_tty(struct hyper_exec *e)
@@ -186,8 +194,8 @@ int hyper_exec_in_container(struct hyper_pod *pod,
 	fprintf(stdout, "init container exec pts event %p, ops %p, fd %d\n",
 		&exec->e, &pts_ops, exec->e.fd);
 
-	if (hyper_init_event(&exec->e, &pts_ops, 0, ctl.tty.fd, NULL) < 0 ||
-	    hyper_add_event(ctl.efd, &exec->e) < 0) {
+	if (hyper_init_event(&exec->e, &pts_ops, pod) < 0 ||
+	    hyper_add_event(ctl.efd, &exec->e, EPOLLIN) < 0) {
 		fprintf(stderr, "add pts master event failed\n");
 		return -1;
 	}
@@ -224,8 +232,8 @@ int hyper_request_restart_containers(struct hyper_pod *pod)
 		if (exec->seq == 0)
 			continue;
 
-		if (hyper_init_event(&exec->e, &pts_ops, 0, ctl.tty.fd, NULL) < 0 ||
-		    hyper_add_event(ctl.efd, &exec->e) < 0) {
+		if (hyper_init_event(&exec->e, &pts_ops, pod) < 0 ||
+		    hyper_add_event(ctl.efd, &exec->e, EPOLLIN) < 0) {
 			fprintf(stderr, "add pts master event failed\n");
 			return -1;
 		}
@@ -297,8 +305,8 @@ int hyper_exec_cmd(char *json, int length)
 
 		fprintf(stdout, "init pod exec pts event %p, ops %p, fd %d\n",
 			&exec->e, &pts_ops, exec->e.fd);
-		if (hyper_init_event(&exec->e, &pts_ops, 0, ctl.tty.fd, NULL) < 0 ||
-		    hyper_add_event(ctl.efd, &exec->e) < 0) {
+		if (hyper_init_event(&exec->e, &pts_ops, pod) < 0 ||
+		    hyper_add_event(ctl.efd, &exec->e, EPOLLIN) < 0) {
 			fprintf(stderr, "add pts master event failed\n");
 			return -1;
 		}
@@ -421,6 +429,7 @@ fail:
 	_exit(-1);
 }
 
+
 int hyper_release_exec(struct hyper_exec *exec,
 		       struct hyper_pod *pod)
 {
@@ -449,7 +458,8 @@ int hyper_release_exec(struct hyper_exec *exec,
 		/* should shutdown? */
 		if (pod->policy == POLICY_NEVER ||
 		   ((pod->policy == POLICY_ONFAILURE) && pod->code == 0)) {
-			hyper_shutdown(pod);
+			hyper_send_finish(pod);
+			//hyper_shutdown(pod);
 			return 0;
 		}
 

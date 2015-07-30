@@ -24,6 +24,7 @@ enum {
 	WINSIZE,
 	PING,
 	FINISH,
+	NEXT,
 };
 
 enum {

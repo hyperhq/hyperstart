@@ -42,27 +42,29 @@ static int container_setup_volume(struct hyper_container *container)
 
 		sprintf(dev, "/.oldroot/dev/%s", vol->device);
 		sprintf(path, "/tmp/%s", vol->mountpoint);
-		fprintf(stdout, "mount %s to %s\n", dev, vol->mountpoint);
+		fprintf(stdout, "mount %s to %s, tmp path %s\n",
+			dev, vol->mountpoint, path);
 
 		if (hyper_mkdir(path) < 0 || hyper_mkdir(vol->mountpoint) < 0) {
-			fprintf(stdout, "mountpoint %s\n", vol->mountpoint);
 			perror("create volume dir failed");
-			continue;
+			return -1;
 		}
 
 		if (mount(dev, path, vol->fstype, 0, NULL) < 0) {
 			perror("mount volume device faled");
-			continue;
+			return -1;
 		}
 
 		if (mount(path, vol->mountpoint, NULL, MS_BIND, NULL) < 0) {
 			perror("mount volume device faled");
-			continue;
+			return -1;
 		}
 
 		if (vol->readonly &&
-		    mount(path, vol->mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0)
+		    mount(path, vol->mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
 			perror("mount fsmap faled");
+			return -1;
+		}
 
 		umount(path);
 	}

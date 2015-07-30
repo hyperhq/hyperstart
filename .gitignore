@@ -11,6 +11,7 @@ init
 build/hyper_daemon
 build/hyper-initrd.img
 build/root/*
+build/*iso
 build/daemon
 build/.*
 src/.*

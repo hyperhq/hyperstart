@@ -7,8 +7,10 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <termios.h>
 
 #include "hyper.h"
+#include "../config.h"
 
 void hyper_set_be32(uint8_t *buf, uint32_t val)
 {
@@ -55,7 +57,9 @@ int hyper_send_data(int fd, uint8_t *data, uint32_t len)
 			perror("send hyper data failed");
 			return -1;
 		}
-
+#if WITH_VBOX
+		tcdrain(fd);
+#endif
 		length += size;
 	}
 

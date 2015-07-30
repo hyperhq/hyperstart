@@ -1,18 +1,29 @@
 #ifndef _UTIL_H_
 #define _UTIL_H_
 
-#include "hyper.h"
+#include <stdio.h>
+#include "../config.h"
+
+struct hyper_pod;
+
+#ifdef WITH_DEBUG
+#define dprintf(fmt, ...) \
+	fprintf(stdout, fmt, ##_VA_ARGS__)
+#else
+#define dprintf(fmr, ...)
+#endif
 
 char *read_cmdline(void);
 int hyper_list_dir(char *path);
 int hyper_mkdir(char *path);
 int hyper_open_channel(char *channel, int mode);
 int hyper_open_serial_dev(char *tty);
-int hyper_open_serial(char *tty);
 int hyper_setfd_cloexec(int fd);
 int hyper_setfd_block(int fd);
 int hyper_setfd_nonblock(int fd);
 void hyper_shutdown(struct hyper_pod *pod);
+int hyper_send_finish(struct hyper_pod *pod);
 void hyper_kill_all(void);
 void hyper_unmount_all(void);
+int hyper_insmod(char *module);
 #endif

@@ -2,9 +2,9 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([hyperstart], [0.1], [www.hyper.sh])
+AC_INIT([hyperstart], [0.2], [www.hyper.sh])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
-AM_EXTRA_RECURSIVE_TARGETS([cbfs])
+AM_EXTRA_RECURSIVE_TARGETS([initrd])
 AC_CONFIG_SRCDIR([src/init.c])
 AC_CONFIG_HEADERS([config.h])
 
@@ -37,15 +37,17 @@ if test "$fail" = "1" ; then
     AC_MSG_ERROR(Unable to find necessary functions)
 fi
 
-AC_ARG_WITH([ttys],
-            [AS_HELP_STRING([--with-ttys],
-                            [use pci serial device as container tty])],
-            [],[with_ttys=yes])
+AC_ARG_WITH([vbox],
+            [AS_HELP_STRING([--with-vbox],
+                            [run hyperstart on Virtualbox])],
+            [],[with_vbox=no])
 
-if test "x$with_ttys" != "xno" ; then
-    AC_DEFINE_UNQUOTED([WITH_TTYS], 1, [where use pci serial device as container tty])
+if test "x$with_vbox" != "xno" ; then
+    AC_DEFINE_UNQUOTED([WITH_VBOX], 1, [run hyperstart on Virtualbox])
+    AM_EXTRA_RECURSIVE_TARGETS([vbox-bootimage])
 fi
-AM_CONDITIONAL([WITH_TTYS], [test "x$with_ttys" != "xno"])
+
+AM_CONDITIONAL([WITH_VBOX], [test "x$with_vbox" != "xno"])
 
 AC_CONFIG_FILES([
   Makefile
@@ -58,7 +60,7 @@ AC_MSG_RESULT([
 	${PACKAGE}  ${VERSION}
 	prefix:		${prefix}
 
-	with-ttys:	${with_ttys}
+	with-vbox:	${with_vbox}
 
 	compiler:          ${CC}
 	cflags:            ${CFLAGS}
