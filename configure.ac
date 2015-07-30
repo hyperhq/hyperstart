@@ -44,7 +44,6 @@ AC_ARG_WITH([vbox],
 
 if test "x$with_vbox" != "xno" ; then
     AC_DEFINE_UNQUOTED([WITH_VBOX], 1, [run hyperstart on Virtualbox])
-    AM_EXTRA_RECURSIVE_TARGETS([vbox-bootimage])
 fi
 
 AM_CONDITIONAL([WITH_VBOX], [test "x$with_vbox" != "xno"])
