@@ -1,5 +1,3 @@
-bin_PROGRAMS=hyper_daemon
-hyper_daemon_SOURCES=hyper_daemon.c ../src/net.c
 all-local: initrd
 
 if WITH_VBOX
