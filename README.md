@@ -17,7 +17,5 @@ If you want to get the boot disk file for VirtaulBox, please reconfigure with fl
     > ./configure --with-vbox
     > make
 
-Note: This will need you to input your password to mount pseudo vbox image.
-
 Then you can find `hyper-vbox-bootimage.iso` in build directory, booting from this iso will
 bring you to the hyper world.
