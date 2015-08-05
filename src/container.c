@@ -112,6 +112,10 @@ static int container_setup_mount(struct hyper_container *container)
 	char src[512];
 	struct fsmap *map;
 
+	hyper_mkdir("/proc");
+	hyper_mkdir("/sys");
+	hyper_mkdir("/dev");
+
 	if (mount("proc", "/proc", "proc", 0, NULL) < 0 ||
 	    mount("sysfs", "/sys", "sysfs", 0, NULL) < 0 ||
 	    mount("devtmpfs", "/dev", "devtmpfs", 0, NULL) < 0) {
@@ -307,7 +311,6 @@ static int hyper_container_init(void *data)
 	fprintf(stdout, "root directory for container is %s/%s, init task %s\n",
 		root, container->rootfs, container->exec.argv[0]);
 
-	hyper_list_dir(root);
 	sprintf(oldroot, "%s/%s/.oldroot", root, container->rootfs);
 	if (hyper_mkdir(oldroot) < 0) {
 		perror("make oldroot directroy failed");
@@ -354,6 +357,7 @@ static int hyper_container_init(void *data)
 	close(arg->pipe[1]);
 
 	execvp(container->exec.argv[0], container->exec.argv);
+	perror("exec container command failed");
 
 	_exit(-1);
 
