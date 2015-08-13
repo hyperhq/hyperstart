@@ -406,7 +406,7 @@ void hyper_shutdown(struct hyper_pod *pod)
 {
 	hyper_send_finish(pod);
 
-	hyper_kill_all();
+	//hyper_kill_all();
 
 	hyper_unmount_all();
 

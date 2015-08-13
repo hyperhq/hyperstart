@@ -631,12 +631,98 @@ static void hyper_print_uptime(void)
 	close(fd);
 }
 
+static void hyper_kill_process(int pid)
+{
+	char path[64];
+	char *line = NULL, *ignore = "SigIgn:";
+	size_t len = 0;
+	ssize_t read;
+	FILE *file;
+	char *sub;
+
+	sprintf(path, "/proc/%u/status", pid);
+
+	fprintf(stdout, "fopen %s\n", path);
+	file = fopen(path, "r");
+	if (file == NULL) {
+		perror("can not open process proc status file");
+		return;
+	}
+
+	while ((read = getline(&line, &len, file)) != -1) {
+		long mask;
+
+		if (strstr(line, ignore) == NULL)
+			continue;
+
+		sub = line + strlen(ignore);
+		fprintf(stdout, "find sigign %s", sub);
+
+		mask = atol(sub);
+		fprintf(stdout, "mask is %ld\n", mask);
+
+		if ((mask >> (SIGTERM - 1)) & 0x1) {
+			fprintf(stdout, "signal term is ignored, kill it\n");
+			kill(pid, SIGKILL);
+		}
+
+		break;
+	}
+
+	fclose(file);
+	free(line);
+}
+
+static void hyper_term_all(struct hyper_pod *pod)
+{
+	int npids = 0;
+	int index = 0;
+	int pid;
+	DIR *dp;
+	struct dirent *de;
+	pid_t *pids = NULL;
+
+	dp = opendir("/proc");
+	if (dp == NULL)
+		return;
+
+	while ((de = readdir(dp)) && de != NULL) {
+		if (!isdigit(de->d_name[0]))
+			continue;
+		pid = atoi(de->d_name);
+		if (pid == 1)
+			continue;
+		if (index <= npids) {
+			pids = realloc(pids, npids + 16384);
+			if (pids == NULL)
+				return;
+			npids += 16384;
+		}
+
+		pids[index++] = pid;
+	}
+
+	fprintf(stdout, "Sending SIGTERM\n");
+
+	for (--index; index >= 0; --index) {
+		fprintf(stdout, "kill process %d\n", pids[index]);
+		kill(pids[index], SIGTERM);
+	}
+
+	free(pids);
+	closedir(dp);
+
+	for (index = 0; index < pod->c_num; index++) {
+		hyper_kill_process(pod->c[index].exec.pid);
+	}
+}
+
 static void hyper_cleanup_pod(struct hyper_pod *pod)
 {
 	close(pod->sig.fd);
 	hyper_reset_event(&pod->sig);
 
-	hyper_kill_all();
+	hyper_term_all(pod);
 	hyper_handle_exit(pod, pod->ctl.fd, 1, 0);
 
 	pod->init_pid = 0;

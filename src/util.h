@@ -23,7 +23,6 @@ int hyper_setfd_block(int fd);
 int hyper_setfd_nonblock(int fd);
 void hyper_shutdown(struct hyper_pod *pod);
 int hyper_send_finish(struct hyper_pod *pod);
-void hyper_kill_all(void);
 void hyper_unmount_all(void);
 int hyper_insmod(char *module);
 #endif

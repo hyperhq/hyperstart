@@ -370,12 +370,12 @@ fail:
 int hyper_start_container(struct hyper_container *container)
 {
 	int stacksize = getpagesize() * 4;
-	void *stack = malloc(stacksize);
 	struct hyper_container_arg arg = {
 		.c = container,
 	};
 	int flags = CLONE_NEWNS | SIGCHLD;
 	uint32_t type;
+	void *stack;
 	int pid;
 
 	if (container->image == NULL || container->exec.argv == NULL) {
@@ -387,6 +387,12 @@ int hyper_start_container(struct hyper_container *container)
 	if (socketpair(PF_UNIX, SOCK_STREAM, 0, arg.pipe) < 0) {
 		perror("create pipe between pod init execcmd failed");
 		goto fail;
+	}
+
+	stack = malloc(stacksize);
+	if (stack == NULL) {
+		perror("fail to allocate stack for container init");
+		return -1;
 	}
 
 	pid = clone(hyper_container_init, stack + stacksize, flags, &arg);
@@ -412,6 +418,7 @@ int hyper_start_container(struct hyper_container *container)
 
 fail:
 	fprintf(stdout, "container %s init exit code %d\n", container->id, -1);
+
 	container->exec.code = -1;
 	return -1;
 }
