@@ -10,6 +10,7 @@
 init
 build/hyper_daemon
 build/hyper-initrd.img
+build/cbfs.rom
 build/root/*
 build/*iso
 build/daemon
