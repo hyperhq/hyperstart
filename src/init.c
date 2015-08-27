@@ -539,6 +539,11 @@ static int hyper_setup_pod(struct hyper_pod *pod)
 		return -1;
 	}
 
+	if (hyper_setup_dns(pod) < 0) {
+		fprintf(stderr, "setup network failed\n");
+		return -1;
+	}
+
 	if (hyper_setup_shared(pod) < 0) {
 		fprintf(stderr, "setup shared directory failed\n");
 		return -1;
@@ -655,6 +660,7 @@ static int hyper_stop_pod(struct hyper_pod *pod)
 	hyper_cleanup_exec(pod);
 	hyper_cleanup_container(pod);
 	hyper_cleanup_network(pod);
+	hyper_cleanup_dns(pod);
 	hyper_cleanup_shared(pod);
 
 	free(pod->hostname);

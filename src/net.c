@@ -791,3 +791,55 @@ void hyper_cleanup_network(struct hyper_pod *pod)
 	pod->i_num = 0;
 	netlink_close(&rth);
 }
+
+int hyper_setup_dns(struct hyper_pod *pod)
+{
+	int i, fd, ret = -1;
+	char buf[28];
+
+	if (pod->dns == NULL)
+		return 0;
+
+	fd = open("/tmp/hyper/resolv.conf", O_CREAT| O_TRUNC| O_WRONLY, 0644);
+
+	if (fd < 0) {
+		perror("create /tmp/resolv.conf failed");
+		return -1;
+	}
+
+	for (i = 0; i < pod->d_num; i++) {
+		int size = snprintf(buf, sizeof(buf), "nameserver %s\n", pod->dns[i]);
+		int len = 0, l;
+
+		if (size < 0) {
+			fprintf(stderr, "sprintf resolv.conf entry failed\n");
+			goto out;
+		}
+
+		while (len < size) {
+			l = write(fd, buf, size);
+			if (l < 0) {
+				perror("fail to write resolv.conf");
+				goto out;
+			}
+			len += l;
+		}
+	}
+
+	ret = 0;
+out:
+	close(fd);
+	return ret;
+}
+
+void hyper_cleanup_dns(struct hyper_pod *pod)
+{
+	int fd = open("/tmp/hyper/resolv.conf", O_WRONLY| O_TRUNC);
+
+	if (fd < 0) {
+		perror("open /tmp/resolv.conf failed");
+		return;
+	}
+
+	close(fd);
+}
