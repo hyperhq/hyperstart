@@ -384,6 +384,32 @@ static int hyper_parse_routes(struct hyper_pod *pod, char *json, jsmntok_t *toks
 	return i;
 }
 
+static int hyper_parse_dns(struct hyper_pod *pod, char *json, jsmntok_t *toks)
+{
+	int i = 1, j;
+
+	if (toks[i].type != JSMN_ARRAY) {
+		fprintf(stdout, "Dns format incorrect\n");
+		return -1;
+	}
+
+	pod->d_num = toks[i].size;
+	fprintf(stdout, "dns count %d\n", pod->d_num);
+	pod->dns = calloc(pod->d_num, sizeof(*pod->dns));
+
+	if (pod->dns == NULL) {
+		fprintf(stdout, "alloc memory for container failed\n");
+		return -1;
+	}
+
+	for (j = 0; j < pod->d_num; j++) {
+		pod->dns[j] = strdup(json_token_str(json, &toks[++i]));
+		fprintf(stdout, "pod dns %d: %s\n", j, pod->dns[j]);
+	}
+
+	return i;
+}
+
 int hyper_parse_pod(struct hyper_pod *pod, char *json, int length)
 {
 	int i, n, next = -1;
@@ -433,6 +459,12 @@ realloc:
 			i += next;
 		} else if (json_token_streq(json, t, "routes") && t->size == 1) {
 			next = hyper_parse_routes(pod, json, t);
+			if (next < 0)
+				goto out;
+
+			i += next;
+		} else if (json_token_streq(json, t, "dns") && t->size == 1) {
+			next = hyper_parse_dns(pod, json, t);
 			if (next < 0)
 				goto out;
 
