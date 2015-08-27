@@ -437,9 +437,6 @@ realloc:
 				goto out;
 
 			i += next;
-		} else if (json_token_streq(json, t, "socket") && t->size == 1) {
-			pod->channel = strdup(json_token_str(json, &toks[++i]));
-			fprintf(stdout, "channel is %s\n", pod->channel);
 		} else if (json_token_streq(json, t, "shareDir") && t->size == 1) {
 			pod->tag = strdup(json_token_str(json, &toks[++i]));
 			fprintf(stdout, "9p tag is %s\n", pod->tag);

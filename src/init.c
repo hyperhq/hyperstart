@@ -657,7 +657,6 @@ static int hyper_stop_pod(struct hyper_pod *pod)
 	hyper_cleanup_network(pod);
 	hyper_cleanup_shared(pod);
 
-	free(pod->channel);
 	free(pod->hostname);
 
 	sync();
