@@ -821,7 +821,7 @@ int hyper_setup_dns(struct hyper_pod *pod)
 		}
 
 		while (len < size) {
-			l = write(fd, buf, size);
+			l = write(fd, buf + len, size - len);
 			if (l < 0) {
 				perror("fail to write resolv.conf");
 				goto out;
