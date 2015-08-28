@@ -37,16 +37,17 @@ struct hyper_pod {
 	struct hyper_container	*c;
 	struct hyper_interface	*iface;
 	struct hyper_route	*rt;
+	char			**dns;
 	struct list_head	pe_head;
 	struct list_head	ce_head;
 	char			*hostname;
 	char			*tag;
-	char			*channel;
 	int			init_pid;
 	uint32_t		c_num;
 	uint32_t		i_num;
 	uint32_t		r_num;
 	uint32_t		e_num;
+	uint32_t		d_num;
 	uint32_t		type;
 	uint32_t		code;
 	uint32_t		remains;

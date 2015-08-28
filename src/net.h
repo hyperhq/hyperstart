@@ -48,6 +48,8 @@ void hyper_set_be64(uint8_t *buf, uint64_t val);
 uint64_t hyper_get_be64(uint8_t *buf);
 int hyper_setup_network(struct hyper_pod *pod);
 void hyper_cleanup_network(struct hyper_pod *pod);
+int hyper_setup_dns(struct hyper_pod *pod);
+void hyper_cleanup_dns(struct hyper_pod *pod);
 int hyper_get_type_block(int fd, uint32_t *type);
 int hyper_send_type(int fd, uint32_t type);
 int hyper_send_type_block(int fd, uint32_t type, int need_ack);

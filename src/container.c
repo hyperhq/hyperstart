@@ -181,6 +181,39 @@ static int container_setup_mount(struct hyper_container *container)
 	return 0;
 }
 
+static int container_setup_dns(struct hyper_container *container)
+{
+	int fd;
+	struct stat st;
+	char *src = "/.oldroot/tmp/hyper/resolv.conf";
+
+	if (stat(src, &st) < 0) {
+		if (errno == ENOENT) {
+			fprintf(stdout, "no dns configured\n");
+			return 0;
+		}
+
+		perror("stat resolve.conf failed");
+		return -1;
+	}
+
+	hyper_mkdir("/etc");
+
+	fd = open("/etc/resolv.conf", O_CREAT| O_WRONLY, 0644);
+	if (fd < 0) {
+		perror("create /etc/resolv.conf failed");
+		return -1;
+	}
+	close(fd);
+
+	if (mount(src, "/etc/resolv.conf", NULL, MS_BIND, NULL) < 0) {
+		perror("bind to /etc/resolv.conf failed");
+		return -1;
+	}
+
+	return 0;
+}
+
 static int container_setup_workdir(struct hyper_container *container)
 {
 	if (container->workdir && chdir(container->workdir) < 0) {
@@ -336,6 +369,11 @@ static int hyper_container_init(void *data)
 
 	if (container_setup_mount(container) < 0) {
 		fprintf(stderr, "container sets up mount ns failed\n");
+		goto fail;
+	}
+
+	if (container_setup_dns(container) < 0) {
+		fprintf(stderr, "container sets up dns failed\n");
 		goto fail;
 	}
 
