@@ -25,6 +25,8 @@ enum {
 	PING,
 	FINISH,
 	NEXT,
+	WRITEFILE,
+	READFILE,
 };
 
 enum {
