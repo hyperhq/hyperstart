@@ -66,6 +66,11 @@ struct hyper_win_size {
 	uint64_t	seq;
 };
 
+struct hyper_reader {
+	char		*id;
+	char		*file;
+};
+
 struct hyper_writter {
 	char		*id;
 	char		*file;
