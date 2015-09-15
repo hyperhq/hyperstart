@@ -762,6 +762,16 @@ static int hyper_start_pod(char *json, int length)
 	return 0;
 }
 
+static int hyper_cmd_write_file(char *json, int length)
+{
+	return 0;
+}
+
+static int hyper_cmd_read_file(char *json, int length)
+{
+	return 0;
+}
+
 static void hyper_cleanup_shared(struct hyper_pod *pod)
 {
 	if (pod->tag == NULL) {
@@ -941,6 +951,13 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	case EXECCMD:
 		ret = hyper_exec_cmd((char *)buf->data + 8, len - 8);
 		break;
+	case WRITEFILE:
+		ret = hyper_cmd_write_file((char *)buf->data + 8, len - 8);
+		break;
+	case READFILE:
+		hyper_cmd_read_file((char *)buf->data + 8, len - 8);
+		/* hyperstart will send ACK message with file context */
+		return 0;
 	case PING:
 	case GETPOD:
 		break;
