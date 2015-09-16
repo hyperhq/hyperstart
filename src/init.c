@@ -726,6 +726,98 @@ static int hyper_start_pod(char *json, int length)
 
 static int hyper_cmd_write_file(char *json, int length)
 {
+	struct hyper_writter writter;
+	struct hyper_container *c;
+	struct hyper_pod *pod = &global_pod;
+	int pipe[2] = {-1, -1};
+	int pid, mntns = -1, fd;
+	char path[512];
+	int len = 0, size;
+
+	fprintf(stdout, "%s\n", __func__);
+	memset(&writter, 0, sizeof(writter));
+
+	if (hyper_parse_write_file(&writter, json, length) < 0) {
+		goto out;
+	}
+
+	c = hyper_find_container(pod, writter.id);
+	if (c == NULL) {
+		fprintf(stderr, "can not find container whose id is %s\n", writter.id);
+		goto out;
+	}
+
+	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, pipe) < 0) {
+		perror("create writter pipe failed");
+		goto out;
+	}
+
+	sprintf(path, "/proc/%d/ns/mnt", c->exec.pid);
+	mntns = open(path, O_RDONLY);
+	if (mntns < 0) {
+		perror("fail to open mnt ns");
+		goto out;
+	}
+
+	pid = fork();
+	if (pid < 0) {
+		perror("fail to fork writter process");
+		goto out;
+	} else if (pid > 0) {
+		uint32_t type;
+
+		if (hyper_get_type_block(pipe[0], &type) < 0 || type != READY) {
+			fprintf(stderr, "get incorrect message type %d, expect READY\n", type);
+			goto out;
+		}
+
+		goto out;
+	}
+
+	if (setns(mntns, CLONE_NEWNS) < 0) {
+		perror("fail to enter container ns");
+		_exit(-1);
+	}
+
+	sprintf(path, "/tmp/hyper/%s/root/%s/", c->id, c->rootfs);
+	fprintf(stdout, "root directory for container is %s\n",path);
+
+	/* TODO: wait for container finishing setup root */
+	if (chroot(path) < 0) {
+		perror("chroot for exec command failed");
+		_exit(-1);
+	}
+
+	fd = open(writter.file, O_CREAT| O_WRONLY, 0644);
+	if (fd < 0) {
+		perror("fail to open target file");
+		_exit(-1);
+	}
+
+	while(len < writter.len) {
+		size = write(fd, writter.data + len, writter.len - len);
+
+		if (size < 0) {
+			if (errno == EINTR)
+				continue;
+
+			perror("fail to write data to file");
+			_exit(-1);
+		}
+
+		len += size;
+	}
+
+	hyper_send_type(pipe[1], READY);
+	_exit(0);
+out:
+	close(pipe[0]);
+	close(pipe[1]);
+	close(mntns);
+	free(writter.id);
+	free(writter.file);
+	free(writter.data);
+
 	return 0;
 }
 

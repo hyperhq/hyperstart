@@ -75,6 +75,7 @@ struct hyper_writter {
 	char		*id;
 	char		*file;
 	char		*data;
+	int		len;
 };
 
 struct hyper_ctl {
