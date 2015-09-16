@@ -17,20 +17,6 @@
 #include "util.h"
 #include "hyper.h"
 
-static int container_setup_env(struct hyper_container *container)
-{
-	int i;
-	struct env *env;
-
-	for (i = 0; i < container->envs_num; i++) {
-		env = &container->envs[i];
-
-		setenv(env->env, env->value, 1);
-	}
-
-	return 0;
-}
-
 static int container_setup_volume(struct hyper_container *container)
 {
 	int i;
@@ -308,7 +294,7 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
-	if (container_setup_env(container) < 0) {
+	if (hyper_setup_env(container->envs, container->envs_num) < 0) {
 		fprintf(stdout, "setup env failed\n");
 		goto fail;
 	}

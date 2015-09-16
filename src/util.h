@@ -5,6 +5,7 @@
 #include "../config.h"
 
 struct hyper_pod;
+struct env;
 
 #ifdef WITH_DEBUG
 #define dprintf(fmt, ...) \
@@ -14,6 +15,7 @@ struct hyper_pod;
 #endif
 
 char *read_cmdline(void);
+int hyper_setup_env(struct env *envs, int num);
 int hyper_list_dir(char *path);
 int hyper_mkdir(char *path);
 int hyper_open_channel(char *channel, int mode);

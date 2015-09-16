@@ -16,11 +16,28 @@
 
 #include "util.h"
 #include "hyper.h"
+#include "container.h"
 #include "../config.h"
 
 char *read_cmdline(void)
 {
 	return NULL;
+}
+
+int hyper_setup_env(struct env *envs, int num)
+{
+	int i, ret = 0;
+	struct env *env;
+
+	for (i = 0; i < num; i++) {
+		env = &envs[i];
+		if (setenv(env->env, env->value, 1) < 0) {
+			perror("fail to setup env");
+			ret = -1;
+		}
+	}
+
+	return ret;
 }
 
 int hyper_list_dir(char *path)
