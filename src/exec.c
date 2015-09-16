@@ -262,47 +262,6 @@ out:
 	return ret;
 }
 
-/*
-int hyper_request_restart_containers(struct hyper_pod *pod)
-{
-	int i;
-	struct hyper_exec *exec;
-
-	pod->code = 0;
-	pod->remains = pod->c_num;
-
-	for (i = 0; i < pod->c_num; i++) {
-		exec = &pod->c[i].exec;
-
-		if (hyper_setup_exec_tty(exec) < 0) {
-			fprintf(stdout, "restart setup container tty failed\n");
-			return -1;
-		}
-	}
-
-	if (hyper_send_type_block(ctl.ctl.fd, RESTARTCONTAINER, 1) < 0) {
-		fprintf(stderr, "tell container init RESTARTCONTAINER failed\n");
-		return -1;
-	}
-
-	for (i = 0; i < pod->c_num; i++) {
-		exec = &pod->c[i].exec;
-
-		list_add_tail(&exec->list, &pod->ce_head);
-		if (exec->seq == 0)
-			continue;
-
-		if (hyper_init_event(&exec->e, &pts_ops, pod) < 0 ||
-		    hyper_add_event(ctl.efd, &exec->e, EPOLLIN) < 0) {
-			fprintf(stderr, "add pts master event failed\n");
-			return -1;
-		}
-	}
-
-	return 0;
-}
-*/
-
 int hyper_exec_cmd(char *json, int length)
 {
 	struct hyper_exec *exec;
@@ -465,16 +424,7 @@ struct hyper_exec *hyper_find_exec_by_seq(struct hyper_pod *pod, uint64_t seq)
 
 		return exec;
 	}
-/*
-	list_for_each_entry(exec, &pod->pe_head, list) {
-		fprintf(stdout, "pod exec seq %" PRIu64 ", seq %" PRIu64 "\n",
-			exec->seq, seq);
-		if (exec->seq != seq)
-			continue;
 
-		return exec;
-	}
-*/
 	return NULL;
 }
 

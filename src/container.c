@@ -506,28 +506,6 @@ fail:
 	return -1;
 }
 
-/*
-int hyper_restart_containers(struct hyper_pod *pod)
-{
-	int i;
-	struct hyper_container *c;
-
-	for (i = 0; i < pod->c_num; i++) {
-		c = &pod->c[i];
-
-		if (hyper_start_container(c) < 0) {
-			fprintf(stderr, "restart container %s failed\n", c->id);
-			hyper_send_type(pod->ctl.fd, ERROR);
-			return -1;
-		}
-	}
-
-	if (hyper_send_type(pod->ctl.fd, ACK) < 0)
-		return -1;
-
-	return 0;
-}
-*/
 struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id)
 {
 	int i;

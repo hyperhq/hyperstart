@@ -37,7 +37,6 @@ struct hyper_exec *global_exec;
 
 struct hyper_ctl ctl;
 
-static void hyper_cleanup_pod(struct hyper_pod *pod);
 static int hyper_handle_exit(struct hyper_pod *pod);
 
 static int hyper_set_win_size(char *json, int length)
@@ -96,22 +95,106 @@ out:
 	return ret;
 }
 
+static void hyper_kill_process(int pid)
+{
+	char path[64];
+	char *line = NULL, *ignore = "SigIgn:";
+	size_t len = 0;
+	ssize_t read;
+	FILE *file;
+	char *sub;
+
+	sprintf(path, "/proc/%u/status", pid);
+
+	fprintf(stdout, "fopen %s\n", path);
+	file = fopen(path, "r");
+	if (file == NULL) {
+		perror("can not open process proc status file");
+		return;
+	}
+
+	while ((read = getline(&line, &len, file)) != -1) {
+		long mask;
+
+		if (strstr(line, ignore) == NULL)
+			continue;
+
+		sub = line + strlen(ignore);
+		fprintf(stdout, "find sigign %s", sub);
+
+		mask = atol(sub);
+		fprintf(stdout, "mask is %ld\n", mask);
+
+		if ((mask >> (SIGTERM - 1)) & 0x1) {
+			fprintf(stdout, "signal term is ignored, kill it\n");
+			kill(pid, SIGKILL);
+		}
+
+		break;
+	}
+
+	fclose(file);
+	free(line);
+}
+
+static void hyper_term_all(struct hyper_pod *pod)
+{
+	int npids = 0;
+	int index = 0;
+	int pid;
+	DIR *dp;
+	struct dirent *de;
+	pid_t *pids = NULL;
+
+	dp = opendir("/proc");
+	if (dp == NULL)
+		return;
+
+	while ((de = readdir(dp)) && de != NULL) {
+		if (!isdigit(de->d_name[0]))
+			continue;
+		pid = atoi(de->d_name);
+		if (pid == 1)
+			continue;
+		if (index <= npids) {
+			pids = realloc(pids, npids + 16384);
+			if (pids == NULL)
+				return;
+			npids += 16384;
+		}
+
+		pids[index++] = pid;
+	}
+
+	fprintf(stdout, "Sending SIGTERM\n");
+
+	for (--index; index >= 0; --index) {
+		fprintf(stdout, "kill process %d\n", pids[index]);
+		kill(pids[index], SIGTERM);
+	}
+
+	free(pids);
+	closedir(dp);
+
+	for (index = 0; index < pod->c_num; index++) {
+		hyper_kill_process(pod->c[index].exec.pid);
+	}
+}
+
 static int pod_ctl_pipe_handle(struct hyper_event *de, uint32_t len)
 {
 	struct hyper_buf *buf = &de->rbuf;
-	struct hyper_pod *pod = de->ptr;
-	uint32_t type;
 
 	fprintf(stdout, "%s\n", __func__);
 
-	type = hyper_get_be32(buf->data);
+	if (hyper_get_be32(buf->data) == STOPPOD) {
+		struct hyper_pod *pod = de->ptr;
 
-	switch (type) {
-	case STOPPOD:
-		fprintf(stdout, "get type STOPPOD, exit\n");
-		hyper_cleanup_pod(pod);
-	default:
-		break;
+		fprintf(stdout, "pod init get type STOPPOD, exit\n");
+		hyper_term_all(pod);
+		hyper_reset_event(&pod->ctl);
+		hyper_unmount_all();
+		_exit(0);
 	}
 
 	return 0;
@@ -141,15 +224,6 @@ static int hyper_handle_exit(struct hyper_pod *pod)
 	}
 
 	return 0;
-
-	/* send ack message to hyper init. 
-	if (hyper_send_type(to, ACK) < 0) {
-		fprintf(stderr, "send ACK of STOPPOD to hyper init failed\n");
-		return -1;
-	}
-
-	return 0;
-	*/
 }
 
 static int hyper_signal_loop(struct hyper_event *de)
@@ -186,18 +260,6 @@ static int hyper_signal_loop(struct hyper_event *de)
 	return 0;
 }
 
-/*
-static int pod_signal_loop(struct hyper_event *de)
-{
-	return signal_loop(de, 1);
-}
-
-static int hyper_signal_loop(struct hyper_event *de)
-{
-	return signal_loop(de, 0);
-}
-*/
-
 static struct hyper_event_ops pod_ctl_pipe_ops = {
 	.read		= hyper_event_read,
 	.handle		= pod_ctl_pipe_handle,
@@ -205,13 +267,6 @@ static struct hyper_event_ops pod_ctl_pipe_ops = {
 	.rbuf_size	= 8,
 	.len_offset	= 4,
 };
-
-/*
-static struct hyper_event_ops pod_signal_ops = {
-	.read		= pod_signal_loop,
-	.hup		= hyper_event_hup,
-};
-*/
 
 static int pod_init_loop(struct hyper_pod *pod)
 {
@@ -231,15 +286,7 @@ static int pod_init_loop(struct hyper_pod *pod)
 		fprintf(stderr, "hyper add pod ctl pipe event failed\n");
 		return -1;
 	}
-/*
-	fprintf(stdout, "hyper_init_event pod signal event %p, ops %p, fd %d\n",
-		&pod->sig, &pod_signal_ops, pod->sig.fd);
-	if (hyper_init_event(&pod->sig, &pod_signal_ops, pod) < 0 ||
-	    hyper_add_event(pod->efd, &pod->sig, EPOLLIN) < 0) {
-		fprintf(stderr, "hyper add pod tty pipe event failed\n");
-		return -1;
-	}
-*/
+
 	events = calloc(MAXEVENTS, sizeof(*events));
 
 	while (1) {
@@ -284,21 +331,7 @@ static int hyper_pod_init(void *data)
 		perror("set pod init ctl pipe fd FD_CLOEXEC failed");
 		goto fail;
 	}
-/*
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGCHLD);
 
-	if (sigprocmask(SIG_BLOCK, &mask, NULL) < 0) {
-		perror("sigprocmask SIGCHLD failed");
-		goto fail;
-	}
-
-	pod->sig.fd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
-	if (pod->sig.fd < 0) {
-		perror("create signalfd failed");
-		goto fail;
-	}
-*/
 	/* mount new proc directory */
 	if (umount("/proc") < 0) {
 		perror("umount proc filesystem failed\n");
@@ -347,16 +380,6 @@ static int hyper_ctl_pipe_handle(struct hyper_event *de, uint32_t len)
 		 * fd is block, and ACK is the last message, exit loop. */
 		fprintf(stdout, "hyper_ctl_pipe_loop get ack\n");
 		return 1;
-	/*
-	case FINISHCMD:
-		pid = hyper_get_be32(buf->data + 8);
-		code = buf->data[12];
-		if (hyper_send_exec_eof(ctl.tty.fd, pod, &pod->ce_head, pid, code) < 0) {
-			fprintf(stderr, "hyper_ctl_pipe_loop send eof failed\n");
-			return -1;
-		}
-		break;
-	*/
 	default:
 		fprintf(stdout, "get unknown type %" PRIu32"\n", type);
 		break;
@@ -679,110 +702,6 @@ static void hyper_print_uptime(void)
 	close(fd);
 }
 
-static void hyper_kill_process(int pid)
-{
-	char path[64];
-	char *line = NULL, *ignore = "SigIgn:";
-	size_t len = 0;
-	ssize_t read;
-	FILE *file;
-	char *sub;
-
-	sprintf(path, "/proc/%u/status", pid);
-
-	fprintf(stdout, "fopen %s\n", path);
-	file = fopen(path, "r");
-	if (file == NULL) {
-		perror("can not open process proc status file");
-		return;
-	}
-
-	while ((read = getline(&line, &len, file)) != -1) {
-		long mask;
-
-		if (strstr(line, ignore) == NULL)
-			continue;
-
-		sub = line + strlen(ignore);
-		fprintf(stdout, "find sigign %s", sub);
-
-		mask = atol(sub);
-		fprintf(stdout, "mask is %ld\n", mask);
-
-		if ((mask >> (SIGTERM - 1)) & 0x1) {
-			fprintf(stdout, "signal term is ignored, kill it\n");
-			kill(pid, SIGKILL);
-		}
-
-		break;
-	}
-
-	fclose(file);
-	free(line);
-}
-
-static void hyper_term_all(struct hyper_pod *pod)
-{
-	int npids = 0;
-	int index = 0;
-	int pid;
-	DIR *dp;
-	struct dirent *de;
-	pid_t *pids = NULL;
-
-	dp = opendir("/proc");
-	if (dp == NULL)
-		return;
-
-	while ((de = readdir(dp)) && de != NULL) {
-		if (!isdigit(de->d_name[0]))
-			continue;
-		pid = atoi(de->d_name);
-		if (pid == 1)
-			continue;
-		if (index <= npids) {
-			pids = realloc(pids, npids + 16384);
-			if (pids == NULL)
-				return;
-			npids += 16384;
-		}
-
-		pids[index++] = pid;
-	}
-
-	fprintf(stdout, "Sending SIGTERM\n");
-
-	for (--index; index >= 0; --index) {
-		fprintf(stdout, "kill process %d\n", pids[index]);
-		kill(pids[index], SIGTERM);
-	}
-
-	free(pids);
-	closedir(dp);
-
-	for (index = 0; index < pod->c_num; index++) {
-		hyper_kill_process(pod->c[index].exec.pid);
-	}
-}
-
-static void hyper_cleanup_pod(struct hyper_pod *pod)
-{
-	//close(pod->sig.fd);
-	//hyper_reset_event(&pod->sig);
-
-	hyper_term_all(pod);
-	//hyper_handle_exit(pod, pod->ctl.fd, 1, 0);
-
-	//pod->init_pid = 0;
-
-	close(pod->ctl.fd);
-	hyper_reset_event(&pod->ctl);
-
-	hyper_unmount_all();
-
-	_exit(0);
-}
-
 static int hyper_start_pod(char *json, int length)
 {
 	struct hyper_pod *pod = &global_pod;
@@ -858,6 +777,7 @@ static int hyper_stop_pod(struct hyper_pod *pod)
 		return 0;
 	}
 
+	pod->init_pid = 0;
 	/* Make hyper ctl_pipe blocked */
 	hyper_send_stoppod(ctl.ctl.fd);
 
