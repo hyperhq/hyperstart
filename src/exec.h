@@ -28,8 +28,8 @@ int hyper_dup_exec_tty(int fd, struct hyper_exec *e);
 struct hyper_exec *hyper_find_exec_by_pid(struct list_head *head, int pid);
 struct hyper_exec *hyper_find_exec_by_seq(struct hyper_pod *pod, uint64_t seq);
 int hyper_send_exec_eof(int to, struct hyper_pod *pod,
-		      struct list_head *head, int pid,
-		      uint8_t code);
+			int pid, uint8_t code);
+int hyper_watch_exec_pty(struct hyper_exec *exec);
 void hyper_cleanup_exec(struct hyper_pod *pod);
 
 extern struct hyper_event_ops pts_ops;

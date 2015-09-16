@@ -39,9 +39,10 @@ struct hyper_container {
 
 struct hyper_pod;
 
-int hyper_start_containers(struct hyper_pod *pod);
+int hyper_start_container(struct hyper_container *container,
+			  int pidns, int utsns, int ipcns);
 struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id);
-int hyper_restart_containers(struct hyper_pod *pod);
+//int hyper_restart_containers(struct hyper_pod *pod);
 void hyper_cleanup_container(struct hyper_pod *pod);
 
 #endif

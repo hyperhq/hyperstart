@@ -40,8 +40,8 @@ struct hyper_pod {
 	struct hyper_interface	*iface;
 	struct hyper_route	*rt;
 	char			**dns;
-	struct list_head	pe_head;
-	struct list_head	ce_head;
+	struct list_head	exec_head;
+	//struct list_head	ce_head;
 	char			*hostname;
 	char			*tag;
 	int			init_pid;
@@ -88,6 +88,7 @@ struct hyper_ctl {
 int hyper_mkdir(char *hyper_path);
 int hyper_open_serial(char *tty);
 struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id);
+int hyper_start_containers(struct hyper_pod *pod);
 
 extern struct hyper_pod global_pod;
 extern struct hyper_ctl ctl;
