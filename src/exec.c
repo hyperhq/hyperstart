@@ -285,7 +285,7 @@ static int hyper_do_exec_cmd(void *data)
 		}
 	}
 
-	if (socketpair(PF_UNIX, SOCK_STREAM, 0, pipe) < 0) {
+	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, pipe) < 0) {
 		perror("create pipe in exec command failed");
 		_exit(-1);
 	}
@@ -333,11 +333,6 @@ static int hyper_do_exec_cmd(void *data)
 		_exit(-1);
 	}
 
-	close(pipe[0]);
-	close(pipe[1]);
-	close(arg->pipe[0]);
-	close(arg->pipe[1]);
-
 	if (execvp(exec->argv[0], exec->argv) < 0) {
 		perror("exec failed");
 		_exit(-1);
@@ -384,7 +379,7 @@ int hyper_exec_cmd(char *json, int length)
 		goto out;
 	}
 
-	if (socketpair(PF_UNIX, SOCK_STREAM, 0, arg.pipe) < 0) {
+	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, arg.pipe) < 0) {
 		perror("create pipe between pod init execcmd failed");
 		goto out;
 	}

@@ -389,9 +389,6 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
-	close(arg->pipe[0]);
-	close(arg->pipe[1]);
-
 	execvp(container->exec.argv[0], container->exec.argv);
 	perror("exec container command failed");
 
@@ -453,7 +450,7 @@ int hyper_start_container(struct hyper_container *container,
 		goto fail;
 	}
 
-	if (socketpair(PF_UNIX, SOCK_STREAM, 0, arg.pipe) < 0) {
+	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, arg.pipe) < 0) {
 		perror("create pipe between pod init execcmd failed");
 		goto fail;
 	}

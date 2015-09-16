@@ -388,7 +388,7 @@ static int hyper_ctl_pipe_handle(struct hyper_event *de, uint32_t len)
 	return 0;
 }
 
-static int hyper_enter_container_pidns(void *data)
+static int hyper_do_start_containers(void *data)
 {
 	int i, pidns, ipcns, utsns, ret;
 	struct hyper_container *c;
@@ -467,12 +467,12 @@ int hyper_start_containers(struct hyper_pod *pod)
 		goto out;
 	}
 
-	if (socketpair(PF_UNIX, SOCK_STREAM, 0, arg.ctl_pipe) < 0) {
+	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, arg.ctl_pipe) < 0) {
 		perror("create pipe between hyper init and pod init failed");
 		goto out;
 	}
 
-	pid = clone(hyper_enter_container_pidns, stack + stacksize, CLONE_VM| CLONE_FILES, &arg);
+	pid = clone(hyper_do_start_containers, stack + stacksize, CLONE_VM| CLONE_FILES, &arg);
 	free(stack);
 	if (pid < 0) {
 		perror("enter container pid ns failed");
@@ -520,7 +520,7 @@ static int hyper_setup_container(struct hyper_pod *pod)
 	uint32_t type;
 	void *stack;
 
-	if (socketpair(PF_UNIX, SOCK_STREAM, 0, arg.ctl_pipe) < 0) {
+	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, arg.ctl_pipe) < 0) {
 		perror("create pipe between hyper init and pod init failed");
 		return -1;
 	}
