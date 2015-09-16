@@ -276,7 +276,6 @@ static int hyper_rescan_scsi(void)
 
 struct hyper_container_arg {
 	struct hyper_container	*c;
-	int			pidns;
 	int			ipcns;
 	int			utsns;
 	int			pipe[2];
@@ -291,11 +290,6 @@ static int hyper_container_init(void *data)
 	fprintf(stdout, "%s in\n", __func__);
 	if (container->exec.argv == NULL) {
 		fprintf(stdout, "no cmd!\n");
-		goto fail;
-	}
-
-	if (setns(arg->pidns, CLONE_NEWPID) < 0) {
-		perror("setns to pidns of pod init faild");
 		goto fail;
 	}
 
@@ -449,12 +443,11 @@ static int hyper_setup_pty(struct hyper_container *c)
 }
 
 int hyper_start_container(struct hyper_container *container,
-			  int pidns, int utsns, int ipcns)
+			  int utsns, int ipcns)
 {
 	int stacksize = getpagesize() * 4;
 	struct hyper_container_arg arg = {
 		.c = container,
-		.pidns = pidns,
 		.utsns = utsns,
 		.ipcns = ipcns,
 	};

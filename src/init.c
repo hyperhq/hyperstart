@@ -110,18 +110,6 @@ static int pod_ctl_pipe_handle(struct hyper_event *de, uint32_t len)
 	case STOPPOD:
 		fprintf(stdout, "get type STOPPOD, exit\n");
 		hyper_cleanup_pod(pod);
-	/*
-	case RESTARTCONTAINER:
-		fprintf(stdout, "%s get type RESTARTCONTAINER\n", __func__);
-		if (hyper_restart_containers(pod) < 0)
-			return -1;
-		break;
-
-	case EXECCMD:
-		if (hyper_container_execcmd(pod) < 0)
-			return -1;
-		break;
-	*/
 	default:
 		break;
 	}
@@ -147,17 +135,7 @@ static int hyper_handle_exit(struct hyper_pod *pod)
 			fprintf(stdout, "pid %d exit by signal, status %d\n",
 				pid, WTERMSIG(status));
 		}
-/*
-		if (container) {
-			hyper_set_be32(data, pid);
-			if (hyper_send_msg(to, FINISHCMD, 5, data) < 0) {
-				fprintf(stderr, "pod signal_loop send finishcmd failed\n");
-				return -1;
-			}
 
-			continue;
-		}
-*/
 		if (hyper_send_exec_eof(ctl.tty.fd, pod, pid, data[4]) < 0)
 			fprintf(stderr, "signal_loop send eof failed\n");
 	}
@@ -387,19 +365,30 @@ static int hyper_ctl_pipe_handle(struct hyper_event *de, uint32_t len)
 	return 0;
 }
 
-int hyper_start_containers(struct hyper_pod *pod)
+static int hyper_enter_container_pidns(void *data)
 {
 	int i, pidns, ipcns, utsns, ret;
 	struct hyper_container *c;
+	struct hyper_pod_arg *arg;
+	struct hyper_pod *pod;
 	char path[64];
+
+	arg = data;
+	pod = arg->pod;
 
 	ret = pidns = ipcns = utsns = -1;
 
-	fprintf(stdout, "%s\n", __func__);
 	sprintf(path, "/proc/%d/ns/pid", pod->init_pid);
 	pidns = open(path, O_RDONLY| O_CLOEXEC);
 	if (pidns < 0) {
 		perror("fail to open pidns of pod init");
+		goto out;
+	}
+
+	/* enter pidns of pod init, so the children of this process will run in
+	 * pidns of pod init, see man 2 setns */
+	if (setns(pidns, CLONE_NEWPID) < 0) {
+		perror("enter pidns of pod init failed");
 		goto out;
 	}
 
@@ -420,7 +409,12 @@ int hyper_start_containers(struct hyper_pod *pod)
 	for (i = 0; i < pod->c_num; i++) {
 		c = &pod->c[i];
 		list_add_tail(&c->exec.list, &pod->exec_head);
-		hyper_start_container(c, pidns, utsns, ipcns);
+		hyper_start_container(c, utsns, ipcns);
+	}
+
+	if (hyper_send_type(arg->ctl_pipe[1], READY) < 0) {
+		fprintf(stderr, "container init send ready message failed\n");
+		goto out;
 	}
 
 	ret = 0;
@@ -428,7 +422,56 @@ out:
 	close(pidns);
 	close(utsns);
 	close(ipcns);
+	close(arg->ctl_pipe[0]);
+	close(arg->ctl_pipe[1]);
 
+	_exit(ret);
+}
+
+int hyper_start_containers(struct hyper_pod *pod)
+{
+	int stacksize = getpagesize() * 4;
+	void *stack = malloc(stacksize);
+	struct hyper_pod_arg arg = {
+		.pod		= pod,
+		.ctl_pipe	= {-1, -1},
+	};
+	int ret = -1, pid;
+	uint32_t type;
+
+	if (stack == NULL) {
+		perror("fail to allocate stack for container init");
+		goto out;
+	}
+
+	if (socketpair(PF_UNIX, SOCK_STREAM, 0, arg.ctl_pipe) < 0) {
+		perror("create pipe between hyper init and pod init failed");
+		goto out;
+	}
+
+	pid = clone(hyper_enter_container_pidns, stack + stacksize, CLONE_VM| CLONE_FILES, &arg);
+	free(stack);
+	if (pid < 0) {
+		perror("enter container pid ns failed");
+		goto out;
+	}
+
+	/* Wait for container start */
+	if (hyper_get_type_block(arg.ctl_pipe[0], &type) < 0) {
+		perror("get enter_container_pidns ready message failed");
+		goto out;
+	}
+
+	if (type != READY) {
+		fprintf(stderr, "get incorrect enter_container_pidns message type %d, expect READY\n",
+			type);
+		goto out;
+	}
+
+	ret = 0;
+out:
+	close(arg.ctl_pipe[0]);
+	close(arg.ctl_pipe[1]);
 	return ret;
 }
 
