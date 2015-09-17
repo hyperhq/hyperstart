@@ -821,9 +821,145 @@ out:
 	return 0;
 }
 
-static int hyper_cmd_read_file(char *json, int length)
+struct hyper_file_arg {
+	int		mntns;
+	int		pipe[2];
+	char		*file;
+	char		root[128];
+	uint32_t	*datalen;
+	uint8_t		**data;
+};
+
+static int hyper_do_cmd_read_file(void *data)
 {
+	struct stat st;
+	int len = 0, size, fd;
+	struct hyper_file_arg *arg = data;
+
+	if (setns(arg->mntns, CLONE_NEWNS) < 0) {
+		perror("fail to enter container ns");
+		goto err;
+	}
+
+	fprintf(stdout, "read file %s\n", arg->file);
+
+	/* TODO: wait for container finishing setup root */
+	if (chroot(arg->root) < 0) {
+		perror("chroot for exec command failed");
+		goto err;
+	}
+
+	if (stat(arg->file, &st) < 0) {
+		perror("fail to state file");
+		goto err;
+	}
+
+	*arg->datalen = st.st_size;
+	*arg->data = malloc(*arg->datalen);
+	if (*arg->data == NULL) {
+		fprintf(stderr, "allocate memory for reading file failed\n");
+		goto err;
+	}
+
+	fd = open(arg->file, O_RDONLY);
+	if (fd < 0) {
+		perror("fail to open target file");
+		goto err;
+	}
+
+	fprintf(stdout, "file length %d\n", *arg->datalen);
+	while(len < *arg->datalen) {
+		size = read(fd, *arg->data + len, *arg->datalen - len);
+
+		if (size < 0) {
+			if (errno == EINTR)
+				continue;
+
+			perror("fail to read data from file");
+			goto err;
+		}
+
+		len += size;
+	}
+
+	fprintf(stdout, "read data %s\n", *arg->data);
+	hyper_send_type(arg->pipe[1], READY);
 	return 0;
+err:
+	hyper_send_type(arg->pipe[1], ERROR);
+	return -1;
+}
+
+static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_t **data)
+{
+	struct hyper_reader reader;
+	struct hyper_container *c;
+	struct hyper_pod *pod = &global_pod;
+	struct hyper_file_arg arg = {
+		.pipe = {-1, -1},
+	};
+	int stacksize = getpagesize() * 4;
+	void *stack = malloc(stacksize);
+	int pid, ret = -1;
+	char path[128];
+	uint32_t type;
+
+	if (stack == NULL) {
+		perror("fail to allocate stack for container init");
+		goto out;
+	}
+
+	fprintf(stdout, "%s\n", __func__);
+	memset(&reader, 0, sizeof(reader));
+
+	if (hyper_parse_read_file(&reader, json, length) < 0) {
+		goto out;
+	}
+
+	c = hyper_find_container(pod, reader.id);
+	if (c == NULL) {
+		fprintf(stderr, "can not find container whose id is %s\n", reader.id);
+		goto out;
+	}
+
+	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, arg.pipe) < 0) {
+		perror("create reader pipe failed");
+		goto out;
+	}
+
+	sprintf(path, "/proc/%d/ns/mnt", c->exec.pid);
+	arg.mntns = open(path, O_RDONLY);
+	if (arg.mntns < 0) {
+		perror("fail to open mnt ns");
+		goto out;
+	}
+
+	arg.file = reader.file;
+	arg.datalen = datalen;
+	arg.data = data;
+	sprintf(arg.root, "/tmp/hyper/%s/root/%s/", c->id, c->rootfs);
+
+	pid = clone(hyper_do_cmd_read_file, stack + stacksize, CLONE_VM, &arg);
+	free(stack);
+	if (pid < 0) {
+		perror("fail to fork writter process");
+		goto out;
+	}
+
+	if (hyper_get_type_block(arg.pipe[0], &type) < 0 || type != READY) {
+		fprintf(stderr, "%s to incorrect type %" PRIu32 "\n", __func__, type);
+		goto out;
+	}
+
+	ret = 0;
+out:
+	close(arg.pipe[0]);
+	close(arg.pipe[1]);
+	close(arg.mntns);
+	free(reader.id);
+	free(reader.file);
+
+	return ret;
 }
 
 static void hyper_cleanup_shared(struct hyper_pod *pod)
@@ -979,7 +1115,8 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 {
 	struct hyper_buf *buf = &de->rbuf;
 	struct hyper_pod *pod = de->ptr;
-	uint32_t type = 0;
+	uint32_t type = 0, datalen = 0;
+	uint8_t *data = NULL;
 	int i, ret = 0;
 
 	for (i = 0; i < buf->get; i++)
@@ -1010,9 +1147,8 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		ret = hyper_cmd_write_file((char *)buf->data + 8, len - 8);
 		break;
 	case READFILE:
-		hyper_cmd_read_file((char *)buf->data + 8, len - 8);
-		/* hyperstart will send ACK message with file context */
-		return 0;
+		ret = hyper_cmd_read_file((char *)buf->data + 8, len - 8, &datalen, &data);
+		break;
 	case PING:
 	case GETPOD:
 		break;
@@ -1030,8 +1166,9 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	if (ret < 0)
 		hyper_send_type(de->fd, ERROR);
 	else
-		hyper_send_type(de->fd, ACK);
+		hyper_send_msg(de->fd, ACK, datalen, data);
 
+	free(data);
 	return 0;
 }
 

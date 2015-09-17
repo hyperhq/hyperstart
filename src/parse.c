@@ -704,6 +704,11 @@ int hyper_parse_read_file(struct hyper_reader *reader, char *json, int length)
 	jsmntok_t *toks = NULL;
 
 	toks = calloc(toks_num, sizeof(jsmntok_t));
+	if (toks == NULL) {
+		fprintf(stderr, "fail to allocate tokens for read file cmd\n");
+		ret = -1;
+		goto out;
+	}
 
 	jsmn_init(&p);
 	n = jsmn_parse(&p, json, length,  toks, toks_num);

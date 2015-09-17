@@ -74,7 +74,7 @@ struct hyper_reader {
 struct hyper_writter {
 	char		*id;
 	char		*file;
-	char		*data;
+	uint8_t		*data;
 	int		len;
 };
 
