@@ -164,14 +164,18 @@ jsmnerr_t jsmn_parse(jsmn_parser *parser, const char *js, size_t len,
 	int i;
 	jsmntok_t *token;
 	int count = 0;
+	int num = 0;
+	int out = 0;
 
-	for (; parser->pos < len && js[parser->pos] != '\0'; parser->pos++) {
+	for (; parser->pos < len && js[parser->pos] != '\0' && !out; parser->pos++) {
 		char c;
 		jsmntype_t type;
 
 		c = js[parser->pos];
 		switch (c) {
-		case '{': case '[':
+		case '{':
+			num++;
+		case '[':
 			count++;
 			if (tokens == NULL)
 				break;
@@ -189,7 +193,10 @@ jsmnerr_t jsmn_parse(jsmn_parser *parser, const char *js, size_t len,
 			token->start = parser->pos;
 			parser->toksuper = parser->toknext - 1;
 			break;
-		case '}': case ']':
+		case '}':
+			if (--num <= 0)
+				out = 1;
+		case ']':
 			if (tokens == NULL)
 				break;
 			type = (c == '}' ? JSMN_OBJECT : JSMN_ARRAY);
@@ -221,7 +228,7 @@ jsmnerr_t jsmn_parse(jsmn_parser *parser, const char *js, size_t len,
 
 					parser->toksuper = -1;
 					token->end = parser->pos + 1;
-						break;
+					break;
 				}
 			}
 			/* Error if unmatched closing bracket */

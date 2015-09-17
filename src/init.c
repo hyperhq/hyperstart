@@ -780,7 +780,7 @@ static int hyper_cmd_write_file(char *json, int length)
 	}
 
 	sprintf(path, "/tmp/hyper/%s/root/%s/", c->id, c->rootfs);
-	fprintf(stdout, "root directory for container is %s\n",path);
+	fprintf(stdout, "write file %s, data len %d\n", writter.file, writter.len);
 
 	/* TODO: wait for container finishing setup root */
 	if (chroot(path) < 0) {
