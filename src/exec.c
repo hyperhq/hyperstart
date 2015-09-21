@@ -204,22 +204,21 @@ int hyper_enter_container(struct hyper_pod *pod,
 		return -1;
 	}
 
-	sprintf(path, "/proc/%d/ns/uts", c->exec.pid);
+	sprintf(path, "/proc/%d/ns/uts", pod->init_pid);
 	utsns = open(path, O_RDONLY| O_CLOEXEC);
 	if (utsns < 0) {
 		perror("fail to open utsns of pod init");
 		goto out;
 	}
 
-	sprintf(path, "/proc/%d/ns/ipc", c->exec.pid);
+	sprintf(path, "/proc/%d/ns/ipc", pod->init_pid);
 	ipcns = open(path, O_RDONLY| O_CLOEXEC);
 	if (ipcns < 0) {
 		perror("fail to open ipcns of pod init");
 		goto out;
 	}
 
-	sprintf(path, "/proc/%d/ns/mnt", c->exec.pid);
-	mntns = open(path, O_RDONLY| O_CLOEXEC);
+	mntns = c->ns;
 	if (mntns < 0) {
 		perror("fail to open mntns of pod init");
 		goto out;
@@ -248,7 +247,6 @@ int hyper_enter_container(struct hyper_pod *pod,
 out:
 	close(ipcns);
 	close(utsns);
-	close(mntns);
 
 	return ret;
 }

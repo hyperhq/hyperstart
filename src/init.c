@@ -752,8 +752,7 @@ static int hyper_cmd_write_file(char *json, int length)
 		goto out;
 	}
 
-	sprintf(path, "/proc/%d/ns/mnt", c->exec.pid);
-	mntns = open(path, O_RDONLY);
+	mntns = c->ns;
 	if (mntns < 0) {
 		perror("fail to open mnt ns");
 		goto out;
@@ -813,7 +812,6 @@ static int hyper_cmd_write_file(char *json, int length)
 out:
 	close(pipe[0]);
 	close(pipe[1]);
-	close(mntns);
 	free(writter.id);
 	free(writter.file);
 	free(writter.data);
@@ -901,7 +899,6 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 	int stacksize = getpagesize() * 4;
 	void *stack = malloc(stacksize);
 	int pid, ret = -1;
-	char path[128];
 	uint32_t type;
 
 	if (stack == NULL) {
@@ -927,8 +924,7 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 		goto out;
 	}
 
-	sprintf(path, "/proc/%d/ns/mnt", c->exec.pid);
-	arg.mntns = open(path, O_RDONLY);
+	arg.mntns = c->ns;
 	if (arg.mntns < 0) {
 		perror("fail to open mnt ns");
 		goto out;
@@ -955,7 +951,6 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 out:
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
-	close(arg.mntns);
 	free(reader.id);
 	free(reader.file);
 

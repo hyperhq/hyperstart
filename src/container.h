@@ -33,6 +33,7 @@ struct hyper_container {
 	int			vols_num;
 	int			envs_num;
 	int			maps_num;
+	int			ns;
 	uint32_t		code;
 	struct hyper_exec	exec;
 };

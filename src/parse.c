@@ -199,6 +199,7 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 
 	c->exec.init = 1;
 	c->exec.code = -1;
+	c->ns = -1;
 
 	next_container = toks[i].size;
 	fprintf(stdout, "next container %d\n", next_container);

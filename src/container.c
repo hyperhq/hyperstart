@@ -430,11 +430,13 @@ int hyper_start_container(struct hyper_container *container,
 {
 	int stacksize = getpagesize() * 4;
 	struct hyper_container_arg arg = {
-		.c = container,
-		.utsns = utsns,
-		.ipcns = ipcns,
+		.c	= container,
+		.utsns	= utsns,
+		.ipcns	= ipcns,
+		.pipe	= {-1, -1},
 	};
 	int flags = CLONE_NEWNS | SIGCHLD;
+	char path[128];
 	uint32_t type;
 	void *stack;
 	int pid;
@@ -467,7 +469,13 @@ int hyper_start_container(struct hyper_container *container,
 		perror("create child process failed");
 		goto fail;
 	}
+	sprintf(path, "/proc/%d/ns/mnt", pid);
 	container->exec.pid = pid;
+	container->ns = open(path, O_RDONLY | O_CLOEXEC);
+	if (container->ns < 0) {
+		perror("open container mount ns failed");
+		goto fail;
+	}
 
 	/* wait for ready message */
 	if (hyper_get_type_block(arg.pipe[0], &type) < 0 || type != READY) {
@@ -484,6 +492,10 @@ int hyper_start_container(struct hyper_container *container,
 	fprintf(stdout, "container %s init pid is %d\n", container->id, pid);
 	return 0;
 fail:
+	close(arg.pipe[0]);
+	close(arg.pipe[1]);
+	close(container->ns);
+	container->ns = -1;
 	fprintf(stdout, "container %s init exit code %d\n", container->id, -1);
 	container->exec.code = -1;
 	return -1;
@@ -552,6 +564,7 @@ void hyper_cleanup_container(struct hyper_pod *pod)
 			free(map->path);
 		}
 		free(c->maps);
+		close(c->ns);
 	}
 
 	free(pod->c);
