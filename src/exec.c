@@ -17,6 +17,57 @@
 #include "util.h"
 #include "parse.h"
 
+static void pts_hup(struct hyper_event *de, int efd)
+{
+
+	struct hyper_buf *buf = &ctl.tty.wbuf;
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
+	int i, len, size;
+
+	hyper_setfd_block(de->fd);
+	hyper_setfd_block(ctl.tty.fd);
+	dprintf("%s\n", __func__);
+
+again:
+	while (buf->get + 12 < buf->size) {
+		size = read(de->fd, buf->data + buf->get + 12, buf->size - buf->get - 12);
+		fprintf(stdout, "%s: read %d data\n", __func__, size);
+		if (size <= 0) {
+			if (errno == EINTR)
+				continue;
+			perror("read from pts failed");
+			goto out;
+		}
+
+		hyper_set_be64(buf->data + buf->get, exec->seq);
+		hyper_set_be32(buf->data + buf->get + 8, size + 12);
+		buf->get += size + 12;
+
+		fprintf(stdout, "%s: seq %" PRIu64" len %" PRIu32"\n", __func__, exec->seq, size);
+		for (i = 0; i < size; i++)
+			dprintf("%0x ", buf->data[i]);
+	}
+
+	len = 0;
+	while (len < buf->get) {
+		size = write(ctl.tty.fd, buf->data + len, buf->get - len);
+		if (size <= 0) {
+			if (errno == EINTR)
+				continue;
+			perror("write to tty failed");
+			goto out;
+		}
+		len += size;
+	}
+
+	buf->get -= len;
+	memmove(buf->data, buf->data + len, buf->get);
+	goto again;
+out:
+	hyper_setfd_nonblock(ctl.tty.fd);
+	return hyper_event_hup(de, efd);
+}
+
 static int pts_loop(struct hyper_event *de)
 {
 	int size = 0, i;
@@ -57,7 +108,7 @@ static int pts_loop(struct hyper_event *de)
 struct hyper_event_ops pts_ops = {
 	.read		= pts_loop,
 	.write		= hyper_event_write,
-	.hup		= hyper_event_hup,
+	.hup		= pts_hup,
 	.wbuf_size	= 512,
 	/* don't need read buff, the pts data will store in tty buffer */
 };
