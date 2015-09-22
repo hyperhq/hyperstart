@@ -426,7 +426,7 @@ static int hyper_setup_pty(struct hyper_container *c)
 }
 
 int hyper_start_container(struct hyper_container *container,
-			  int utsns, int ipcns)
+			  int utsns, int ipcns, struct hyper_pod *pod)
 {
 	int stacksize = getpagesize() * 4;
 	struct hyper_container_arg arg = {
@@ -486,7 +486,7 @@ int hyper_start_container(struct hyper_container *container,
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
 
-	if (hyper_watch_exec_pty(&container->exec) < 0)
+	if (hyper_watch_exec_pty(&container->exec, pod) < 0)
 		fprintf(stderr, "faile to watch container pty\n");
 
 	fprintf(stdout, "container %s init pid is %d\n", container->id, pid);

@@ -576,6 +576,7 @@ realloc:
 	if (exec == NULL)
 		goto out;
 
+	exec->ptyfd = -1;
 	INIT_LIST_HEAD(&exec->list);
 
 	for (i = 0, j = 0; i < n; i++) {

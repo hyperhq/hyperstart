@@ -63,27 +63,23 @@ static int hyper_set_win_size(char *json, int length)
 			return 0;
 		}
 
-		fprintf(stdout, "find exec %s, pts %s, pid is %d, seq is %" PRIu64"\n",
-			exec->id ? exec->id : "pod", exec->pty, exec->pid, ws.seq);
-		name = exec->pty;
+		fprintf(stdout, "find exec %s, pid is %d, seq is %" PRIu64"\n",
+			exec->id ? exec->id : "pod", exec->pid, ws.seq);
+		fd = exec->ptyfd;
 	} else {
 		if (sprintf(path, "/dev/%s", ws.tty) < 0) {
 			fprintf(stderr, "get tty device failed\n");
 			return -1;
 		}
-		name = path;
-	}
-
-	fprintf(stdout, "try to open %s\n", name);
-	ret = hyper_open_serial_dev(name);
-	if (ret < 0) {
-		fprintf(stderr, "cannot open %s to set term size\n", name);
-		goto out;
+		fd = hyper_open_serial_dev(name);
+		if (fd < 0) {
+			fprintf(stderr, "cannot open %s to set term size\n", name);
+			goto out;
+		}
 	}
 
 	size.ws_row = ws.row;
 	size.ws_col = ws.column;
-	fd = ret;
 
 	ret = ioctl(fd, TIOCSWINSZ, &size);
 	if (ret < 0)
@@ -226,7 +222,7 @@ static int hyper_handle_exit(struct hyper_pod *pod)
 	return 0;
 }
 
-static int hyper_signal_loop(struct hyper_event *de)
+static int hyper_signal_loop(struct hyper_event *de, int closed)
 {
 	int size;
 	struct signalfd_siginfo sinfo;
@@ -432,7 +428,7 @@ static int hyper_do_start_containers(void *data)
 	for (i = 0; i < pod->c_num; i++) {
 		c = &pod->c[i];
 		list_add_tail(&c->exec.list, &pod->exec_head);
-		hyper_start_container(c, utsns, ipcns);
+		hyper_start_container(c, utsns, ipcns, pod);
 	}
 
 	if (hyper_send_type(arg->ctl_pipe[1], READY) < 0) {
@@ -1239,6 +1235,7 @@ static int hyper_loop(void)
 			if (hyper_handle_event(ctl.efd, &events[i]) < 0)
 				return -1;
 		}
+		hyper_modify_event(ctl.efd, &ctl.sig, EPOLLIN);
 	}
 
 	free(events);
