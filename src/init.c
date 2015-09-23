@@ -1235,7 +1235,6 @@ static int hyper_loop(void)
 			if (hyper_handle_event(ctl.efd, &events[i]) < 0)
 				return -1;
 		}
-		hyper_modify_event(ctl.efd, &ctl.sig, EPOLLIN);
 	}
 
 	free(events);

@@ -20,9 +20,23 @@
 static void pts_hup(struct hyper_event *de, int efd)
 {
 	struct hyper_pod *pod = de->ptr;
+	struct hyper_buf *buf = &ctl.tty.wbuf;
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
 
 	fprintf(stdout, "%s\n", __func__);
+
+	if (buf->get + 12 > buf->size) {
+		fprintf(stdout, "%s: tty buf full\n", __func__);
+		return;
+	}
+
+	/* no in event, no more data, send eof */
+	hyper_set_be64(buf->data + buf->get, exec->seq);
+	hyper_set_be32(buf->data + buf->get + 8, 12);
+	buf->get += 12;
+
+	hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT);
+
 	hyper_release_exec(exec, pod);
 }
 
@@ -45,12 +59,7 @@ static int pts_loop(struct hyper_event *de)
 				return -1;
 			}
 
-			if (!exec->exit && size != 0)
-				break;
-
-			/* container task exited, No more data from pts of container, release exec */
-			size = 0;
-			fprintf(stdout, "%s: get eof from pts of contaienr\n", __func__);
+			break;
 		}
 
 		hyper_set_be64(buf->data + buf->get, exec->seq);
