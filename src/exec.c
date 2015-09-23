@@ -213,7 +213,6 @@ int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 		return -1;
 	}
 
-	hyper_list_dir("/proc/1/fd/");
 	return 0;
 }
 
