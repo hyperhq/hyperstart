@@ -222,7 +222,7 @@ static int hyper_handle_exit(struct hyper_pod *pod)
 	return 0;
 }
 
-static int hyper_signal_loop(struct hyper_event *de, int closed)
+static int hyper_signal_loop(struct hyper_event *de)
 {
 	int size;
 	struct signalfd_siginfo sinfo;

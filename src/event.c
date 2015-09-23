@@ -229,11 +229,18 @@ int hyper_handle_event(int efd, struct epoll_event *event)
 	fprintf(stdout, "%s get event %d, de %p, fd %d. ops %p\n",
 			__func__, event->events, de, de->fd, de->ops);
 
+	/* do not handle hup event if have in event */
 	if (event->events & EPOLLIN) {
 		fprintf(stdout, "%s event EPOLLIN, de %p, fd %d, %p\n",
 			__func__, de, de->fd, de->ops);
 		if (de->ops->read(de) < 0)
 			return -1;
+	} else if (event->events & EPOLLHUP) {
+		fprintf(stdout, "%s event EPOLLHUP, de %p, fd %d, %p\n",
+			__func__, de, de->fd, de->ops);
+		if (de->ops->hup)
+			de->ops->hup(de, efd);
+		return 0;
 	}
 
 	if (event->events & EPOLLOUT) {
@@ -246,14 +253,6 @@ int hyper_handle_event(int efd, struct epoll_event *event)
 	if (event->events & EPOLLERR) {
 		fprintf(stderr, "get epoll err of not epool in event\n");
 		return -1;
-	}
-
-	if (event->events & EPOLLHUP) {
-		fprintf(stdout, "%s event EPOLLHUP, de %p, fd %d, %p\n",
-			__func__, de, de->fd, de->ops);
-		if (de->ops->hup)
-			de->ops->hup(de, efd);
-		return 0;
 	}
 
 	return 0;

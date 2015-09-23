@@ -16,6 +16,7 @@ struct hyper_exec {
 	int			init;
 	int			ptyfd;
 	uint8_t			code;
+	uint8_t			exit;
 };
 
 struct hyper_pod;

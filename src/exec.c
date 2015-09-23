@@ -19,59 +19,45 @@
 
 static void pts_hup(struct hyper_event *de, int efd)
 {
-	struct hyper_buf *buf = &ctl.tty.wbuf;
-	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
 	struct hyper_pod *pod = de->ptr;
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
 
-	dprintf("%s\n", __func__);
-
-	if (buf->get + 12 < buf->size) {
-		hyper_set_be64(buf->data + buf->get, exec->seq);
-		hyper_set_be32(buf->data + buf->get + 8, 12);
-		buf->get += 12;
-
-		fprintf(stdout, "%s: seq %" PRIu64"\n", __func__, exec->seq);
-	}
-
-	if (hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT) < 0) {
-		fprintf(stderr, "modify ctl tty event to in & out failed\n");
-	}
-
+	fprintf(stdout, "%s\n", __func__);
 	hyper_release_exec(exec, pod);
 }
 
 static int pts_loop(struct hyper_event *de)
 {
-	int size = 0, i;
+	int size = -1;
 	struct hyper_buf *buf = &ctl.tty.wbuf;
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
 
 	fprintf(stdout, "%s\n", __func__);
-	while (buf->get + 12 < buf->size) {
+	while ((buf->get + 12 < buf->size) && size) {
 		size = read(de->fd, buf->data + buf->get + 12, buf->size - buf->get - 12);
 		fprintf(stdout, "%s: read %d data\n", __func__, size);
 		if (size <= 0) {
 			if (errno == EINTR)
 				continue;
 
-			if (errno == EAGAIN || errno == EIO) {
-				break;
-			}
-
-			if (size != 0) {
+			if (errno != EAGAIN && errno != EIO) {
 				perror("fail to read tty fd");
 				return -1;
 			}
+
+			if (!exec->exit && size != 0)
+				break;
+
+			/* container task exited, No more data from pts of container, release exec */
+			size = 0;
+			fprintf(stdout, "%s: get eof from pts of contaienr\n", __func__);
 		}
+
 		hyper_set_be64(buf->data + buf->get, exec->seq);
 		hyper_set_be32(buf->data + buf->get + 8, size + 12);
 		buf->get += size + 12;
 
 		dprintf("%s: seq %" PRIu64" len %" PRIu32"\n", __func__, exec->seq, size);
-		for (i = 0; i < size; i++)
-			dprintf("%0x ", buf->data[i]);
-		if (size == 0)
-			break;
 	}
 
 	if (hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT) < 0) {
@@ -84,8 +70,8 @@ static int pts_loop(struct hyper_event *de)
 
 struct hyper_event_ops pts_ops = {
 	.read		= pts_loop,
-	.write		= hyper_event_write,
 	.hup		= pts_hup,
+	.write		= hyper_event_write,
 	.wbuf_size	= 512,
 	/* don't need read buff, the pts data will store in tty buffer */
 };
@@ -437,9 +423,16 @@ int hyper_release_exec(struct hyper_exec *exec,
 {
 	int i;
 
+	if (!exec->exit) {
+		fprintf(stdout, "first user of exec exit\n");
+		exec->exit = 1;
+		return 0;
+	}
+
+	fprintf(stdout, "second user of exec exit, release\n");
 	close(exec->e.fd);
+	close(exec->ptyfd);
 	hyper_reset_event(&exec->e);
-	//close(exec->ptyfd);
 
 	list_del_init(&exec->list);
 
@@ -530,16 +523,11 @@ int hyper_send_exec_eof(int to, struct hyper_pod *pod,
 		return 0;
 	}
 
-	fprintf(stdout, "%s exec pid %d, seq %" PRIu64 ", container %s\n",
+	fprintf(stdout, "%s exec exit pid %d, seq %" PRIu64 ", container %s\n",
 		__func__, exec->pid, exec->seq, exec->id ? exec->id : "pod");
 
 	exec->code = code;
-
-	if (exec->seq == 0)
-		goto out;
-
-out:
-	close(exec->ptyfd);
+	hyper_release_exec(exec, pod);
 
 	return 0;
 }
