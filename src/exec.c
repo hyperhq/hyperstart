@@ -284,7 +284,7 @@ static int hyper_do_exec_cmd(void *data)
 	struct hyper_exec_arg *arg = data;
 	struct hyper_exec *exec = arg->exec;
 	struct hyper_pod *pod = arg->pod;
-	int pipe[2], pid;
+	int pipe[2] = {-1, -1}, pid;
 
 	if (exec->id) {
 		char path[512];
@@ -324,11 +324,6 @@ static int hyper_do_exec_cmd(void *data)
 			goto out;
 		}
 
-		if (hyper_send_type_block(arg->pipe[1], READY, 0) < 0) {
-			fprintf(stderr, "%s send ready message failed\n", __func__);
-			goto out;
-		}
-
 		fprintf(stdout, "hyper init get ready message\n");
 		exec->pid = pid;
 		fprintf(stdout, "create exec cmd %s pid %d\n", exec->argv[0], pid);
@@ -337,6 +332,11 @@ static int hyper_do_exec_cmd(void *data)
 
 		if (hyper_watch_exec_pty(exec, pod) < 0) {
 			fprintf(stderr, "add pts master event failed\n");
+			goto out;
+		}
+
+		if (hyper_send_type_block(arg->pipe[1], READY, 0) < 0) {
+			fprintf(stderr, "%s send ready message failed\n", __func__);
 			goto out;
 		}
 out:
@@ -419,6 +419,7 @@ int hyper_exec_cmd(char *json, int length)
 		return -1;
 	}
 
+	fprintf(stdout, "%s get ready message %"PRIu32 "\n", __func__, type);
 	ret = 0;
 out:
 	close(arg.pipe[0]);
