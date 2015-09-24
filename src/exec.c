@@ -433,13 +433,14 @@ int hyper_release_exec(struct hyper_exec *exec,
 {
 	int i;
 
-	if (!exec->exit) {
+	if (!exec->exit && exec->seq) {
 		fprintf(stdout, "first user of exec exit\n");
 		exec->exit = 1;
 		return 0;
 	}
 
-	fprintf(stdout, "second user of exec exit, release\n");
+	/* exec has no pty or the pty user already exited */
+	fprintf(stdout, "last user of exec exit, release\n");
 	close(exec->e.fd);
 	close(exec->ptyfd);
 	hyper_reset_event(&exec->e);
