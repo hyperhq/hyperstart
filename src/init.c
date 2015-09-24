@@ -468,7 +468,7 @@ int hyper_start_containers(struct hyper_pod *pod)
 		goto out;
 	}
 
-	pid = clone(hyper_do_start_containers, stack + stacksize, CLONE_VM| CLONE_FILES, &arg);
+	pid = clone(hyper_do_start_containers, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
 	free(stack);
 	if (pid < 0) {
 		perror("enter container pid ns failed");
@@ -932,7 +932,7 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 	arg.data = data;
 	sprintf(arg.root, "/tmp/hyper/%s/root/%s/", c->id, c->rootfs);
 
-	pid = clone(hyper_do_cmd_read_file, stack + stacksize, CLONE_VM, &arg);
+	pid = clone(hyper_do_cmd_read_file, stack + stacksize, CLONE_VM| SIGCHLD, &arg);
 	free(stack);
 	if (pid < 0) {
 		perror("fail to fork writter process");

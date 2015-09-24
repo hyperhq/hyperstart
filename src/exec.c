@@ -9,6 +9,7 @@
 #include <sched.h>
 #include <errno.h>
 #include <string.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include "syscall.h"
@@ -407,7 +408,8 @@ int hyper_exec_cmd(char *json, int length)
 	}
 
 	arg.exec = exec;
-	pid = clone(hyper_do_exec_cmd, stack + stacksize, CLONE_VM| CLONE_FILES, &arg);
+	pid = clone(hyper_do_exec_cmd, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
+	fprintf(stdout, "do_exec_cmd pid %d\n", pid);
 	free(stack);
 	if (pid < 0) {
 		perror("clone hyper_do_exec_cmd failed");
