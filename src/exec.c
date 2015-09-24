@@ -165,12 +165,8 @@ int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 		goto out;
 	}
 
-	if (hyper_send_type_block(to, READY, 0) < 0) {
-		fprintf(stderr, "%s send ready message failed\n", __func__);
-		goto out;
-	}
-
 	fflush(stdout);
+	hyper_send_type(to, READY);
 
 	if (dup2(fd, STDIN_FILENO) < 0) {
 		perror("dup tty device to stdin failed");
@@ -285,6 +281,7 @@ static int hyper_do_exec_cmd(void *data)
 	struct hyper_exec *exec = arg->exec;
 	struct hyper_pod *pod = arg->pod;
 	int pipe[2] = {-1, -1}, pid;
+	int ret = -1;
 
 	if (exec->id) {
 		char path[512];
@@ -294,33 +291,33 @@ static int hyper_do_exec_cmd(void *data)
 		pidns = open(path, O_RDONLY| O_CLOEXEC);
 		if (pidns < 0) {
 			perror("fail to open pidns of pod init");
-			_exit(-1);
+			goto out;
 		}
 
 		/* enter pidns of pod init, so the children of this process will run in
 		 * pidns of pod init, see man 2 setns */
 		if (setns(pidns, CLONE_NEWPID) < 0) {
 			perror("enter pidns of pod init failed");
-			_exit(-1);
+			goto out;
 		}
 		close(pidns);
 	}
 
-	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, pipe) < 0) {
+	if (pipe2(pipe, O_CLOEXEC) < 0) {
 		perror("create pipe in exec command failed");
-		_exit(-1);
+		goto out;
 	}
 
 	pid = fork();
 	if (pid < 0) {
 		perror("fail to fork");
-		_exit(-1);
+		goto out;
 	} else if (pid > 0) {
 		uint32_t type;
 
-		if (hyper_get_type_block(pipe[0], &type) < 0 || type != READY) {
+		if (hyper_get_type(pipe[0], &type) < 0 || type != READY) {
 			fprintf(stderr, "hyper init doesn't get execcmd ready message\n");
-			hyper_send_type_block(arg->pipe[1], ERROR, 0);
+			hyper_send_type(arg->pipe[1], ERROR);
 			goto out;
 		}
 
@@ -335,32 +332,35 @@ static int hyper_do_exec_cmd(void *data)
 			goto out;
 		}
 
-		if (hyper_send_type_block(arg->pipe[1], READY, 0) < 0) {
-			fprintf(stderr, "%s send ready message failed\n", __func__);
-			goto out;
-		}
-out:
-		close(pipe[0]);
-		close(pipe[1]);
-		_exit(0);
+		ret = 0;
+		goto out;
 	}
 
 	if (exec->id && hyper_enter_container(pod, exec) < 0) {
 		fprintf(stderr, "enter container ns failed\n");
-		_exit(-1);
+		goto exit;
 	}
 
 	if (hyper_dup_exec_tty(pipe[1], exec) < 0) {
 		fprintf(stderr, "dup pts to exec stdio failed\n");
-		_exit(-1);
+		goto exit;
 	}
 
 	if (execvp(exec->argv[0], exec->argv) < 0) {
 		perror("exec failed");
-		_exit(-1);
+		goto exit;
 	}
 
-	_exit(0);
+	ret = 0;
+exit:
+	hyper_send_type(pipe[1], ERROR);
+	_exit(ret);
+
+out:
+	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
+	close(pipe[0]);
+	close(pipe[1]);
+	_exit(ret);
 }
 
 int hyper_exec_cmd(char *json, int length)
@@ -401,7 +401,7 @@ int hyper_exec_cmd(char *json, int length)
 		goto out;
 	}
 
-	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, arg.pipe) < 0) {
+	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between pod init execcmd failed");
 		goto out;
 	}
@@ -414,7 +414,7 @@ int hyper_exec_cmd(char *json, int length)
 		goto out;
 	}
 
-	if (hyper_get_type_block(arg.pipe[0], &type) < 0 || type != READY) {
+	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
 		fprintf(stderr, "hyper init doesn't get execcmd ready message\n");
 		return -1;
 	}
@@ -436,6 +436,8 @@ int hyper_release_exec(struct hyper_exec *exec,
 	if (!exec->exit && exec->seq) {
 		fprintf(stdout, "first user of exec exit\n");
 		exec->exit = 1;
+		close(exec->ptyfd);
+		exec->ptyfd = -1;
 		return 0;
 	}
 

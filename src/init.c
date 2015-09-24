@@ -431,13 +431,13 @@ static int hyper_do_start_containers(void *data)
 		hyper_start_container(c, utsns, ipcns, pod);
 	}
 
-	if (hyper_send_type(arg->ctl_pipe[1], READY) < 0) {
+	ret = 0;
+out:
+	if (hyper_send_type(arg->ctl_pipe[1], ret ? ERROR : READY) < 0) {
 		fprintf(stderr, "container init send ready message failed\n");
 		goto out;
 	}
 
-	ret = 0;
-out:
 	close(pidns);
 	close(utsns);
 	close(ipcns);
@@ -463,7 +463,7 @@ int hyper_start_containers(struct hyper_pod *pod)
 		goto out;
 	}
 
-	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, arg.ctl_pipe) < 0) {
+	if (pipe2(arg.ctl_pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between hyper init and pod init failed");
 		goto out;
 	}
@@ -476,7 +476,7 @@ int hyper_start_containers(struct hyper_pod *pod)
 	}
 
 	/* Wait for container start */
-	if (hyper_get_type_block(arg.ctl_pipe[0], &type) < 0) {
+	if (hyper_get_type(arg.ctl_pipe[0], &type) < 0) {
 		perror("get enter_container_pidns ready message failed");
 		goto out;
 	}
@@ -728,7 +728,7 @@ static int hyper_cmd_write_file(char *json, int length)
 	int pipe[2] = {-1, -1};
 	int pid, mntns = -1, fd;
 	char path[512];
-	int len = 0, size;
+	int len = 0, size, ret = -1;
 
 	fprintf(stdout, "%s\n", __func__);
 	memset(&writter, 0, sizeof(writter));
@@ -743,7 +743,7 @@ static int hyper_cmd_write_file(char *json, int length)
 		goto out;
 	}
 
-	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, pipe) < 0) {
+	if (pipe2(pipe, O_CLOEXEC) < 0) {
 		perror("create writter pipe failed");
 		goto out;
 	}
@@ -761,17 +761,18 @@ static int hyper_cmd_write_file(char *json, int length)
 	} else if (pid > 0) {
 		uint32_t type;
 
-		if (hyper_get_type_block(pipe[0], &type) < 0 || type != READY) {
+		if (hyper_get_type(pipe[0], &type) < 0 || type != READY) {
 			fprintf(stderr, "get incorrect message type %d, expect READY\n", type);
 			goto out;
 		}
 
+		ret = 0;
 		goto out;
 	}
 
 	if (setns(mntns, CLONE_NEWNS) < 0) {
 		perror("fail to enter container ns");
-		_exit(-1);
+		goto exit;
 	}
 
 	sprintf(path, "/tmp/hyper/%s/root/%s/", c->id, c->rootfs);
@@ -780,13 +781,13 @@ static int hyper_cmd_write_file(char *json, int length)
 	/* TODO: wait for container finishing setup root */
 	if (chroot(path) < 0) {
 		perror("chroot for exec command failed");
-		_exit(-1);
+		goto exit;
 	}
 
 	fd = open(writter.file, O_CREAT| O_WRONLY, 0644);
 	if (fd < 0) {
 		perror("fail to open target file");
-		_exit(-1);
+		goto exit;
 	}
 
 	while(len < writter.len) {
@@ -797,13 +798,14 @@ static int hyper_cmd_write_file(char *json, int length)
 				continue;
 
 			perror("fail to write data to file");
-			_exit(-1);
+			goto exit;
 		}
 
 		len += size;
 	}
-
-	hyper_send_type(pipe[1], READY);
+	ret = 0;
+exit:
+	hyper_send_type(pipe[1], ret ? ERROR : READY);
 	_exit(0);
 out:
 	close(pipe[0]);
@@ -827,7 +829,7 @@ struct hyper_file_arg {
 static int hyper_do_cmd_read_file(void *data)
 {
 	struct stat st;
-	int len = 0, size, fd;
+	int len = 0, size, fd, ret = -1;
 	struct hyper_file_arg *arg = data;
 
 	if (setns(arg->mntns, CLONE_NEWNS) < 0) {
@@ -877,11 +879,10 @@ static int hyper_do_cmd_read_file(void *data)
 	}
 
 	fprintf(stdout, "read data %s\n", *arg->data);
-	hyper_send_type(arg->pipe[1], READY);
-	return 0;
+	ret = 0;
 err:
-	hyper_send_type(arg->pipe[1], ERROR);
-	return -1;
+	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
+	return ret;
 }
 
 static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_t **data)
@@ -915,7 +916,7 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 		goto out;
 	}
 
-	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, arg.pipe) < 0) {
+	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
 		perror("create reader pipe failed");
 		goto out;
 	}
@@ -938,7 +939,7 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 		goto out;
 	}
 
-	if (hyper_get_type_block(arg.pipe[0], &type) < 0 || type != READY) {
+	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
 		fprintf(stderr, "%s to incorrect type %" PRIu32 "\n", __func__, type);
 		goto out;
 	}

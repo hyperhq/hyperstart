@@ -396,7 +396,7 @@ static int hyper_container_init(void *data)
 
 fail:
 	container->exec.code = -1;
-	hyper_send_type_block(arg->pipe[1], ERROR, 0);
+	hyper_send_type(arg->pipe[1], ERROR);
 	_exit(-1);
 }
 
@@ -452,7 +452,7 @@ int hyper_start_container(struct hyper_container *container,
 		goto fail;
 	}
 
-	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, arg.pipe) < 0) {
+	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between pod init execcmd failed");
 		goto fail;
 	}
@@ -478,7 +478,7 @@ int hyper_start_container(struct hyper_container *container,
 	}
 
 	/* wait for ready message */
-	if (hyper_get_type_block(arg.pipe[0], &type) < 0 || type != READY) {
+	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
 		fprintf(stderr, "wait for container started failed\n");
 		goto fail;
 	}
