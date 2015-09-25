@@ -450,7 +450,7 @@ out:
 int hyper_start_containers(struct hyper_pod *pod)
 {
 	int stacksize = getpagesize() * 4;
-	void *stack = malloc(stacksize);
+	void *stack = NULL;
 	struct hyper_pod_arg arg = {
 		.pod		= pod,
 		.ctl_pipe	= {-1, -1},
@@ -458,13 +458,15 @@ int hyper_start_containers(struct hyper_pod *pod)
 	int ret = -1, pid;
 	uint32_t type;
 
-	if (stack == NULL) {
-		perror("fail to allocate stack for container init");
-		goto out;
-	}
 
 	if (pipe2(arg.ctl_pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between hyper init and pod init failed");
+		goto out;
+	}
+
+	stack = malloc(stacksize);
+	if (stack == NULL) {
+		perror("fail to allocate stack for container init");
 		goto out;
 	}
 
@@ -515,16 +517,17 @@ static int hyper_setup_container(struct hyper_pod *pod)
 
 	uint32_t type;
 	void *stack;
+	int ret = -1;
 
 	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, arg.ctl_pipe) < 0) {
 		perror("create pipe between hyper init and pod init failed");
-		return -1;
+		goto out;
 	}
 
 	stack = malloc(stacksize);
 	if (stack == NULL) {
 		perror("fail to allocate stack for container init");
-		return -1;
+		goto out;
 	}
 
 	arg.pod = pod;
@@ -533,41 +536,45 @@ static int hyper_setup_container(struct hyper_pod *pod)
 	free(stack);
 	if (pod->init_pid < 0) {
 		perror("create container init process failed");
-		return -1;
+		goto out;
 	}
 	fprintf(stdout, "pod init pid %d\n", pod->init_pid);
 
-	close(arg.ctl_pipe[1]);
-	ctl.ctl.fd = arg.ctl_pipe[0];
-
 	/* Wait for container start */
-	if (hyper_get_type_block(ctl.ctl.fd, &type) < 0) {
+	if (hyper_get_type_block(arg.ctl_pipe[0], &type) < 0) {
 		perror("get container init ready message failed");
-		return -1;
+		goto out;
 	}
 
 	if (type != READY) {
 		fprintf(stderr, "get incorrect message type %d, expect READY\n", type);
-		return -1;
+		goto out;
 	}
 
 	if (hyper_start_containers(pod) < 0) {
 		fprintf(stderr, "start containers failed\n");
-		return -1;
+		goto out;
 	}
 
-	if (hyper_setfd_cloexec(ctl.ctl.fd) < 0) {
+	if (hyper_setfd_cloexec(arg.ctl_pipe[0]) < 0) {
 		perror("set ctl pipe fd FD_CLOEXEC failed");
-		return -1;
+		goto out;
 	}
 
+	ctl.ctl.fd = arg.ctl_pipe[0];
 	fprintf(stdout, "hyper_init_event hyper ctl pipe fd %d\n", ctl.ctl.fd);
 	if (hyper_init_event(&ctl.ctl, &hyper_ctl_pipe_ops, pod) < 0 ||
 	    hyper_add_event(ctl.efd, &ctl.ctl, EPOLLIN) < 0) {
-		return -1;
+		goto out;
 	}
 
-	return 0;
+	ret = 0;
+out:
+	close(arg.ctl_pipe[1]);
+	if (ret < 0) {
+		close(arg.ctl_pipe[0]);
+	}
+	return ret;
 }
 
 #ifdef WITH_VBOX
@@ -894,14 +901,9 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 		.pipe = {-1, -1},
 	};
 	int stacksize = getpagesize() * 4;
-	void *stack = malloc(stacksize);
+	void *stack = NULL;
 	int pid, ret = -1;
 	uint32_t type;
-
-	if (stack == NULL) {
-		perror("fail to allocate stack for container init");
-		goto out;
-	}
 
 	fprintf(stdout, "%s\n", __func__);
 	memset(&reader, 0, sizeof(reader));
@@ -931,6 +933,12 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 	arg.datalen = datalen;
 	arg.data = data;
 	sprintf(arg.root, "/tmp/hyper/%s/root/%s/", c->id, c->rootfs);
+
+	stack = malloc(stacksize);
+	if (stack == NULL) {
+		perror("fail to allocate stack for container init");
+		goto out;
+	}
 
 	pid = clone(hyper_do_cmd_read_file, stack + stacksize, CLONE_VM| SIGCHLD, &arg);
 	free(stack);

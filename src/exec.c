@@ -369,8 +369,7 @@ int hyper_exec_cmd(char *json, int length)
 	struct hyper_exec *exec;
 	struct hyper_pod *pod = &global_pod;
 	int stacksize = getpagesize() * 4;
-	void *stack = malloc(stacksize);
-	struct hyper_exec_arg arg = {
+	void *stack = NULL;	struct hyper_exec_arg arg = {
 		.pod	= pod,
 		.exec	= NULL,
 		.pipe	= {-1, -1},
@@ -392,11 +391,6 @@ int hyper_exec_cmd(char *json, int length)
 		goto out;
 	}
 
-	if (stack == NULL) {
-		perror("fail to allocate stack for container init");
-		goto out;
-	}
-
 	if (hyper_setup_exec_tty(exec) < 0) {
 		fprintf(stderr, "setup exec tty failed\n");
 		goto out;
@@ -408,6 +402,13 @@ int hyper_exec_cmd(char *json, int length)
 	}
 
 	arg.exec = exec;
+
+	stack = malloc(stacksize);
+	if (stack == NULL) {
+		perror("fail to allocate stack for container init");
+		goto out;
+	}
+
 	pid = clone(hyper_do_exec_cmd, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
 	fprintf(stdout, "do_exec_cmd pid %d\n", pid);
 	free(stack);

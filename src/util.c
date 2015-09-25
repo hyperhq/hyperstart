@@ -57,6 +57,7 @@ int hyper_list_dir(char *path)
 	for (i = 0; i < num; i++) {
 		dir = list[i];
 		fprintf(stdout, "%s get %s\n", path, dir->d_name);
+		free(dir);
 	}
 
 	free(list);
@@ -192,8 +193,7 @@ int hyper_insmod(char *module)
 	ret = 0;
 out:
 	close(fd);
-	if (buf)
-		free(buf);
+	free(buf);
 
 	return ret;
 err:
@@ -426,13 +426,15 @@ void hyper_kill_all(void)
 
 int hyper_send_finish(struct hyper_pod *pod)
 {
-	int i;
+	int i, ret;
 	uint8_t *data = calloc(pod->c_num, 4);
 
 	for (i = 0; i < pod->c_num; i++)
 		hyper_set_be32(data + (i * 4), pod->c[i].exec.code);
 
-	return hyper_send_msg(ctl.chan.fd, FINISH, pod->c_num * 4, data);
+	ret = hyper_send_msg(ctl.chan.fd, FINISH, pod->c_num * 4, data);
+	free(data);
+	return ret;
 }
 
 void hyper_shutdown(struct hyper_pod *pod)
