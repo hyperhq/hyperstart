@@ -11,16 +11,34 @@
 #include <ctype.h>
 #include <mntent.h>
 #include <sys/mount.h>
+#include <sys/socket.h>
 #include <sys/reboot.h>
 #include <linux/reboot.h>
 
 #include "util.h"
 #include "hyper.h"
+#include "container.h"
 #include "../config.h"
 
 char *read_cmdline(void)
 {
 	return NULL;
+}
+
+int hyper_setup_env(struct env *envs, int num)
+{
+	int i, ret = 0;
+	struct env *env;
+
+	for (i = 0; i < num; i++) {
+		env = &envs[i];
+		if (setenv(env->env, env->value, 1) < 0) {
+			perror("fail to setup env");
+			ret = -1;
+		}
+	}
+
+	return ret;
 }
 
 int hyper_list_dir(char *path)
@@ -39,6 +57,7 @@ int hyper_list_dir(char *path)
 	for (i = 0; i < num; i++) {
 		dir = list[i];
 		fprintf(stdout, "%s get %s\n", path, dir->d_name);
+		free(dir);
 	}
 
 	free(list);
@@ -174,8 +193,7 @@ int hyper_insmod(char *module)
 	ret = 0;
 out:
 	close(fd);
-	if (buf)
-		free(buf);
+	free(buf);
 
 	return ret;
 err:
@@ -306,6 +324,21 @@ int hyper_setfd_nonblock(int fd)
 	return 0;
 }
 
+int hyper_socketpair(int domain, int type, int protocol, int sv[2])
+{
+	if (socketpair(domain, type, protocol, sv) < 0) {
+		perror("socketpair failed");
+		return -1;
+	}
+
+	if (hyper_setfd_cloexec(sv[0]) < 0 ||
+	    hyper_setfd_cloexec(sv[1]) < 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
 void hyper_unmount_all(void)
 {
 	FILE *mtab;
@@ -393,13 +426,15 @@ void hyper_kill_all(void)
 
 int hyper_send_finish(struct hyper_pod *pod)
 {
-	int i;
+	int i, ret;
 	uint8_t *data = calloc(pod->c_num, 4);
 
 	for (i = 0; i < pod->c_num; i++)
 		hyper_set_be32(data + (i * 4), pod->c[i].exec.code);
 
-	return hyper_send_msg(ctl.chan.fd, FINISH, pod->c_num * 4, data);
+	ret = hyper_send_msg(ctl.chan.fd, FINISH, pod->c_num * 4, data);
+	free(data);
+	return ret;
 }
 
 void hyper_shutdown(struct hyper_pod *pod)

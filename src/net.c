@@ -90,7 +90,7 @@ int hyper_send_type(int fd, uint32_t type)
 	return hyper_send_msg(fd, type, 0, NULL);
 }
 
-int hyper_get_type_block(int fd, uint32_t *type)
+int hyper_get_type(int fd, uint32_t *type)
 {
 	int len = 0, size;
 	uint8_t buf[8];
@@ -109,6 +109,34 @@ int hyper_get_type_block(int fd, uint32_t *type)
 
 	*type = hyper_get_be32(buf);
 	return 0;
+}
+
+int hyper_get_type_block(int fd, uint32_t *type)
+{
+	int ret = 0, flags;
+
+	flags = fcntl(fd, F_GETFL, 0);
+	if (flags < 0) {
+		fprintf(stderr, "%s get fd flag failed\n", __func__);
+		return -1;
+	}
+
+	if (fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
+		perror("set fd BLOCK failed");
+		return -1;
+	}
+
+	ret = hyper_get_type(fd, type);
+	if (ret < 0) {
+		fprintf(stderr, "%s can not get type\n", __func__);
+	}
+
+	if (fcntl(fd, F_SETFL, flags) < 0) {
+		perror("restore fd flag failed");
+		return -1;
+	}
+
+	return ret;
 }
 
 int hyper_send_type_block(int fd, uint32_t type, int need_ack)
@@ -134,7 +162,7 @@ int hyper_send_type_block(int fd, uint32_t type, int need_ack)
 	if (need_ack == 0)
 		goto out;
 
-	ret = hyper_get_type_block(fd, &t);
+	ret = hyper_get_type(fd, &t);
 	if (ret < 0) {
 		fprintf(stderr, "can not get type\n");
 		goto out;
@@ -145,8 +173,8 @@ int hyper_send_type_block(int fd, uint32_t type, int need_ack)
 	if (t != ACK)
 		ret = -1;
 out:
-	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-		perror("set fd BLOCK failed");
+	if (fcntl(fd, F_SETFL, flags) < 0) {
+		perror("restore fd flag failed");
 		return -1;
 	}
 

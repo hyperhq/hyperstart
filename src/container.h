@@ -33,15 +33,16 @@ struct hyper_container {
 	int			vols_num;
 	int			envs_num;
 	int			maps_num;
+	int			ns;
 	uint32_t		code;
 	struct hyper_exec	exec;
 };
 
 struct hyper_pod;
 
-int hyper_start_containers(struct hyper_pod *pod);
+int hyper_start_container(struct hyper_container *container,
+			  int utsns, int ipcns, struct hyper_pod *pod);
 struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id);
-int hyper_restart_containers(struct hyper_pod *pod);
 void hyper_cleanup_container(struct hyper_pod *pod);
 
 #endif

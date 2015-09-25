@@ -199,6 +199,9 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 
 	c->exec.init = 1;
 	c->exec.code = -1;
+	c->exec.e.fd = -1;
+	c->exec.ptyfd = -1;
+	c->ns = -1;
 
 	next_container = toks[i].size;
 	fprintf(stdout, "next container %d\n", next_container);
@@ -575,6 +578,8 @@ realloc:
 	if (exec == NULL)
 		goto out;
 
+	exec->ptyfd = -1;
+	exec->e.fd = -1;
 	INIT_LIST_HEAD(&exec->list);
 
 	for (i = 0, j = 0; i < n; i++) {
@@ -630,5 +635,124 @@ fail:
 	free(exec);
 
 	exec = NULL;
+	goto out;
+}
+
+int hyper_parse_write_file(struct hyper_writter *writter, char *json, int length)
+{
+	int i, n, ret = 0;
+
+	jsmn_parser p;
+	int toks_num = 10;
+	jsmntok_t *toks = NULL;
+
+	toks = calloc(toks_num, sizeof(jsmntok_t));
+
+	jsmn_init(&p);
+	n = jsmn_parse(&p, json, length,  toks, toks_num);
+	/* Must be json first */
+	if (n <= 0) {
+		fprintf(stdout, "jsmn parse failed, n is %d\n", n);
+		ret = -1;
+		goto out;
+	}
+
+	writter->len = length - toks[0].end;
+	writter->data = malloc(writter->len);
+
+	if (writter->data == NULL)
+		goto fail;
+
+	memcpy(writter->data, json + toks[0].end, writter->len);
+	fprintf(stdout, "writefile get data len %d %s\n", writter->len, writter->data);
+
+	for (i = 0; i < n; i++) {
+		jsmntok_t *t = &toks[i];
+
+		if (t->type != JSMN_STRING)
+			continue;
+
+		if (json_token_streq(json, t, "container")) {
+			if (i++ == n)
+				goto fail;
+
+			writter->id = strdup(json_token_str(json, &toks[i]));
+			fprintf(stdout, "writefile get container %s\n", writter->id);
+		} else if (json_token_streq(json, t, "file")) {
+			if (i++ == n)
+				goto fail;
+
+			writter->file = strdup(json_token_str(json, &toks[i]));
+			fprintf(stdout, "writefile get file %s\n", writter->file);
+		} else {
+			fprintf(stdout, "in writefile incorrect %s\n", json_token_str(json, &toks[i]));
+		}
+	}
+out:
+	free(toks);
+	return ret;
+fail:
+	free(writter->id);
+	free(writter->file);
+	free(writter->data);
+
+	ret = -1;
+	goto out;
+}
+
+int hyper_parse_read_file(struct hyper_reader *reader, char *json, int length)
+{
+	int i, n, ret = 0;
+
+	jsmn_parser p;
+	int toks_num = 10;
+	jsmntok_t *toks = NULL;
+
+	toks = calloc(toks_num, sizeof(jsmntok_t));
+	if (toks == NULL) {
+		fprintf(stderr, "fail to allocate tokens for read file cmd\n");
+		ret = -1;
+		goto out;
+	}
+
+	jsmn_init(&p);
+	n = jsmn_parse(&p, json, length,  toks, toks_num);
+	if (n < 0) {
+		fprintf(stdout, "jsmn parse failed, n is %d\n", n);
+		ret = -1;
+		goto out;
+	}
+
+	for (i = 0; i < n; i++) {
+		jsmntok_t *t = &toks[i];
+
+		if (t->type != JSMN_STRING)
+			continue;
+
+		if (json_token_streq(json, t, "container")) {
+			if (i++ == n)
+				goto fail;
+
+			reader->id = strdup(json_token_str(json, &toks[i]));
+			fprintf(stdout, "readfile get container %s\n", reader->id);
+		} else if (json_token_streq(json, t, "file")) {
+			if (i++ == n)
+				goto fail;
+
+			reader->file = strdup(json_token_str(json, &toks[i]));
+			fprintf(stdout, "readfile get file %s\n", reader->file);
+		} else {
+			fprintf(stdout, "in readfile incorrect %s\n", json_token_str(json, &toks[i]));
+		}
+	}
+
+out:
+	free(toks);
+	return ret;
+fail:
+	free(reader->id);
+	free(reader->file);
+
+	ret = -1;
 	goto out;
 }

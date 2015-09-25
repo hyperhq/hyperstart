@@ -9,5 +9,7 @@ struct hyper_exec *hyper_parse_execcmd(char *json, int length);
 char *json_token_str(char *js, jsmntok_t *t);
 int json_token_streq(char *js, jsmntok_t *t, char *s);
 int hyper_parse_winsize(struct hyper_win_size *ws, char *json, int length);
+int hyper_parse_write_file(struct hyper_writter *writter, char *json, int length);
+int hyper_parse_read_file(struct hyper_reader *reader, char *json, int length);
 
 #endif

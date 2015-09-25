@@ -226,29 +226,34 @@ void hyper_event_hup(struct hyper_event *de, int efd)
 int hyper_handle_event(int efd, struct epoll_event *event)
 {
 	struct hyper_event *de = event->data.ptr;
+	fprintf(stdout, "%s get event %d, de %p, fd %d. ops %p\n",
+			__func__, event->events, de, de->fd, de->ops);
 
-	if (event->events & EPOLLHUP) {
+	/* do not handle hup event if have in event */
+	if (event->events & EPOLLIN) {
+		fprintf(stdout, "%s event EPOLLIN, de %p, fd %d, %p\n",
+			__func__, de, de->fd, de->ops);
+		if (de->ops->read(de) < 0)
+			return -1;
+	} else if (event->events & EPOLLHUP) {
 		fprintf(stdout, "%s event EPOLLHUP, de %p, fd %d, %p\n",
 			__func__, de, de->fd, de->ops);
 		if (de->ops->hup)
 			de->ops->hup(de, efd);
 		return 0;
-	} else if (event->events & EPOLLIN) {
-		fprintf(stdout, "%s event EPOLLIN, de %p, fd %d, %p\n",
-			__func__, de, de->fd, de->ops);
-		return de->ops->read(de);
-	} else if (event->events & EPOLLOUT) {
+	}
+
+	if (event->events & EPOLLOUT) {
 		fprintf(stdout, "%s event EPOLLOUT, de %p, fd %d, %p\n",
 			__func__, de, de->fd, de->ops);
-		if (de->ops->write)
-			return de->ops->write(de);
-		fprintf(stderr, "warning: %p received unexpected write event\n", de);
-		return 0;
-	} else if (event->events & EPOLLERR) {
+		if (de->ops->write && de->ops->write(de) < 0)
+			return -1;
+	}
+
+	if (event->events & EPOLLERR) {
 		fprintf(stderr, "get epoll err of not epool in event\n");
 		return -1;
 	}
 
-	fprintf(stdout, "%s get unknown event %d\n", __func__, event->events);
-	return -1;
+	return 0;
 }

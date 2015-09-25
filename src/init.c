@@ -29,8 +29,7 @@
 #include "container.h"
 
 struct hyper_pod global_pod = {
-	.ce_head	=	LIST_HEAD_INIT(global_pod.ce_head),
-	.pe_head	=	LIST_HEAD_INIT(global_pod.pe_head),
+	.exec_head	=	LIST_HEAD_INIT(global_pod.exec_head),
 };
 struct hyper_exec *global_exec;
 
@@ -38,9 +37,7 @@ struct hyper_exec *global_exec;
 
 struct hyper_ctl ctl;
 
-static void hyper_cleanup_pod(struct hyper_pod *pod);
-static int hyper_handle_exit(struct hyper_pod *pod, int to,
-			   int container, int option);
+static int hyper_handle_exit(struct hyper_pod *pod);
 
 static int hyper_set_win_size(char *json, int length)
 {
@@ -66,27 +63,23 @@ static int hyper_set_win_size(char *json, int length)
 			return 0;
 		}
 
-		fprintf(stdout, "find exec %s, pts %s, pid is %d, seq is %" PRIu64"\n",
-			exec->id ? exec->id : "pod", exec->pty, exec->pid, ws.seq);
-		name = exec->pty;
+		fprintf(stdout, "find exec %s, pid is %d, seq is %" PRIu64"\n",
+			exec->id ? exec->id : "pod", exec->pid, ws.seq);
+		fd = exec->ptyfd;
 	} else {
 		if (sprintf(path, "/dev/%s", ws.tty) < 0) {
 			fprintf(stderr, "get tty device failed\n");
 			return -1;
 		}
-		name = path;
-	}
-
-	fprintf(stdout, "try to open %s\n", name);
-	ret = hyper_open_serial_dev(name);
-	if (ret < 0) {
-		fprintf(stderr, "cannot open %s to set term size\n", name);
-		goto out;
+		fd = hyper_open_serial_dev(name);
+		if (fd < 0) {
+			fprintf(stderr, "cannot open %s to set term size\n", name);
+			goto out;
+		}
 	}
 
 	size.ws_row = ws.row;
 	size.ws_col = ws.column;
-	fd = ret;
 
 	ret = ioctl(fd, TIOCSWINSZ, &size);
 	if (ret < 0)
@@ -98,44 +91,118 @@ out:
 	return ret;
 }
 
+static void hyper_kill_process(int pid)
+{
+	char path[64];
+	char *line = NULL, *ignore = "SigIgn:";
+	size_t len = 0;
+	ssize_t read;
+	FILE *file;
+	char *sub;
+
+	sprintf(path, "/proc/%u/status", pid);
+
+	fprintf(stdout, "fopen %s\n", path);
+	file = fopen(path, "r");
+	if (file == NULL) {
+		perror("can not open process proc status file");
+		return;
+	}
+
+	while ((read = getline(&line, &len, file)) != -1) {
+		long mask;
+
+		if (strstr(line, ignore) == NULL)
+			continue;
+
+		sub = line + strlen(ignore);
+		fprintf(stdout, "find sigign %s", sub);
+
+		mask = atol(sub);
+		fprintf(stdout, "mask is %ld\n", mask);
+
+		if ((mask >> (SIGTERM - 1)) & 0x1) {
+			fprintf(stdout, "signal term is ignored, kill it\n");
+			kill(pid, SIGKILL);
+		}
+
+		break;
+	}
+
+	fclose(file);
+	free(line);
+}
+
+static void hyper_term_all(struct hyper_pod *pod)
+{
+	int npids = 0;
+	int index = 0;
+	int pid;
+	DIR *dp;
+	struct dirent *de;
+	pid_t *pids = NULL;
+
+	dp = opendir("/proc");
+	if (dp == NULL)
+		return;
+
+	while ((de = readdir(dp)) && de != NULL) {
+		if (!isdigit(de->d_name[0]))
+			continue;
+		pid = atoi(de->d_name);
+		if (pid == 1)
+			continue;
+		if (index <= npids) {
+			pids = realloc(pids, npids + 16384);
+			if (pids == NULL)
+				return;
+			npids += 16384;
+		}
+
+		pids[index++] = pid;
+	}
+
+	fprintf(stdout, "Sending SIGTERM\n");
+
+	for (--index; index >= 0; --index) {
+		fprintf(stdout, "kill process %d\n", pids[index]);
+		kill(pids[index], SIGTERM);
+	}
+
+	free(pids);
+	closedir(dp);
+
+	for (index = 0; index < pod->c_num; index++) {
+		hyper_kill_process(pod->c[index].exec.pid);
+	}
+}
+
 static int pod_ctl_pipe_handle(struct hyper_event *de, uint32_t len)
 {
 	struct hyper_buf *buf = &de->rbuf;
-	struct hyper_pod *pod = de->ptr;
-	uint32_t type;
 
 	fprintf(stdout, "%s\n", __func__);
 
-	type = hyper_get_be32(buf->data);
+	if (hyper_get_be32(buf->data) == STOPPOD) {
+		struct hyper_pod *pod = de->ptr;
 
-	switch (type) {
-	case STOPPOD:
-		fprintf(stdout, "get type STOPPOD, exit\n");
-		hyper_cleanup_pod(pod);
-	case RESTARTCONTAINER:
-		fprintf(stdout, "%s get type RESTARTCONTAINER\n", __func__);
-		if (hyper_restart_containers(pod) < 0)
-			return -1;
-		break;
-	case EXECCMD:
-		if (hyper_container_execcmd(pod) < 0)
-			return -1;
-		break;
-	default:
-		break;
+		fprintf(stdout, "pod init get type STOPPOD, exit\n");
+		hyper_term_all(pod);
+		hyper_reset_event(&pod->ctl);
+		hyper_unmount_all();
+		_exit(0);
 	}
 
 	return 0;
 }
 
-static int hyper_handle_exit(struct hyper_pod *pod, int to,
-			   int container, int option)
+static int hyper_handle_exit(struct hyper_pod *pod)
 {
 	int pid, status;
 	/* pid + exit code */
 	uint8_t data[5];
 
-	while ((pid = waitpid(-1, &status, option)) > 0) {
+	while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
 		data[4] = 0;
 
 		if (WIFEXITED(status)) {
@@ -148,44 +215,20 @@ static int hyper_handle_exit(struct hyper_pod *pod, int to,
 				pid, WTERMSIG(status));
 		}
 
-		if (container) {
-			hyper_set_be32(data, pid);
-			if (hyper_send_msg(to, FINISHCMD, 5, data) < 0) {
-				fprintf(stderr, "pod signal_loop send finishcmd failed\n");
-				return -1;
-			}
-
-			continue;
-		}
-
-		if (hyper_send_exec_eof(to, pod, &pod->pe_head, pid, data[4]) < 0)
+		if (hyper_send_exec_eof(ctl.tty.fd, pod, pid, data[4]) < 0)
 			fprintf(stderr, "signal_loop send eof failed\n");
-	}
-
-	if (option == WNOHANG)
-		return 0;
-
-	/* send ack message to hyper init. */
-	if (hyper_send_type(to, ACK) < 0) {
-		fprintf(stderr, "send ACK of STOPPOD to hyper init failed\n");
-		return -1;
 	}
 
 	return 0;
 }
 
-static int signal_loop(struct hyper_event *de, int container)
+static int hyper_signal_loop(struct hyper_event *de)
 {
-	int size, to;
+	int size;
 	struct signalfd_siginfo sinfo;
 	struct hyper_pod *pod = de->ptr;
 
-	if (container)
-		to = pod->ctl.fd;
-	else
-		to = ctl.tty.fd;
-
-	fprintf(stdout, "%s write to %d\n", __func__, to);
+	fprintf(stdout, "%s write to ctl tty fd\n", __func__);
 
 	while (1) {
 		size = read(de->fd, &sinfo, sizeof(struct signalfd_siginfo));
@@ -207,20 +250,10 @@ static int signal_loop(struct hyper_event *de, int container)
 			return 0;
 		}
 
-		hyper_handle_exit(pod, to, container, WNOHANG);
+		hyper_handle_exit(pod);
 	}
 
 	return 0;
-}
-
-static int pod_signal_loop(struct hyper_event *de)
-{
-	return signal_loop(de, 1);
-}
-
-static int hyper_signal_loop(struct hyper_event *de)
-{
-	return signal_loop(de, 0);
 }
 
 static struct hyper_event_ops pod_ctl_pipe_ops = {
@@ -229,11 +262,6 @@ static struct hyper_event_ops pod_ctl_pipe_ops = {
 	.hup		= hyper_event_hup,
 	.rbuf_size	= 8,
 	.len_offset	= 4,
-};
-
-static struct hyper_event_ops pod_signal_ops = {
-	.read		= pod_signal_loop,
-	.hup		= hyper_event_hup,
 };
 
 static int pod_init_loop(struct hyper_pod *pod)
@@ -252,14 +280,6 @@ static int pod_init_loop(struct hyper_pod *pod)
 	if (hyper_init_event(&pod->ctl, &pod_ctl_pipe_ops, pod) < 0 ||
 	    hyper_add_event(pod->efd, &pod->ctl, EPOLLIN) < 0) {
 		fprintf(stderr, "hyper add pod ctl pipe event failed\n");
-		return -1;
-	}
-
-	fprintf(stdout, "hyper_init_event pod signal event %p, ops %p, fd %d\n",
-		&pod->sig, &pod_signal_ops, pod->sig.fd);
-	if (hyper_init_event(&pod->sig, &pod_signal_ops, pod) < 0 ||
-	    hyper_add_event(pod->efd, &pod->sig, EPOLLIN) < 0) {
-		fprintf(stderr, "hyper add pod tty pipe event failed\n");
 		return -1;
 	}
 
@@ -295,7 +315,6 @@ static int hyper_pod_init(void *data)
 {
 	struct hyper_pod_arg *arg = data;
 	struct hyper_pod *pod = arg->pod;
-	sigset_t mask;
 
 	close(arg->ctl_pipe[0]);
 	close(ctl.sig.fd);
@@ -309,43 +328,42 @@ static int hyper_pod_init(void *data)
 		goto fail;
 	}
 
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGCHLD);
-
-	if (sigprocmask(SIG_BLOCK, &mask, NULL) < 0) {
-		perror("sigprocmask SIGCHLD failed");
+	/* mount new proc directory */
+	if (umount("/proc") < 0) {
+		perror("umount proc filesystem failed\n");
 		goto fail;
 	}
 
-	pod->sig.fd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
-	if (pod->sig.fd < 0) {
-		perror("create signalfd failed");
+	if (mount("proc", "/proc", "proc", 0, NULL) < 0) {
+		perror("mount proc filesystem failed\n");
 		goto fail;
 	}
 
-	if (hyper_start_containers(pod) < 0)
+	if (sethostname(pod->hostname, strlen(pod->hostname)) < 0) {
+		perror("set host name failed");
 		goto fail;
+	}
 
 	fprintf(stdout, "pod ctl_pipe %d\n", arg->ctl_pipe[1]);
 	if (hyper_send_type(arg->ctl_pipe[1], READY) < 0) {
 		fprintf(stderr, "container init send ready message failed\n");
 		goto fail;
 	}
-loop:
+
 	pod_init_loop(pod);
+	fprintf(stdout, "pod init exit\n");
+out:
 	_exit(-1);
 
 fail:
 	hyper_send_type(arg->ctl_pipe[1], ERROR);
-	goto loop;
+	goto out;
 }
 
 static int hyper_ctl_pipe_handle(struct hyper_event *de, uint32_t len)
 {
 	struct hyper_buf *buf = &de->rbuf;
-	struct hyper_pod *pod = de->ptr;
-	uint32_t type, pid = 0;
-	uint8_t code;
+	uint32_t type;
 
 	/* container exec finish message */
 	fprintf(stdout, "%s\n", __func__);
@@ -358,14 +376,6 @@ static int hyper_ctl_pipe_handle(struct hyper_event *de, uint32_t len)
 		 * fd is block, and ACK is the last message, exit loop. */
 		fprintf(stdout, "hyper_ctl_pipe_loop get ack\n");
 		return 1;
-	case FINISHCMD:
-		pid = hyper_get_be32(buf->data + 8);
-		code = buf->data[12];
-		if (hyper_send_exec_eof(ctl.tty.fd, pod, &pod->ce_head, pid, code) < 0) {
-			fprintf(stderr, "hyper_ctl_pipe_loop send eof failed\n");
-			return -1;
-		}
-		break;
 	default:
 		fprintf(stdout, "get unknown type %" PRIu32"\n", type);
 		break;
@@ -374,57 +384,116 @@ static int hyper_ctl_pipe_handle(struct hyper_event *de, uint32_t len)
 	return 0;
 }
 
-static int hyper_setup_pty(struct hyper_pod *pod)
+static int hyper_do_start_containers(void *data)
 {
-	int i;
-	char root[512];
+	int i, pidns, ipcns, utsns, ret;
 	struct hyper_container *c;
+	struct hyper_pod_arg *arg;
+	struct hyper_pod *pod;
+	char path[64];
+
+	arg = data;
+	pod = arg->pod;
+
+	ret = pidns = ipcns = utsns = -1;
+
+	sprintf(path, "/proc/%d/ns/pid", pod->init_pid);
+	pidns = open(path, O_RDONLY| O_CLOEXEC);
+	if (pidns < 0) {
+		perror("fail to open pidns of pod init");
+		goto out;
+	}
+
+	/* enter pidns of pod init, so the children of this process will run in
+	 * pidns of pod init, see man 2 setns */
+	if (setns(pidns, CLONE_NEWPID) < 0) {
+		perror("enter pidns of pod init failed");
+		goto out;
+	}
+
+	sprintf(path, "/proc/%d/ns/uts", pod->init_pid);
+	utsns = open(path, O_RDONLY| O_CLOEXEC);
+	if (utsns < 0) {
+		perror("fail to open utsns of pod init");
+		goto out;
+	}
+
+	sprintf(path, "/proc/%d/ns/ipc", pod->init_pid);
+	ipcns = open(path, O_RDONLY| O_CLOEXEC);
+	if (ipcns < 0) {
+		perror("fail to open ipcns of pod init");
+		goto out;
+	}
 
 	for (i = 0; i < pod->c_num; i++) {
 		c = &pod->c[i];
-
-		sprintf(root, "/tmp/hyper/%s/devpts/", c->id);
-
-		if (hyper_mkdir(root) < 0) {
-			perror("make container pts directroy failed");
-			return -1;
-		}
-
-		if (mount("devpts", root, "devpts", MS_NOSUID,
-			  "newinstance,ptmxmode=0666,mode=0620") < 0) {
-			perror("mount devpts failed");
-			return -1;
-		}
-
-		list_add_tail(&c->exec.list, &pod->ce_head);
-
-		if (hyper_setup_exec_tty(&c->exec) < 0) {
-			fprintf(stderr, "setup container pts failed\n");
-			return -1;
-		}
+		list_add_tail(&c->exec.list, &pod->exec_head);
+		hyper_start_container(c, utsns, ipcns, pod);
 	}
 
-	return 0;
+	ret = 0;
+out:
+	if (hyper_send_type(arg->ctl_pipe[1], ret ? ERROR : READY) < 0) {
+		fprintf(stderr, "container init send ready message failed\n");
+		goto out;
+	}
+
+	close(pidns);
+	close(utsns);
+	close(ipcns);
+	close(arg->ctl_pipe[0]);
+	close(arg->ctl_pipe[1]);
+
+	_exit(ret);
 }
 
-static int hyper_watch_pty(struct hyper_pod *pod)
+int hyper_start_containers(struct hyper_pod *pod)
 {
-	int i;
-	struct hyper_container *c;
+	int stacksize = getpagesize() * 4;
+	void *stack = NULL;
+	struct hyper_pod_arg arg = {
+		.pod		= pod,
+		.ctl_pipe	= {-1, -1},
+	};
+	int ret = -1, pid;
+	uint32_t type;
 
-	for (i = 0; i < pod->c_num; i++) {
-		c = &pod->c[i];
 
-		fprintf(stdout, "hyper_init_event container pts event %p, ops %p, fd %d\n",
-			&c->exec.e, &pts_ops, c->exec.e.fd);
-		if (hyper_init_event(&c->exec.e, &pts_ops, pod) < 0 ||
-		    hyper_add_event(ctl.efd, &c->exec.e, EPOLLIN) < 0) {
-			fprintf(stderr, "add container pts master event failed\n");
-			return -1;
-		}
+	if (pipe2(arg.ctl_pipe, O_CLOEXEC) < 0) {
+		perror("create pipe between hyper init and pod init failed");
+		goto out;
 	}
 
-	return 0;
+	stack = malloc(stacksize);
+	if (stack == NULL) {
+		perror("fail to allocate stack for container init");
+		goto out;
+	}
+
+	pid = clone(hyper_do_start_containers, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
+	free(stack);
+	if (pid < 0) {
+		perror("enter container pid ns failed");
+		goto out;
+	}
+
+	/* Wait for container start */
+	if (hyper_get_type(arg.ctl_pipe[0], &type) < 0) {
+		perror("get enter_container_pidns ready message failed");
+		goto out;
+	}
+
+	if (type != READY) {
+		fprintf(stderr, "get incorrect enter_container_pidns message type %d, expect READY\n",
+			type);
+		goto out;
+	}
+
+	ret = 0;
+out:
+	close(arg.ctl_pipe[0]);
+	close(arg.ctl_pipe[1]);
+	return ret;
 }
 
 static struct hyper_event_ops hyper_ctl_pipe_ops = {
@@ -448,21 +517,17 @@ static int hyper_setup_container(struct hyper_pod *pod)
 
 	uint32_t type;
 	void *stack;
+	int ret = -1;
 
-	if (hyper_setup_pty(pod) < 0) {
-		fprintf(stderr, "setup pty failed\n");
-		return -1;
-	}
-
-	if (socketpair(PF_UNIX, SOCK_STREAM, 0, arg.ctl_pipe) < 0) {
+	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, arg.ctl_pipe) < 0) {
 		perror("create pipe between hyper init and pod init failed");
-		return -1;
+		goto out;
 	}
 
 	stack = malloc(stacksize);
 	if (stack == NULL) {
 		perror("fail to allocate stack for container init");
-		return -1;
+		goto out;
 	}
 
 	arg.pod = pod;
@@ -471,41 +536,45 @@ static int hyper_setup_container(struct hyper_pod *pod)
 	free(stack);
 	if (pod->init_pid < 0) {
 		perror("create container init process failed");
-		return -1;
+		goto out;
 	}
-
-	close(arg.ctl_pipe[1]);
-	ctl.ctl.fd = arg.ctl_pipe[0];
 	fprintf(stdout, "pod init pid %d\n", pod->init_pid);
 
 	/* Wait for container start */
-	if (hyper_get_type_block(ctl.ctl.fd, &type) < 0) {
+	if (hyper_get_type_block(arg.ctl_pipe[0], &type) < 0) {
 		perror("get container init ready message failed");
-		return -1;
+		goto out;
 	}
 
 	if (type != READY) {
 		fprintf(stderr, "get incorrect message type %d, expect READY\n", type);
-		return -1;
+		goto out;
 	}
 
-	if (hyper_watch_pty(pod) < 0) {
-		fprintf(stderr, "watch pty failed\n");
-		return -1;
+	if (hyper_start_containers(pod) < 0) {
+		fprintf(stderr, "start containers failed\n");
+		goto out;
 	}
 
-	if (hyper_setfd_cloexec(ctl.ctl.fd) < 0) {
+	if (hyper_setfd_cloexec(arg.ctl_pipe[0]) < 0) {
 		perror("set ctl pipe fd FD_CLOEXEC failed");
-		return -1;
+		goto out;
 	}
 
+	ctl.ctl.fd = arg.ctl_pipe[0];
 	fprintf(stdout, "hyper_init_event hyper ctl pipe fd %d\n", ctl.ctl.fd);
 	if (hyper_init_event(&ctl.ctl, &hyper_ctl_pipe_ops, pod) < 0 ||
 	    hyper_add_event(ctl.efd, &ctl.ctl, EPOLLIN) < 0) {
-		return -1;
+		goto out;
 	}
 
-	return 0;
+	ret = 0;
+out:
+	close(arg.ctl_pipe[1]);
+	if (ret < 0) {
+		close(arg.ctl_pipe[0]);
+	}
+	return ret;
 }
 
 #ifdef WITH_VBOX
@@ -636,110 +705,6 @@ static void hyper_print_uptime(void)
 	close(fd);
 }
 
-static void hyper_kill_process(int pid)
-{
-	char path[64];
-	char *line = NULL, *ignore = "SigIgn:";
-	size_t len = 0;
-	ssize_t read;
-	FILE *file;
-	char *sub;
-
-	sprintf(path, "/proc/%u/status", pid);
-
-	fprintf(stdout, "fopen %s\n", path);
-	file = fopen(path, "r");
-	if (file == NULL) {
-		perror("can not open process proc status file");
-		return;
-	}
-
-	while ((read = getline(&line, &len, file)) != -1) {
-		long mask;
-
-		if (strstr(line, ignore) == NULL)
-			continue;
-
-		sub = line + strlen(ignore);
-		fprintf(stdout, "find sigign %s", sub);
-
-		mask = atol(sub);
-		fprintf(stdout, "mask is %ld\n", mask);
-
-		if ((mask >> (SIGTERM - 1)) & 0x1) {
-			fprintf(stdout, "signal term is ignored, kill it\n");
-			kill(pid, SIGKILL);
-		}
-
-		break;
-	}
-
-	fclose(file);
-	free(line);
-}
-
-static void hyper_term_all(struct hyper_pod *pod)
-{
-	int npids = 0;
-	int index = 0;
-	int pid;
-	DIR *dp;
-	struct dirent *de;
-	pid_t *pids = NULL;
-
-	dp = opendir("/proc");
-	if (dp == NULL)
-		return;
-
-	while ((de = readdir(dp)) && de != NULL) {
-		if (!isdigit(de->d_name[0]))
-			continue;
-		pid = atoi(de->d_name);
-		if (pid == 1)
-			continue;
-		if (index <= npids) {
-			pids = realloc(pids, npids + 16384);
-			if (pids == NULL)
-				return;
-			npids += 16384;
-		}
-
-		pids[index++] = pid;
-	}
-
-	fprintf(stdout, "Sending SIGTERM\n");
-
-	for (--index; index >= 0; --index) {
-		fprintf(stdout, "kill process %d\n", pids[index]);
-		kill(pids[index], SIGTERM);
-	}
-
-	free(pids);
-	closedir(dp);
-
-	for (index = 0; index < pod->c_num; index++) {
-		hyper_kill_process(pod->c[index].exec.pid);
-	}
-}
-
-static void hyper_cleanup_pod(struct hyper_pod *pod)
-{
-	close(pod->sig.fd);
-	hyper_reset_event(&pod->sig);
-
-	hyper_term_all(pod);
-	hyper_handle_exit(pod, pod->ctl.fd, 1, 0);
-
-	pod->init_pid = 0;
-
-	close(pod->ctl.fd);
-	hyper_reset_event(&pod->ctl);
-
-	hyper_unmount_all();
-
-	_exit(0);
-}
-
 static int hyper_start_pod(char *json, int length)
 {
 	struct hyper_pod *pod = &global_pod;
@@ -760,6 +725,241 @@ static int hyper_start_pod(char *json, int length)
 	}
 
 	return 0;
+}
+
+static int hyper_cmd_write_file(char *json, int length)
+{
+	struct hyper_writter writter;
+	struct hyper_container *c;
+	struct hyper_pod *pod = &global_pod;
+	int pipe[2] = {-1, -1};
+	int pid, mntns = -1, fd;
+	char path[512];
+	int len = 0, size, ret = -1;
+
+	fprintf(stdout, "%s\n", __func__);
+	memset(&writter, 0, sizeof(writter));
+
+	if (hyper_parse_write_file(&writter, json, length) < 0) {
+		goto out;
+	}
+
+	c = hyper_find_container(pod, writter.id);
+	if (c == NULL) {
+		fprintf(stderr, "can not find container whose id is %s\n", writter.id);
+		goto out;
+	}
+
+	if (pipe2(pipe, O_CLOEXEC) < 0) {
+		perror("create writter pipe failed");
+		goto out;
+	}
+
+	mntns = c->ns;
+	if (mntns < 0) {
+		perror("fail to open mnt ns");
+		goto out;
+	}
+
+	pid = fork();
+	if (pid < 0) {
+		perror("fail to fork writter process");
+		goto out;
+	} else if (pid > 0) {
+		uint32_t type;
+
+		if (hyper_get_type(pipe[0], &type) < 0 || type != READY) {
+			fprintf(stderr, "get incorrect message type %d, expect READY\n", type);
+			goto out;
+		}
+
+		ret = 0;
+		goto out;
+	}
+
+	if (setns(mntns, CLONE_NEWNS) < 0) {
+		perror("fail to enter container ns");
+		goto exit;
+	}
+
+	sprintf(path, "/tmp/hyper/%s/root/%s/", c->id, c->rootfs);
+	fprintf(stdout, "write file %s, data len %d\n", writter.file, writter.len);
+
+	/* TODO: wait for container finishing setup root */
+	if (chroot(path) < 0) {
+		perror("chroot for exec command failed");
+		goto exit;
+	}
+
+	fd = open(writter.file, O_CREAT| O_WRONLY, 0644);
+	if (fd < 0) {
+		perror("fail to open target file");
+		goto exit;
+	}
+
+	while(len < writter.len) {
+		size = write(fd, writter.data + len, writter.len - len);
+
+		if (size < 0) {
+			if (errno == EINTR)
+				continue;
+
+			perror("fail to write data to file");
+			goto exit;
+		}
+
+		len += size;
+	}
+	ret = 0;
+exit:
+	hyper_send_type(pipe[1], ret ? ERROR : READY);
+	_exit(0);
+out:
+	close(pipe[0]);
+	close(pipe[1]);
+	free(writter.id);
+	free(writter.file);
+	free(writter.data);
+
+	return 0;
+}
+
+struct hyper_file_arg {
+	int		mntns;
+	int		pipe[2];
+	char		*file;
+	char		root[128];
+	uint32_t	*datalen;
+	uint8_t		**data;
+};
+
+static int hyper_do_cmd_read_file(void *data)
+{
+	struct stat st;
+	int len = 0, size, fd, ret = -1;
+	struct hyper_file_arg *arg = data;
+
+	if (setns(arg->mntns, CLONE_NEWNS) < 0) {
+		perror("fail to enter container ns");
+		goto err;
+	}
+
+	fprintf(stdout, "read file %s\n", arg->file);
+
+	/* TODO: wait for container finishing setup root */
+	if (chroot(arg->root) < 0) {
+		perror("chroot for exec command failed");
+		goto err;
+	}
+
+	if (stat(arg->file, &st) < 0) {
+		perror("fail to state file");
+		goto err;
+	}
+
+	*arg->datalen = st.st_size;
+	*arg->data = malloc(*arg->datalen);
+	if (*arg->data == NULL) {
+		fprintf(stderr, "allocate memory for reading file failed\n");
+		goto err;
+	}
+
+	fd = open(arg->file, O_RDONLY);
+	if (fd < 0) {
+		perror("fail to open target file");
+		goto err;
+	}
+
+	fprintf(stdout, "file length %d\n", *arg->datalen);
+	while(len < *arg->datalen) {
+		size = read(fd, *arg->data + len, *arg->datalen - len);
+
+		if (size < 0) {
+			if (errno == EINTR)
+				continue;
+
+			perror("fail to read data from file");
+			goto err;
+		}
+
+		len += size;
+	}
+
+	fprintf(stdout, "read data %s\n", *arg->data);
+	ret = 0;
+err:
+	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
+	return ret;
+}
+
+static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_t **data)
+{
+	struct hyper_reader reader;
+	struct hyper_container *c;
+	struct hyper_pod *pod = &global_pod;
+	struct hyper_file_arg arg = {
+		.pipe = {-1, -1},
+	};
+	int stacksize = getpagesize() * 4;
+	void *stack = NULL;
+	int pid, ret = -1;
+	uint32_t type;
+
+	fprintf(stdout, "%s\n", __func__);
+	memset(&reader, 0, sizeof(reader));
+
+	if (hyper_parse_read_file(&reader, json, length) < 0) {
+		goto out;
+	}
+
+	c = hyper_find_container(pod, reader.id);
+	if (c == NULL) {
+		fprintf(stderr, "can not find container whose id is %s\n", reader.id);
+		goto out;
+	}
+
+	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
+		perror("create reader pipe failed");
+		goto out;
+	}
+
+	arg.mntns = c->ns;
+	if (arg.mntns < 0) {
+		perror("fail to open mnt ns");
+		goto out;
+	}
+
+	arg.file = reader.file;
+	arg.datalen = datalen;
+	arg.data = data;
+	sprintf(arg.root, "/tmp/hyper/%s/root/%s/", c->id, c->rootfs);
+
+	stack = malloc(stacksize);
+	if (stack == NULL) {
+		perror("fail to allocate stack for container init");
+		goto out;
+	}
+
+	pid = clone(hyper_do_cmd_read_file, stack + stacksize, CLONE_VM| SIGCHLD, &arg);
+	free(stack);
+	if (pid < 0) {
+		perror("fail to fork writter process");
+		goto out;
+	}
+
+	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
+		fprintf(stderr, "%s to incorrect type %" PRIu32 "\n", __func__, type);
+		goto out;
+	}
+
+	ret = 0;
+out:
+	close(arg.pipe[0]);
+	close(arg.pipe[1]);
+	free(reader.id);
+	free(reader.file);
+
+	return ret;
 }
 
 static void hyper_cleanup_shared(struct hyper_pod *pod)
@@ -805,6 +1005,7 @@ static int hyper_stop_pod(struct hyper_pod *pod)
 		return 0;
 	}
 
+	pod->init_pid = 0;
 	/* Make hyper ctl_pipe blocked */
 	hyper_send_stoppod(ctl.ctl.fd);
 
@@ -914,7 +1115,8 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 {
 	struct hyper_buf *buf = &de->rbuf;
 	struct hyper_pod *pod = de->ptr;
-	uint32_t type = 0;
+	uint32_t type = 0, datalen = 0;
+	uint8_t *data = NULL;
 	int i, ret = 0;
 
 	for (i = 0; i < buf->get; i++)
@@ -941,6 +1143,12 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	case EXECCMD:
 		ret = hyper_exec_cmd((char *)buf->data + 8, len - 8);
 		break;
+	case WRITEFILE:
+		ret = hyper_cmd_write_file((char *)buf->data + 8, len - 8);
+		break;
+	case READFILE:
+		ret = hyper_cmd_read_file((char *)buf->data + 8, len - 8, &datalen, &data);
+		break;
 	case PING:
 	case GETPOD:
 		break;
@@ -958,8 +1166,9 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	if (ret < 0)
 		hyper_send_type(de->fd, ERROR);
 	else
-		hyper_send_type(de->fd, ACK);
+		hyper_send_msg(de->fd, ACK, datalen, data);
 
+	free(data);
 	return 0;
 }
 

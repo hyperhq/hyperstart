@@ -17,20 +17,6 @@
 #include "util.h"
 #include "hyper.h"
 
-static int container_setup_env(struct hyper_container *container)
-{
-	int i;
-	struct env *env;
-
-	for (i = 0; i < container->envs_num; i++) {
-		env = &container->envs[i];
-
-		setenv(env->env, env->value, 1);
-	}
-
-	return 0;
-}
-
 static int container_setup_volume(struct hyper_container *container)
 {
 	int i;
@@ -276,6 +262,8 @@ static int hyper_rescan_scsi(void)
 
 struct hyper_container_arg {
 	struct hyper_container	*c;
+	int			ipcns;
+	int			utsns;
 	int			pipe[2];
 };
 
@@ -291,12 +279,22 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
+	if (setns(arg->ipcns, CLONE_NEWIPC) < 0) {
+		perror("setns to ipcns of pod init faild");
+		goto fail;
+	}
+
+	if (setns(arg->utsns, CLONE_NEWUTS) < 0) {
+		perror("setns to ipcns of pod init faild");
+		goto fail;
+	}
+
 	if (hyper_rescan_scsi() < 0) {
 		fprintf(stdout, "rescan scsi failed\n");
 		goto fail;
 	}
 
-	if (container_setup_env(container) < 0) {
+	if (hyper_setup_env(container->envs, container->envs_num) < 0) {
 		fprintf(stdout, "setup env failed\n");
 		goto fail;
 	}
@@ -391,9 +389,6 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
-	close(arg->pipe[0]);
-	close(arg->pipe[1]);
-
 	execvp(container->exec.argv[0], container->exec.argv);
 	perror("exec container command failed");
 
@@ -401,17 +396,47 @@ static int hyper_container_init(void *data)
 
 fail:
 	container->exec.code = -1;
-	hyper_send_type_block(arg->pipe[1], ERROR, 0);
+	hyper_send_type(arg->pipe[1], ERROR);
 	_exit(-1);
 }
 
-int hyper_start_container(struct hyper_container *container)
+static int hyper_setup_pty(struct hyper_container *c)
+{
+	char root[512];
+
+	sprintf(root, "/tmp/hyper/%s/devpts/", c->id);
+
+	if (hyper_mkdir(root) < 0) {
+		perror("make container pts directroy failed");
+		return -1;
+	}
+
+	if (mount("devpts", root, "devpts", MS_NOSUID,
+		  "newinstance,ptmxmode=0666,mode=0620") < 0) {
+		perror("mount devpts failed");
+		return -1;
+	}
+
+	if (hyper_setup_exec_tty(&c->exec) < 0) {
+		fprintf(stderr, "setup container pts failed\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+int hyper_start_container(struct hyper_container *container,
+			  int utsns, int ipcns, struct hyper_pod *pod)
 {
 	int stacksize = getpagesize() * 4;
 	struct hyper_container_arg arg = {
-		.c = container,
+		.c	= container,
+		.utsns	= utsns,
+		.ipcns	= ipcns,
+		.pipe	= {-1, -1},
 	};
 	int flags = CLONE_NEWNS | SIGCHLD;
+	char path[128];
 	uint32_t type;
 	void *stack;
 	int pid;
@@ -422,7 +447,12 @@ int hyper_start_container(struct hyper_container *container)
 		goto fail;
 	}
 
-	if (socketpair(PF_UNIX, SOCK_STREAM, 0, arg.pipe) < 0) {
+	if (hyper_setup_pty(container) < 0) {
+		fprintf(stderr, "setup pty device for container failed\n");
+		goto fail;
+	}
+
+	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between pod init execcmd failed");
 		goto fail;
 	}
@@ -430,7 +460,7 @@ int hyper_start_container(struct hyper_container *container)
 	stack = malloc(stacksize);
 	if (stack == NULL) {
 		perror("fail to allocate stack for container init");
-		return -1;
+		goto fail;
 	}
 
 	pid = clone(hyper_container_init, stack + stacksize, flags, &arg);
@@ -439,73 +469,36 @@ int hyper_start_container(struct hyper_container *container)
 		perror("create child process failed");
 		goto fail;
 	}
-
+	sprintf(path, "/proc/%d/ns/mnt", pid);
 	container->exec.pid = pid;
+	container->ns = open(path, O_RDONLY | O_CLOEXEC);
+	if (container->ns < 0) {
+		perror("open container mount ns failed");
+		goto fail;
+	}
 
 	/* wait for ready message */
-	if (hyper_get_type_block(arg.pipe[0], &type) < 0 || type != READY) {
-		fprintf(stdout, "wait for container started failed\n");
+	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
+		fprintf(stderr, "wait for container started failed\n");
 		goto fail;
 	}
 
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
 
+	if (hyper_watch_exec_pty(&container->exec, pod) < 0)
+		fprintf(stderr, "faile to watch container pty\n");
+
 	fprintf(stdout, "container %s init pid is %d\n", container->id, pid);
 	return 0;
-
 fail:
+	close(arg.pipe[0]);
+	close(arg.pipe[1]);
+	close(container->ns);
+	container->ns = -1;
 	fprintf(stdout, "container %s init exit code %d\n", container->id, -1);
-
 	container->exec.code = -1;
 	return -1;
-}
-
-int hyper_start_containers(struct hyper_pod *pod)
-{
-	int i;
-
-	/* mount new proc directory */
-	if (umount("/proc") < 0) {
-		perror("umount proc filesystem failed\n");
-		return -1;
-	}
-
-	if (mount("proc", "/proc", "proc", 0, NULL) < 0) {
-		perror("mount proc filesystem failed\n");
-		return -1;
-	}
-
-	if (sethostname(pod->hostname, strlen(pod->hostname)) < 0) {
-		perror("set host name failed");
-		return -1;
-	}
-
-	for (i = 0; i < pod->c_num; i++)
-		hyper_start_container(&pod->c[i]);
-
-	return 0;
-}
-
-int hyper_restart_containers(struct hyper_pod *pod)
-{
-	int i;
-	struct hyper_container *c;
-
-	for (i = 0; i < pod->c_num; i++) {
-		c = &pod->c[i];
-
-		if (hyper_start_container(c) < 0) {
-			fprintf(stderr, "restart container %s failed\n", c->id);
-			hyper_send_type(pod->ctl.fd, ERROR);
-			return -1;
-		}
-	}
-
-	if (hyper_send_type(pod->ctl.fd, ACK) < 0)
-		return -1;
-
-	return 0;
 }
 
 struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id)
@@ -571,6 +564,7 @@ void hyper_cleanup_container(struct hyper_pod *pod)
 			free(map->path);
 		}
 		free(c->maps);
+		close(c->ns);
 	}
 
 	free(pod->c);
