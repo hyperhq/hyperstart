@@ -37,6 +37,7 @@ struct hyper_exec *global_exec;
 
 struct hyper_ctl ctl;
 
+static struct hyper_event_ops hyper_signal_ops;
 static int hyper_handle_exit(struct hyper_pod *pod);
 
 static int hyper_set_win_size(char *json, int length)
@@ -215,7 +216,7 @@ static int hyper_handle_exit(struct hyper_pod *pod)
 				pid, WTERMSIG(status));
 		}
 
-		if (hyper_send_exec_eof(ctl.tty.fd, pod, pid, data[4]) < 0)
+		if (pod && hyper_send_exec_eof(ctl.tty.fd, pod, pid, data[4]) < 0)
 			fprintf(stderr, "signal_loop send eof failed\n");
 	}
 
@@ -283,6 +284,13 @@ static int pod_init_loop(struct hyper_pod *pod)
 		return -1;
 	}
 
+	fprintf(stdout, "hyper_init_event pod signal event %p, ops %p, fd %d\n",
+		&pod->sig, &hyper_signal_ops, pod->sig.fd);
+	if (hyper_init_event(&pod->sig, &hyper_signal_ops, NULL) < 0 ||
+	    hyper_add_event(pod->efd, &pod->sig, EPOLLIN) < 0) {
+		return -1;
+	}
+
 	events = calloc(MAXEVENTS, sizeof(*events));
 
 	while (1) {
@@ -315,6 +323,7 @@ static int hyper_pod_init(void *data)
 {
 	struct hyper_pod_arg *arg = data;
 	struct hyper_pod *pod = arg->pod;
+	sigset_t mask;
 
 	close(arg->ctl_pipe[0]);
 	close(ctl.sig.fd);
@@ -322,9 +331,24 @@ static int hyper_pod_init(void *data)
 	close(ctl.chan.fd);
 	close(ctl.tty.fd);
 
+	pod->sig.fd = -1;
 	pod->ctl.fd = arg->ctl_pipe[1];
 	if (hyper_setfd_cloexec(pod->ctl.fd) < 0) {
 		perror("set pod init ctl pipe fd FD_CLOEXEC failed");
+		goto fail;
+	}
+
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGCHLD);
+
+	if (sigprocmask(SIG_BLOCK, &mask, NULL) < 0) {
+		perror("sigprocmask SIGCHLD failed");
+		goto fail;
+	}
+
+	pod->sig.fd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
+	if (pod->sig.fd < 0) {
+		perror("create pod signalfd failed");
 		goto fail;
 	}
 
@@ -356,6 +380,7 @@ out:
 	_exit(-1);
 
 fail:
+	close(pod->sig.fd);
 	hyper_send_type(arg->ctl_pipe[1], ERROR);
 	goto out;
 }
