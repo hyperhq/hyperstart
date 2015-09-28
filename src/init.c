@@ -791,7 +791,7 @@ static int hyper_cmd_write_file(char *json, int length)
 		goto exit;
 	}
 
-	fd = open(writter.file, O_CREAT| O_WRONLY, 0644);
+	fd = open(writter.file, O_CREAT| O_TRUNC| O_WRONLY, 0644);
 	if (fd < 0) {
 		perror("fail to open target file");
 		goto exit;
