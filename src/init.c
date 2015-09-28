@@ -508,7 +508,7 @@ static int hyper_setup_container(struct hyper_pod *pod)
 {
 	int stacksize = getpagesize() * 4;
 	int flags = CLONE_NEWPID | CLONE_NEWNS | CLONE_NEWIPC |
-		    CLONE_NEWUTS | CLONE_VM | SIGCHLD;
+		    CLONE_NEWUTS;
 
 	struct hyper_pod_arg arg = {
 		.pod		= NULL,
