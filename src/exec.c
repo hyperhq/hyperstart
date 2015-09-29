@@ -132,7 +132,7 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 		return -1;
 	}
 
-	e->ptyfd = open(ptmx, O_RDWR | O_NOCTTY);
+	e->ptyfd = open(ptmx, O_RDWR | O_NOCTTY | O_CLOEXEC);
 	fprintf(stdout, "get pty device for exec %s\n", ptmx);
 
 	return 0;
