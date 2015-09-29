@@ -36,7 +36,13 @@ static int container_setup_volume(struct hyper_container *container)
 			return -1;
 		}
 
-		if (mount(dev, path, vol->fstype, 0, NULL) < 0) {
+		/* Check if it is DAX device, TODO: pass in the "dax" option from hyper */
+		if (strncmp(vol->device, "pmem", 4) == 0 && strcmp(vol->fstype, "ext4") == 0) {
+			if (mount(dev, path, vol->fstype, 0, "dax") < 0) {
+				perror("mount volume device faled");
+				return -1;
+			}
+		} else if (mount(dev, path, vol->fstype, 0, NULL) < 0) {
 			perror("mount volume device faled");
 			return -1;
 		}
@@ -323,7 +329,13 @@ static int hyper_container_init(void *data)
 		sprintf(dev, "/dev/%s", container->image);
 		fprintf(stdout, "device %s\n", dev);
 
-		if (mount(dev, root, container->fstype, 0, NULL) < 0) {
+		/* Check if it is DAX device, TODO: pass in the "dax" option from hyper */
+		if (strncmp(container->image, "pmem", 4) == 0 && strcmp(container->fstype, "ext4") == 0) {
+			if (mount(dev, root, container->fstype, 0, "dax") < 0) {
+				perror("mount volume device faled");
+				return -1;
+			}
+		} else if (mount(dev, root, container->fstype, 0, NULL) < 0) {
 			perror("mount device failed");
 			goto fail;
 		}
