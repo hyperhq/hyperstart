@@ -39,6 +39,8 @@ if [ "$1"x = "cbfs"x ]; then
 	cbfstool .cbfs/cbfs.rom create -s 4096k -B .cbfs/boot.bin -m x86  0x1000
 	cbfstool .cbfs/cbfs.rom add -f kernel -n vmlinuz -t raw
 	cbfstool .cbfs/cbfs.rom add -f hyper-initrd.img -n initrd -t raw
+	echo 'console=ttyS0 panic=1 no_timer_check' > .cbfs/cmdline
+	cbfstool .cbfs/cbfs.rom add -f .cbfs/cmdline -n cmdline -t raw
 	cp .cbfs/cbfs.rom ./
 	rm -rf .cbfs
 	exit 0
