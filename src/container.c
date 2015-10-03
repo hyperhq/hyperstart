@@ -389,6 +389,11 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
+	symlink("/proc/self/fd", "/dev/fd");
+	symlink("/proc/self/fd/0", "/dev/stdin");
+	symlink("/proc/self/fd/1", "/dev/stdout");
+	symlink("/proc/self/fd/2", "/dev/stderr");
+
 	execvp(container->exec.argv[0], container->exec.argv);
 	perror("exec container command failed");
 
