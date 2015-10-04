@@ -7,14 +7,17 @@
 struct hyper_exec {
 	struct list_head	list;
 	struct hyper_event	e;
+	struct hyper_event  errev;
 	char			*id;
 	char			**argv;
 	int			argc;
 	uint64_t		seq;
+	uint64_t		errseq;
 	int			pid;
 	int			ptyno;
 	int			init;
 	int			ptyfd;
+	int			errfd;
 	uint8_t			code;
 	uint8_t			exit;
 };
