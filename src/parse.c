@@ -510,8 +510,8 @@ realloc:
 
 			i += next;
 		} else if (json_token_streq(json, t, "shareDir") && t->size == 1) {
-			pod->tag = strdup(json_token_str(json, &toks[++i]));
-			fprintf(stdout, "9p tag is %s\n", pod->tag);
+			pod->share_tag = strdup(json_token_str(json, &toks[++i]));
+			fprintf(stdout, "share tag is %s\n", pod->share_tag);
 		} else if (json_token_streq(json, t, "hostname") && t->size == 1) {
 			pod->hostname = strdup(json_token_str(json, &toks[++i]));
 			fprintf(stdout, "hostname is %s\n", pod->hostname);

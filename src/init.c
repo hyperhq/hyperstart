@@ -555,7 +555,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 {
 	struct vbsf_mount_info_new mntinf;
 
-	if (pod->tag == NULL) {
+	if (pod->share_tag == NULL) {
 		fprintf(stdout, "no shared directroy\n");
 		return 0;
 	}
@@ -573,7 +573,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 	mntinf.length		= sizeof(mntinf);
 	mntinf.dmode		= ~0U;
 	mntinf.fmode		= ~0U;
-	strcpy(mntinf.name, pod->tag);
+	strcpy(mntinf.name, pod->share_tag);
 
 	if (mount(NULL, "/tmp/hyper/shared", "vboxsf",
 		  MS_NODEV, &mntinf) < 0) {
@@ -586,7 +586,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 #else
 static int hyper_setup_shared(struct hyper_pod *pod)
 {
-	if (pod->tag == NULL) {
+	if (pod->share_tag == NULL) {
 		fprintf(stdout, "no shared directroy\n");
 		return 0;
 	}
@@ -596,7 +596,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 		return -1;
 	}
 
-	if (mount(pod->tag, "/tmp/hyper/shared", "9p",
+	if (mount(pod->share_tag, "/tmp/hyper/shared", "9p",
 		  MS_MGC_VAL| MS_NODEV, "trans=virtio,cache=loose") < 0) {
 
 		perror("fail to mount shared dir");
@@ -917,16 +917,16 @@ static void hyper_cleanup_hostname(struct hyper_pod *pod)
 
 static void hyper_cleanup_shared(struct hyper_pod *pod)
 {
-	if (pod->tag == NULL) {
+	if (pod->share_tag == NULL) {
 		fprintf(stdout, "no shared directroy\n");
 		return;
 	}
 
-	free(pod->tag);
-	pod->tag = NULL;
+	free(pod->share_tag);
+	pod->share_tag = NULL;
 	if (umount("/tmp/hyper/shared") < 0 &&
 	    umount2("/tmp/hyper/shared", MNT_DETACH)) {
-		perror("fail to umount 9p dir");
+		perror("fail to umount shared dir");
 		return;
 	}
 
