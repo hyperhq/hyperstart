@@ -1,5 +1,5 @@
-#ifndef _DVM_H_
-#define _DVM_H_
+#ifndef _HYPER_H_
+#define _HYPER_H_
 
 #include <stdint.h>
 
@@ -10,7 +10,7 @@
 #include "container.h"
 
 enum {
-	SETDVM,
+	RESERVED,
 	STARTPOD,
 	GETPOD,
 	STOPPOD,
