@@ -36,6 +36,15 @@ static void pts_hup(struct hyper_event *de, int efd)
 	hyper_set_be32(buf->data + buf->get + 8, 12);
 	buf->get += 12;
 
+	if (buf->get + 12 > buf->size) {
+		fprintf(stdout, "%s: tty buf full (for stderr)\n", __func__);
+	} else {
+		/* no in event, no more data, send eof in stderr */
+		hyper_set_be64(buf->data + buf->get, exec->errseq);
+		hyper_set_be32(buf->data + buf->get + 8, 12);
+		buf->get += 12;
+	}
+
 	hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT);
 
 	hyper_release_exec(exec, pod);
@@ -86,6 +95,50 @@ struct hyper_event_ops pts_ops = {
 	/* don't need read buff, the pts data will store in tty buffer */
 };
 
+static int stderr_loop(struct hyper_event *de)
+{
+	int size = -1;
+	struct hyper_buf *buf = &ctl.tty.wbuf;
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, errev);
+
+	fprintf(stdout, "%s\n", __func__);
+	while ((buf->get + 12 < buf->size) && size) {
+		size = read(de->fd, buf->data + buf->get + 12, buf->size - buf->get - 12);
+		fprintf(stdout, "%s: read %d data\n", __func__, size);
+		if (size <= 0) {
+			if (errno == EINTR)
+				continue;
+
+			if (errno != EAGAIN && errno != EIO) {
+				perror("fail to read tty fd");
+				return -1;
+			}
+
+			break;
+		}
+
+		hyper_set_be64(buf->data + buf->get, exec->errseq);
+		hyper_set_be32(buf->data + buf->get + 8, size + 12);
+		buf->get += size + 12;
+
+		dprintf("%s: err seq %" PRIu64" len %" PRIu32"\n", __func__, exec->errseq, size);
+	}
+
+	if (hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT) < 0) {
+		fprintf(stderr, "modify ctl tty event to in & out failed\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+struct hyper_event_ops err_ops = {
+	/* don't need to deal with hup, the hup will be dealed by pts*/
+	.read		= stderr_loop,
+	/* don't need read buff, the stderr data will store in tty buffer */
+	/* don't need write buff, the stderr data is one way */
+};
+
 int hyper_setup_exec_tty(struct hyper_exec *e)
 {
 	int unlock = 0;
@@ -93,6 +146,16 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 
 	if (e->seq == 0)
 		return 0;
+
+	if (e->errseq > 0) {
+		int errpipe[2];
+		if (pipe2(errpipe, O_NONBLOCK|O_CLOEXEC) < 0) {
+			fprintf(stderr, "creating stderr pipe failed\n");
+			return -1;
+		}
+		e->errev.fd = errpipe[0];
+		e->errfd = errpipe[1];
+	}
 
 	if (e->id) {
 		if (sprintf(path, "/tmp/hyper/%s/devpts/", e->id) < 0) {
@@ -179,9 +242,16 @@ int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 		goto out;
 	}
 
-	if (dup2(fd, STDERR_FILENO) < 0) {
-		perror("dup tty device to stderr failed");
-		goto out;
+	if (e->errseq > 0) {
+		if (dup2(e->errfd, STDERR_FILENO) < 0) {
+			perror("dup err pipe to stderr failed");
+			goto out;
+		}
+	} else {
+		if (dup2(fd, STDERR_FILENO) < 0) {
+			perror("dup tty device to stderr failed");
+			goto out;
+		}
 	}
 
 	ret = 0;
@@ -202,6 +272,15 @@ int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 	if (hyper_init_event(&exec->e, &pts_ops, pod) < 0 ||
 	    hyper_add_event(ctl.efd, &exec->e, EPOLLIN) < 0) {
 		fprintf(stderr, "add container pts master event failed\n");
+		return -1;
+	}
+
+	if (exec->errseq == 0)
+		return 0;
+
+	if (hyper_init_event(&exec->errev, &err_ops, pod) < 0 ||
+	    hyper_add_event(ctl.efd, &exec->errev, EPOLLIN) < 0) {
+		fprintf(stderr, "add container stderr event failed\n");
 		return -1;
 	}
 

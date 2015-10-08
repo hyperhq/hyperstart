@@ -201,6 +201,8 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 	c->exec.code = -1;
 	c->exec.e.fd = -1;
 	c->exec.ptyfd = -1;
+	c->exec.seq = 0;
+	c->exec.errseq = 0;
 	c->ns = -1;
 
 	next_container = toks[i].size;
@@ -228,6 +230,10 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 			i++;
 			c->exec.seq = json_token_ll(json, &toks[i]);
 			fprintf(stdout, "container seq %" PRIu64 "\n", c->exec.seq);
+		} else if (json_token_streq(json, t, "stderr") && t->size == 1) {
+			i++;
+			c->exec.errseq = json_token_ll(json, &toks[i]);
+			fprintf(stdout, "container stderr seq %" PRIu64 "\n", c->exec.errseq);
 		} else if (json_token_streq(json, t, "workdir") && t->size == 1) {
 			i++;
 			c->workdir = strdup(json_token_str(json, &toks[i]));
@@ -580,6 +586,7 @@ realloc:
 
 	exec->ptyfd = -1;
 	exec->e.fd = -1;
+	exec->errseq = 0;
 	INIT_LIST_HEAD(&exec->list);
 
 	for (i = 0, j = 0; i < n; i++) {
