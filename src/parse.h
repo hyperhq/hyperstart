@@ -1,5 +1,5 @@
-#ifndef _DVM_JSON_H_
-#define _DVM_JSON_H_
+#ifndef _PARSE_H_
+#define _PARSE_H_
 
 #include "hyper.h"
 #include "jsmn.h"
