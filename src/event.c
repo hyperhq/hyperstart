@@ -220,6 +220,7 @@ void hyper_event_hup(struct hyper_event *de, int efd)
 	if (epoll_ctl(efd, EPOLL_CTL_DEL, de->fd, NULL) < 0)
 		perror("epoll_ctl del epoll event failed");
 	close(de->fd);
+	de->fd = -1;
 	hyper_reset_event(de);
 }
 

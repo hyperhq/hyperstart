@@ -228,6 +228,10 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 			i++;
 			c->exec.seq = json_token_ll(json, &toks[i]);
 			fprintf(stdout, "container seq %" PRIu64 "\n", c->exec.seq);
+		} else if (json_token_streq(json, t, "stderr") && t->size == 1) {
+			i++;
+			c->exec.errseq = json_token_ll(json, &toks[i]);
+			fprintf(stdout, "container stderr seq %" PRIu64 "\n", c->exec.errseq);
 		} else if (json_token_streq(json, t, "workdir") && t->size == 1) {
 			i++;
 			c->workdir = strdup(json_token_str(json, &toks[i]));
