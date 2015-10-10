@@ -491,8 +491,10 @@ int hyper_start_container(struct hyper_container *container,
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
 
-	if (hyper_watch_exec_pty(&container->exec, pod) < 0)
+	if (hyper_watch_exec_pty(&container->exec, pod) < 0) {
 		fprintf(stderr, "faile to watch container pty\n");
+		goto fail;
+	}
 
 	fprintf(stdout, "container %s init pid is %d\n", container->id, pid);
 	return 0;
@@ -503,6 +505,7 @@ fail:
 	container->ns = -1;
 	fprintf(stdout, "container %s init exit code %d\n", container->id, -1);
 	container->exec.code = -1;
+	container->exec.seq = 0;
 	return -1;
 }
 

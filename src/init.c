@@ -39,6 +39,7 @@ struct hyper_ctl ctl;
 
 static struct hyper_event_ops hyper_signal_ops;
 static int hyper_handle_exit(struct hyper_pod *pod);
+static int hyper_stop_pod(struct hyper_pod *pod);
 
 static int hyper_set_win_size(char *json, int length)
 {
@@ -453,7 +454,10 @@ static int hyper_do_start_containers(void *data)
 	for (i = 0; i < pod->c_num; i++) {
 		c = &pod->c[i];
 		list_add_tail(&c->exec.list, &pod->exec_head);
-		hyper_start_container(c, utsns, ipcns, pod);
+		if (hyper_start_container(c, utsns, ipcns, pod) < 0) {
+			fprintf(stderr, "fail to start container\n");
+			goto out;
+		}
 	}
 
 	ret = 0;
@@ -555,6 +559,7 @@ static int hyper_setup_container(struct hyper_pod *pod)
 		goto out;
 	}
 
+	ctl.ctl.fd = arg.ctl_pipe[0];
 	arg.pod = pod;
 
 	pod->init_pid = clone(hyper_pod_init, stack + stacksize, flags, &arg);
@@ -586,7 +591,6 @@ static int hyper_setup_container(struct hyper_pod *pod)
 		goto out;
 	}
 
-	ctl.ctl.fd = arg.ctl_pipe[0];
 	fprintf(stdout, "hyper_init_event hyper ctl pipe fd %d\n", ctl.ctl.fd);
 	if (hyper_init_event(&ctl.ctl, &hyper_ctl_pipe_ops, pod) < 0 ||
 	    hyper_add_event(ctl.efd, &ctl.ctl, EPOLLIN) < 0) {
@@ -598,6 +602,7 @@ out:
 	close(arg.ctl_pipe[1]);
 	if (ret < 0) {
 		close(arg.ctl_pipe[0]);
+		hyper_stop_pod(pod);
 	}
 	return ret;
 }
