@@ -400,7 +400,6 @@ static int hyper_container_init(void *data)
 	_exit(-1);
 
 fail:
-	container->exec.code = -1;
 	hyper_send_type(arg->pipe[1], ERROR);
 	_exit(-1);
 }
