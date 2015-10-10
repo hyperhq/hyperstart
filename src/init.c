@@ -911,6 +911,12 @@ out:
 	return ret;
 }
 
+static void hyper_cleanup_hostname(struct hyper_pod *pod)
+{
+	free(pod->hostname);
+	pod->hostname = NULL;
+}
+
 static void hyper_cleanup_shared(struct hyper_pod *pod)
 {
 	if (pod->tag == NULL) {
@@ -919,6 +925,7 @@ static void hyper_cleanup_shared(struct hyper_pod *pod)
 	}
 
 	free(pod->tag);
+	pod->tag = NULL;
 	if (umount("/tmp/hyper/shared") < 0 &&
 	    umount2("/tmp/hyper/shared", MNT_DETACH)) {
 		perror("fail to umount 9p dir");
@@ -931,6 +938,16 @@ static void hyper_cleanup_shared(struct hyper_pod *pod)
 	sync();
 }
 
+void hyper_cleanup_pod(struct hyper_pod *pod)
+{
+	hyper_cleanup_exec(pod);
+	hyper_cleanup_container(pod);
+	hyper_cleanup_network(pod);
+	hyper_cleanup_shared(pod);
+	hyper_cleanup_dns(pod);
+	hyper_cleanup_hostname(pod);
+}
+
 static int hyper_stop_pod(struct hyper_pod *pod)
 {
 	fprintf(stdout, "hyper_stop_pod init_pid %d\n", pod->init_pid);
@@ -940,16 +957,7 @@ static int hyper_stop_pod(struct hyper_pod *pod)
 	}
 
 	pod->init_pid = 0;
-
 	hyper_term_all(pod);
-	hyper_cleanup_exec(pod);
-	hyper_cleanup_container(pod);
-	hyper_cleanup_network(pod);
-	hyper_cleanup_dns(pod);
-	hyper_cleanup_shared(pod);
-
-	free(pod->hostname);
-
 	return 0;
 }
 

@@ -869,8 +869,17 @@ out:
 
 void hyper_cleanup_dns(struct hyper_pod *pod)
 {
-	int fd = open("/tmp/hyper/resolv.conf", O_WRONLY| O_TRUNC);
+	int fd, i;
 
+	for (i = 0; i < pod->d_num; i++) {
+		free(pod->dns[i]);
+	}
+
+	free(pod->dns);
+	pod->dns = NULL;
+	pod->d_num = 0;
+
+	fd = open("/tmp/hyper/resolv.conf", O_WRONLY| O_TRUNC);
 	if (fd < 0) {
 		perror("open /tmp/hyper/resolv.conf failed");
 		return;
