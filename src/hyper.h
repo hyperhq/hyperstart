@@ -27,6 +27,7 @@ enum {
 	NEXT,
 	WRITEFILE,
 	READFILE,
+	NEWCONTAINER,
 };
 
 enum {

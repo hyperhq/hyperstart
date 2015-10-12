@@ -687,6 +687,32 @@ static int hyper_start_pod(char *json, int length)
 	return 0;
 }
 
+static int hyper_new_container(char *json, int length)
+{
+	int ret;
+	struct hyper_pod *pod = &global_pod;
+
+	fprintf(stdout, "call hyper_new_container, json %s, len %d\n", json, length);
+
+	if (!pod->init_pid)
+		fprintf(stdout, "the pod is not created yet\n");
+
+	if (hyper_parse_new_container(pod, json, length) < 0) {
+		fprintf(stderr, "parse container json failed\n");
+		return -1;
+	}
+
+	ret = hyper_start_container_stage0(&pod->c[pod->c_num - 1], pod);
+	if (ret < 0) {
+		//TODO full grace cleanup
+		pod->remains -= 1;
+		pod->c_num -= 1;
+		return ret;
+	}
+
+	return 0;
+}
+
 static int hyper_cmd_write_file(char *json, int length)
 {
 	struct hyper_writter writter;
@@ -1111,6 +1137,9 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		break;
 	case WINSIZE:
 		ret = hyper_set_win_size((char *)buf->data + 8, len - 8);
+		break;
+	case NEWCONTAINER:
+		ret = hyper_new_container((char *)buf->data + 8, len - 8);
 		break;
 	default:
 		ret = -1;

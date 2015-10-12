@@ -530,6 +530,51 @@ out:
 	return next;
 }
 
+int hyper_parse_new_container(struct hyper_pod *pod, char *json, int length)
+{
+	int n;
+	jsmn_parser p;
+	int toks_num = 100;
+	jsmntok_t *toks = NULL;
+	struct hyper_container *c;
+
+realloc:
+	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
+
+	jsmn_init(&p);
+	n = jsmn_parse(&p, json, length, toks, toks_num);
+	if (n < 0) {
+		fprintf(stdout, "jsmn parse failed, n is %d\n", n);
+		if (n == JSMN_ERROR_NOMEM) {
+			toks_num *= 2;
+			goto realloc;
+		}
+
+		goto fail;
+	}
+
+	c = realloc(pod->c, (pod->c_num + 1) * sizeof(*pod->c));
+	if (c == NULL) {
+		fprintf(stdout, "alloc memory for container failed\n");
+		goto fail;
+	}
+	pod->c = c;
+	memset(&pod->c[pod->c_num], 0, sizeof(pod->c[pod->c_num]));
+
+	// trick: toks-1, TODO: change all "i = 1" to "i = 0"
+	if (hyper_parse_container(pod, &pod->c[pod->c_num], json, toks-1) < 0)
+		goto fail;
+
+	pod->remains += 1;
+	pod->c_num += 1;
+	free(toks);
+	return 0;
+
+fail:
+	free(toks);
+	return -1;
+}
+
 int hyper_parse_winsize(struct hyper_win_size *ws, char *json, int length)
 {
 	int i, n, ret = 0;
