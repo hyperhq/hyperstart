@@ -186,6 +186,32 @@ static int container_parse_envs(struct hyper_container *c, char *json, jsmntok_t
 	return i;
 }
 
+static int container_parse_sysctl(struct hyper_container *c, char *json, jsmntok_t *toks)
+{
+	int i = 1, j;
+	char *p;
+
+	if (toks[i].type != JSMN_OBJECT) {
+		fprintf(stdout, "sysctl need object\n");
+		return -1;
+	}
+
+	c->sys_num = toks[i].size;
+	fprintf(stdout, "sysctl size %d\n", c->sys_num);
+	c->sys = calloc(c->sys_num, sizeof(*c->sys));
+
+	for (j = 0; j < c->sys_num; j++) {
+		c->sys[j].path = strdup(json_token_str(json, &toks[++i]));
+		while((p = strchr(c->sys[j].path, '.')) != NULL) {
+			*p = '/';
+		}
+		c->sys[j].value = strdup(json_token_str(json, &toks[++i]));
+		fprintf(stdout, "sysctl %s:%s\n", c->sys[j].path, c->sys[j].value);
+	}
+	return i;
+}
+
+
 static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *c,
 			       char *json, jsmntok_t *toks)
 {
@@ -256,6 +282,11 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 			i += next;
 		} else if (json_token_streq(json, t, "envs") && t->size == 1) {
 			next = container_parse_envs(c, json, &toks[i]);
+			if (next < 0)
+				return -1;
+			i += next;
+		} else if (json_token_streq(json, t, "sysctl") && t->size == 1) {
+			next = container_parse_sysctl(c, json, &toks[i]);
 			if (next < 0)
 				return -1;
 			i += next;
