@@ -515,21 +515,24 @@ int hyper_release_exec(struct hyper_exec *exec,
 		fprintf(stdout, "%s container init exited, type %d, remains %d, policy %d\n",
 			__func__, pod->type, pod->remains, pod->policy);
 
-		/* stop pod, should not restart container */
-		if (pod->type == STOPPOD)
-			return 0;
-
 		if (exec->code)
 			pod->code = exec->code;
 
 		if (--pod->remains > 0)
 			return 0;
 
+		/* stop pod, should not restart container */
+		if (pod->type == STOPPOD) {
+			hyper_send_type(ctl.chan.fd, ACK);
+			hyper_cleanup_pod(pod);
+			return 0;
+		}
+
 		/* should shutdown? */
 		if (pod->policy == POLICY_NEVER ||
 		   ((pod->policy == POLICY_ONFAILURE) && pod->code == 0)) {
 			hyper_send_finish(pod);
-			//hyper_shutdown(pod);
+			hyper_cleanup_pod(pod);
 			return 0;
 		}
 

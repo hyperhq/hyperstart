@@ -335,14 +335,17 @@ static int hyper_remove_nic(char *device)
 {
 	char path[256], real[128];
 	int fd;
+	ssize_t size;
 
 	sprintf(path, "/sys/class/net/%s", device);
 
-	if (readlink(path, real, 128) < 0) {
+	size = readlink(path, real, 128);
+	if (size < 0 || size > 127) {
 		perror("fail to read link directory");
 		return -1;
 	}
 
+	real[size] = '\0';
 	sprintf(path, "/sys/%s/../../../remove", real + 5);
 
 	fprintf(stdout, "get net sys path %s\n", path);
@@ -866,10 +869,19 @@ out:
 
 void hyper_cleanup_dns(struct hyper_pod *pod)
 {
-	int fd = open("/tmp/hyper/resolv.conf", O_WRONLY| O_TRUNC);
+	int fd, i;
 
+	for (i = 0; i < pod->d_num; i++) {
+		free(pod->dns[i]);
+	}
+
+	free(pod->dns);
+	pod->dns = NULL;
+	pod->d_num = 0;
+
+	fd = open("/tmp/hyper/resolv.conf", O_WRONLY| O_TRUNC);
 	if (fd < 0) {
-		perror("open /tmp/resolv.conf failed");
+		perror("open /tmp/hyper/resolv.conf failed");
 		return;
 	}
 
