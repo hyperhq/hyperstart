@@ -380,13 +380,12 @@ static int hyper_do_exec_cmd(void *data)
 		exec->pid = pid;
 		fprintf(stdout, "create exec cmd %s pid %d\n", exec->argv[0], pid);
 
-		list_add_tail(&exec->list, &pod->exec_head);
-
 		if (hyper_watch_exec_pty(exec, pod) < 0) {
 			fprintf(stderr, "add pts master event failed\n");
 			goto out;
 		}
 
+		list_add_tail(&exec->list, &pod->exec_head);
 		ret = 0;
 		goto out;
 	}
@@ -418,12 +417,28 @@ out:
 	_exit(ret);
 }
 
+static void hyper_free_exec(struct hyper_exec *exec)
+{
+	int i;
+
+	free(exec->id);
+
+	for (i = 0; i < exec->argc; i++) {
+		//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
+		free(exec->argv[i]);
+	}
+
+	free(exec->argv);
+	free(exec);
+}
+
 int hyper_exec_cmd(char *json, int length)
 {
 	struct hyper_exec *exec;
 	struct hyper_pod *pod = &global_pod;
 	int stacksize = getpagesize() * 4;
-	void *stack = NULL;	struct hyper_exec_arg arg = {
+	void *stack = NULL;
+	struct hyper_exec_arg arg = {
 		.pod	= pod,
 		.exec	= NULL,
 		.pipe	= {-1, -1},
@@ -442,17 +457,17 @@ int hyper_exec_cmd(char *json, int length)
 	if (exec->argv == NULL) {
 		fprintf(stderr, "cmd is %p, seq %" PRIu64 ", container %s\n",
 			exec->argv, exec->seq, exec->id);
-		goto out;
+		goto free_exec;
 	}
 
 	if (hyper_setup_exec_tty(exec) < 0) {
 		fprintf(stderr, "setup exec tty failed\n");
-		goto out;
+		goto free_exec;
 	}
 
 	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between pod init execcmd failed");
-		goto out;
+		goto close_tty;
 	}
 
 	arg.exec = exec;
@@ -460,7 +475,7 @@ int hyper_exec_cmd(char *json, int length)
 	stack = malloc(stacksize);
 	if (stack == NULL) {
 		perror("fail to allocate stack for container init");
-		goto out;
+		goto close_tty;
 	}
 
 	pid = clone(hyper_do_exec_cmd, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
@@ -468,12 +483,12 @@ int hyper_exec_cmd(char *json, int length)
 	free(stack);
 	if (pid < 0) {
 		perror("clone hyper_do_exec_cmd failed");
-		goto out;
+		goto close_tty;
 	}
 
 	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
 		fprintf(stderr, "hyper init doesn't get execcmd ready message\n");
-		return -1;
+		goto close_tty;
 	}
 
 	fprintf(stdout, "%s get ready message %"PRIu32 "\n", __func__, type);
@@ -481,15 +496,18 @@ int hyper_exec_cmd(char *json, int length)
 out:
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
-
 	return ret;
+close_tty:
+	close(exec->ptyfd);
+	close(exec->e.fd);
+free_exec:
+	hyper_free_exec(exec);
+	goto out;
 }
 
 int hyper_release_exec(struct hyper_exec *exec,
 		       struct hyper_pod *pod)
 {
-	int i;
-
 	if (!exec->exit && exec->seq) {
 		fprintf(stdout, "first user of exec exit\n");
 		exec->exit = 1;
@@ -544,15 +562,7 @@ int hyper_release_exec(struct hyper_exec *exec,
 		return 0;
 	}
 
-	free(exec->id);
-
-	for (i = 0; i < exec->argc; i++) {
-		//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
-		free(exec->argv[i]);
-	}
-
-	free(exec->argv);
-	free(exec);
+	hyper_free_exec(exec);
 
 	return 0;
 }

@@ -392,18 +392,17 @@ static int hyper_do_start_containers(void *data)
 
 	for (i = 0; i < pod->c_num; i++) {
 		c = &pod->c[i];
-		list_add_tail(&c->exec.list, &pod->exec_head);
 		if (hyper_start_container(c, utsns, ipcns, pod) < 0) {
 			fprintf(stderr, "fail to start container\n");
 			goto out;
 		}
+		list_add_tail(&c->exec.list, &pod->exec_head);
 	}
 
 	ret = 0;
 out:
 	if (hyper_send_type(arg->ctl_pipe[1], ret ? ERROR : READY) < 0) {
 		fprintf(stderr, "container init send ready message failed\n");
-		goto out;
 	}
 
 	close(pidns);
