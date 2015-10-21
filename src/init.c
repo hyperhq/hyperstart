@@ -48,7 +48,7 @@ static int hyper_set_win_size(char *json, int length)
 	};
 	struct winsize size;
 	struct hyper_exec *exec;
-	char *name, path[128];
+	char path[128];
 	int fd, ret;
 
 	fprintf(stdout, "call hyper_win_size, json %s, len %d\n", json, length);
@@ -57,7 +57,6 @@ static int hyper_set_win_size(char *json, int length)
 		return -1;
 	}
 
-	name = ws.tty;
 	if (!ws.tty) {
 		exec = hyper_find_exec_by_seq(&global_pod, ws.seq);
 		if (exec == NULL) {
@@ -67,17 +66,18 @@ static int hyper_set_win_size(char *json, int length)
 
 		fprintf(stdout, "find exec %s, pid is %d, seq is %" PRIu64"\n",
 			exec->id ? exec->id : "pod", exec->pid, ws.seq);
-		fd = exec->ptyfd;
+		fd = dup(exec->ptyfd);
 	} else {
 		if (sprintf(path, "/dev/%s", ws.tty) < 0) {
 			fprintf(stderr, "get tty device failed\n");
 			return -1;
 		}
-		fd = hyper_open_serial_dev(name);
-		if (fd < 0) {
-			fprintf(stderr, "cannot open %s to set term size\n", name);
-			goto out;
-		}
+		fd = hyper_open_serial_dev(path);
+	}
+
+	if (fd < 0) {
+		perror("cannot open pty device to set term size");
+		goto out;
 	}
 
 	size.ws_row = ws.row;
@@ -85,7 +85,7 @@ static int hyper_set_win_size(char *json, int length)
 
 	ret = ioctl(fd, TIOCSWINSZ, &size);
 	if (ret < 0)
-		fprintf(stderr, "cannot ioctl to set %s term size\n", name);
+		perror("cannot ioctl to set pty device term size");
 
 	close(fd);
 out:
