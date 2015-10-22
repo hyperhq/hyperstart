@@ -167,6 +167,45 @@ static int container_setup_mount(struct hyper_container *container)
 	return 0;
 }
 
+static int container_setup_sysctl(struct hyper_container *container)
+{
+	int i, size, len, l, fd;
+	struct sysctl *sys;
+
+	for (i = 0; i < container->sys_num; i++) {
+		char path[256];
+
+		len = 0;
+		sys = &container->sys[i];
+		size = strlen(sys->value);
+
+		sprintf(path, "/proc/sys/%s", sys->path);
+		fprintf(stdout, "sysctl %s value %s\n", sys->path, sys->value);
+
+		fd = open(path, O_WRONLY);
+		if (fd < 0) {
+			perror("open file failed");
+			goto out;
+		}
+
+		while (len < size) {
+			l = write(fd, sys->value + len, size - len);
+			if (l < 0) {
+				perror("fail to write sysctl");
+				close(fd);
+				goto out;
+			}
+			len += l;
+		}
+
+		close(fd);
+	}
+
+	return 0;
+out:
+	return -1;
+}
+
 static int container_setup_dns(struct hyper_container *container)
 {
 	int fd;
@@ -366,7 +405,12 @@ static int hyper_container_init(void *data)
 	}
 
 	if (container_setup_mount(container) < 0) {
-		fprintf(stderr, "container sets up mount ns failed\n");
+		fprintf(stderr, "container sets up mount failed\n");
+		goto fail;
+	}
+
+	if (container_setup_sysctl(container) < 0) {
+		fprintf(stderr, "container sets up sysctl failed\n");
 		goto fail;
 	}
 
@@ -535,6 +579,7 @@ void hyper_cleanup_container(struct hyper_pod *pod)
 	struct volume *vol;
 	struct env *env;
 	struct fsmap *map;
+	struct sysctl *sys;
 	char root[512];
 
 	for (i = 0; i < pod->c_num; i++) {
@@ -564,6 +609,13 @@ void hyper_cleanup_container(struct hyper_pod *pod)
 			free(env->value);
 		}
 		free(c->envs);
+
+		for (j = 0; j < c->sys_num; j++) {
+			sys = &(c->sys[j]);
+			free(sys->path);
+			free(sys->value);
+		}
+		free(c->sys);
 
 		for (j = 0; j < c->maps_num; j++) {
 			map = &(c->maps[j]);

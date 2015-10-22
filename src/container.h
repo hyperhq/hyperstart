@@ -21,6 +21,11 @@ struct fsmap {
 	int	readonly;
 };
 
+struct sysctl {
+	char	*path;
+	char	*value;
+};
+
 struct hyper_container {
 	char			*id;
 	char			*rootfs;
@@ -30,9 +35,11 @@ struct hyper_container {
 	struct volume		*vols;
 	struct env		*envs;
 	struct fsmap		*maps;
+	struct sysctl		*sys;
 	int			vols_num;
 	int			envs_num;
 	int			maps_num;
+	int			sys_num;
 	int			ns;
 	uint32_t		code;
 	struct hyper_exec	exec;
