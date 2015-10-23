@@ -227,6 +227,7 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 	c->exec.code = -1;
 	c->exec.e.fd = -1;
 	c->exec.ptyfd = -1;
+	c->exec.errfd = -1;
 	c->ns = -1;
 
 	next_container = toks[i].size;

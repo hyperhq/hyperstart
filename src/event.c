@@ -14,8 +14,9 @@ void hyper_reset_event(struct hyper_event *de)
 {
 	free(de->rbuf.data);
 	free(de->wbuf.data);
-
+	close(de->fd);
 	memset(de, 0, sizeof(*de));
+	de->fd = -1;
 }
 
 int hyper_init_event(struct hyper_event *de, struct hyper_event_ops *ops, void *arg)
@@ -219,8 +220,6 @@ void hyper_event_hup(struct hyper_event *de, int efd)
 {
 	if (epoll_ctl(efd, EPOLL_CTL_DEL, de->fd, NULL) < 0)
 		perror("epoll_ctl del epoll event failed");
-	close(de->fd);
-	de->fd = -1;
 	hyper_reset_event(de);
 }
 

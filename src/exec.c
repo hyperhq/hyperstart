@@ -370,6 +370,11 @@ static int hyper_do_exec_cmd(void *data)
 	} else if (pid > 0) {
 		uint32_t type;
 
+		if (hyper_watch_exec_pty(exec, pod) < 0) {
+			fprintf(stderr, "add pts master event failed\n");
+			goto out;
+		}
+
 		if (hyper_get_type(pipe[0], &type) < 0 || type != READY) {
 			fprintf(stderr, "hyper init doesn't get execcmd ready message\n");
 			hyper_send_type(arg->pipe[1], ERROR);
@@ -379,11 +384,6 @@ static int hyper_do_exec_cmd(void *data)
 		fprintf(stdout, "hyper init get ready message\n");
 		exec->pid = pid;
 		fprintf(stdout, "create exec cmd %s pid %d\n", exec->argv[0], pid);
-
-		if (hyper_watch_exec_pty(exec, pod) < 0) {
-			fprintf(stderr, "add pts master event failed\n");
-			goto out;
-		}
 
 		list_add_tail(&exec->list, &pod->exec_head);
 		ret = 0;
