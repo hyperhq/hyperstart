@@ -18,11 +18,24 @@
 #include "util.h"
 #include "parse.h"
 
-static void pts_hup(struct hyper_exec *exec, struct hyper_pod *pod, uint64_t seq)
+static void pts_hup(struct hyper_event *de, int efd, int out)
 {
+	struct hyper_exec *exec;
+	struct hyper_pod *pod = de->ptr;
 	struct hyper_buf *buf = &ctl.tty.wbuf;
+	uint64_t seq;
 
-	fprintf(stdout, "%s\n", __func__);
+	if (out) {
+		exec = container_of(de, struct hyper_exec, e);
+		seq = exec->seq;
+	} else {
+		exec = container_of(de, struct hyper_exec, errev);
+		seq = exec->errseq;
+	}
+
+	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, seq);
+
+	hyper_event_hup(de, efd);
 
 	if (buf->get + 12 > buf->size) {
 		fprintf(stdout, "%s: tty buf full\n", __func__);
@@ -41,22 +54,14 @@ static void pts_hup(struct hyper_exec *exec, struct hyper_pod *pod, uint64_t seq
 
 static void stdout_hup(struct hyper_event *de, int efd)
 {
-	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
-	struct hyper_pod *pod = de->ptr;
-
-	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
-
-	return pts_hup(exec, pod, exec->seq);
+	fprintf(stdout, "%s\n", __func__);
+	return pts_hup(de, efd, 1);
 }
 
 static void stderr_hup(struct hyper_event *de, int efd)
 {
-	struct hyper_exec *exec = container_of(de, struct hyper_exec, errev);
-	struct hyper_pod *pod = de->ptr;
-
-	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->errseq);
-
-	return pts_hup(exec, pod, exec->errseq);
+	fprintf(stdout, "%s\n", __func__);
+	return pts_hup(de, efd, 0);
 }
 
 static int pts_loop(struct hyper_event *de, uint64_t seq)
@@ -529,10 +534,6 @@ int hyper_release_exec(struct hyper_exec *exec,
 
 	/* exec has no pty or the pty user already exited */
 	fprintf(stdout, "last user of exec exit, release\n");
-	close(exec->e.fd);
-	close(exec->errev.fd);
-	close(exec->ptyfd);
-	close(exec->errfd);
 
 	hyper_reset_event(&exec->e);
 	hyper_reset_event(&exec->errev);
