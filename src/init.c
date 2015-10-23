@@ -1024,6 +1024,12 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 
 	dprintf(stdout, "find exec %s pid %d, seq is %" PRIu64 "\n",
 		exec->id ? exec->id : "pod", exec->pid, exec->seq);
+	// if exec is exited, the event fd of exec is invalid. don't accept any input.
+	if (exec->exit) {
+		fprintf(stdout, "exec seq %" PRIu64 " exited, don't accept any input\n", exec->seq);
+		return 0;
+	}
+
 	wbuf = &exec->e.wbuf;
 
 	size = wbuf->size - wbuf->get;
