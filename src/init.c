@@ -938,7 +938,6 @@ static void hyper_cleanup_shared(struct hyper_pod *pod)
 
 void hyper_cleanup_pod(struct hyper_pod *pod)
 {
-	hyper_cleanup_exec(pod);
 	hyper_cleanup_container(pod);
 	hyper_cleanup_network(pod);
 	hyper_cleanup_shared(pod);

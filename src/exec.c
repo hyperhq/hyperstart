@@ -637,7 +637,7 @@ int hyper_send_exec_eof(int to, struct hyper_pod *pod,
 
 	return 0;
 }
-
+/*
 void hyper_cleanup_exec(struct hyper_pod *pod)
 {
 	struct hyper_exec *exec, *next;
@@ -647,3 +647,4 @@ void hyper_cleanup_exec(struct hyper_pod *pod)
 		hyper_release_exec(exec, pod);
 	}
 }
+*/

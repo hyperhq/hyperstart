@@ -631,6 +631,13 @@ void hyper_cleanup_container(struct hyper_pod *pod)
 		}
 		free(c->maps);
 		close(c->ns);
+
+		free(c->exec.id);
+		for (i = 0; i < c->exec.argc; i++) {
+			//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
+			free(c->exec.argv[i]);
+		}
+		free(c->exec.argv);
 	}
 
 	free(pod->c);
