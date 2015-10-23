@@ -396,7 +396,6 @@ static int hyper_do_start_containers(void *data)
 			fprintf(stderr, "fail to start container\n");
 			goto out;
 		}
-		list_add_tail(&c->exec.list, &pod->exec_head);
 	}
 
 	ret = 0;

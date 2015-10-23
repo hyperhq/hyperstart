@@ -615,6 +615,7 @@ realloc:
 		goto out;
 
 	exec->ptyfd = -1;
+	exec->errfd = -1;
 	exec->e.fd = -1;
 	INIT_LIST_HEAD(&exec->list);
 

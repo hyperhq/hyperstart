@@ -20,6 +20,7 @@ struct hyper_exec {
 	int			errfd;
 	uint8_t			code;
 	uint8_t			exit;
+	uint8_t			ref;
 };
 
 struct hyper_pod;
