@@ -707,6 +707,11 @@ static int hyper_cleanup_interface(struct rtnl_handle *rth,
 		return -1;
 	}
 
+	/* Don't down&remove lo device */
+	if (strcmp(iface->device, "lo") == 0) {
+		return 0;
+	}
+
 	if (hyper_down_nic(rth, iface->ifindex) < 0) {
 		fprintf(stderr, "up device %d failed\n", iface->ifindex);
 		return -1;

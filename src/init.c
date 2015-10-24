@@ -48,7 +48,7 @@ static int hyper_set_win_size(char *json, int length)
 	};
 	struct winsize size;
 	struct hyper_exec *exec;
-	char *name, path[128];
+	char path[128];
 	int fd, ret;
 
 	fprintf(stdout, "call hyper_win_size, json %s, len %d\n", json, length);
@@ -57,7 +57,6 @@ static int hyper_set_win_size(char *json, int length)
 		return -1;
 	}
 
-	name = ws.tty;
 	if (!ws.tty) {
 		exec = hyper_find_exec_by_seq(&global_pod, ws.seq);
 		if (exec == NULL) {
@@ -67,17 +66,18 @@ static int hyper_set_win_size(char *json, int length)
 
 		fprintf(stdout, "find exec %s, pid is %d, seq is %" PRIu64"\n",
 			exec->id ? exec->id : "pod", exec->pid, ws.seq);
-		fd = exec->ptyfd;
+		fd = dup(exec->ptyfd);
 	} else {
 		if (sprintf(path, "/dev/%s", ws.tty) < 0) {
 			fprintf(stderr, "get tty device failed\n");
 			return -1;
 		}
-		fd = hyper_open_serial_dev(name);
-		if (fd < 0) {
-			fprintf(stderr, "cannot open %s to set term size\n", name);
-			goto out;
-		}
+		fd = hyper_open_serial_dev(path);
+	}
+
+	if (fd < 0) {
+		perror("cannot open pty device to set term size");
+		goto out;
 	}
 
 	size.ws_row = ws.row;
@@ -85,7 +85,7 @@ static int hyper_set_win_size(char *json, int length)
 
 	ret = ioctl(fd, TIOCSWINSZ, &size);
 	if (ret < 0)
-		fprintf(stderr, "cannot ioctl to set %s term size\n", name);
+		perror("cannot ioctl to set pty device term size");
 
 	close(fd);
 out:
@@ -392,7 +392,6 @@ static int hyper_do_start_containers(void *data)
 
 	for (i = 0; i < pod->c_num; i++) {
 		c = &pod->c[i];
-		list_add_tail(&c->exec.list, &pod->exec_head);
 		if (hyper_start_container(c, utsns, ipcns, pod) < 0) {
 			fprintf(stderr, "fail to start container\n");
 			goto out;
@@ -403,7 +402,6 @@ static int hyper_do_start_containers(void *data)
 out:
 	if (hyper_send_type(arg->ctl_pipe[1], ret ? ERROR : READY) < 0) {
 		fprintf(stderr, "container init send ready message failed\n");
-		goto out;
 	}
 
 	close(pidns);
@@ -940,7 +938,6 @@ static void hyper_cleanup_shared(struct hyper_pod *pod)
 
 void hyper_cleanup_pod(struct hyper_pod *pod)
 {
-	hyper_cleanup_exec(pod);
 	hyper_cleanup_container(pod);
 	hyper_cleanup_network(pod);
 	hyper_cleanup_shared(pod);
@@ -1025,6 +1022,12 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 
 	dprintf(stdout, "find exec %s pid %d, seq is %" PRIu64 "\n",
 		exec->id ? exec->id : "pod", exec->pid, exec->seq);
+	// if exec is exited, the event fd of exec is invalid. don't accept any input.
+	if (exec->exit) {
+		fprintf(stdout, "exec seq %" PRIu64 " exited, don't accept any input\n", exec->seq);
+		return 0;
+	}
+
 	wbuf = &exec->e.wbuf;
 
 	size = wbuf->size - wbuf->get;

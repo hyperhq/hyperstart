@@ -18,13 +18,24 @@
 #include "util.h"
 #include "parse.h"
 
-static void pts_hup(struct hyper_event *de, int efd)
+static void pts_hup(struct hyper_event *de, int efd, int out)
 {
+	struct hyper_exec *exec;
 	struct hyper_pod *pod = de->ptr;
 	struct hyper_buf *buf = &ctl.tty.wbuf;
-	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
+	uint64_t seq;
 
-	fprintf(stdout, "%s\n", __func__);
+	if (out) {
+		exec = container_of(de, struct hyper_exec, e);
+		seq = exec->seq;
+	} else {
+		exec = container_of(de, struct hyper_exec, errev);
+		seq = exec->errseq;
+	}
+
+	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, seq);
+
+	hyper_event_hup(de, efd);
 
 	if (buf->get + 12 > buf->size) {
 		fprintf(stdout, "%s: tty buf full\n", __func__);
@@ -32,22 +43,25 @@ static void pts_hup(struct hyper_event *de, int efd)
 	}
 
 	/* no in event, no more data, send eof */
-	hyper_set_be64(buf->data + buf->get, exec->seq);
+	hyper_set_be64(buf->data + buf->get, seq);
 	hyper_set_be32(buf->data + buf->get + 8, 12);
 	buf->get += 12;
-
-	if (buf->get + 12 > buf->size) {
-		fprintf(stdout, "%s: tty buf full (for stderr)\n", __func__);
-	} else {
-		/* no in event, no more data, send eof in stderr */
-		hyper_set_be64(buf->data + buf->get, exec->errseq);
-		hyper_set_be32(buf->data + buf->get + 8, 12);
-		buf->get += 12;
-	}
 
 	hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT);
 
 	hyper_release_exec(exec, pod);
+}
+
+static void stdout_hup(struct hyper_event *de, int efd)
+{
+	fprintf(stdout, "%s\n", __func__);
+	return pts_hup(de, efd, 1);
+}
+
+static void stderr_hup(struct hyper_event *de, int efd)
+{
+	fprintf(stdout, "%s\n", __func__);
+	return pts_hup(de, efd, 0);
 }
 
 static int pts_loop(struct hyper_event *de, uint64_t seq)
@@ -93,7 +107,7 @@ static int stdout_loop(struct hyper_event *de)
 
 struct hyper_event_ops pts_ops = {
 	.read		= stdout_loop,
-	.hup		= pts_hup,
+	.hup		= stdout_hup,
 	.write		= hyper_event_write,
 	.wbuf_size	= 512,
 	/* don't need read buff, the pts data will store in tty buffer */
@@ -108,8 +122,8 @@ static int stderr_loop(struct hyper_event *de)
 }
 
 struct hyper_event_ops err_ops = {
-	/* don't need to deal with hup, the hup will be dealed by pts*/
 	.read		= stderr_loop,
+	.hup		= stderr_hup,
 	/* don't need read buff, the stderr data will store in tty buffer */
 	/* don't need write buff, the stderr data is one way */
 };
@@ -173,6 +187,8 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	e->ptyfd = open(ptmx, O_RDWR | O_NOCTTY | O_CLOEXEC);
 	fprintf(stdout, "get pty device for exec %s\n", ptmx);
 
+	fprintf(stdout, "%s pts event %p, fd %d %d\n",
+		__func__, &e->e, e->e.fd, e->ptyfd);
 	return 0;
 }
 
@@ -249,16 +265,17 @@ int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 		fprintf(stderr, "add container pts master event failed\n");
 		return -1;
 	}
+	exec->ref++;
 
 	if (exec->errseq == 0)
 		return 0;
 
-	if (hyper_init_event(&exec->errev, &err_ops, NULL) < 0 ||
+	if (hyper_init_event(&exec->errev, &err_ops, pod) < 0 ||
 	    hyper_add_event(ctl.efd, &exec->errev, EPOLLIN) < 0) {
 		fprintf(stderr, "add container stderr event failed\n");
 		return -1;
 	}
-
+	exec->ref++;
 	return 0;
 }
 
@@ -363,6 +380,11 @@ static int hyper_do_exec_cmd(void *data)
 		goto out;
 	}
 
+	if (hyper_watch_exec_pty(exec, pod) < 0) {
+		fprintf(stderr, "add pts master event failed\n");
+		goto out;
+	}
+
 	pid = fork();
 	if (pid < 0) {
 		perror("fail to fork");
@@ -378,15 +400,10 @@ static int hyper_do_exec_cmd(void *data)
 
 		fprintf(stdout, "hyper init get ready message\n");
 		exec->pid = pid;
-		fprintf(stdout, "create exec cmd %s pid %d\n", exec->argv[0], pid);
-
+		//TODO combin ref++ and add to list.
 		list_add_tail(&exec->list, &pod->exec_head);
-
-		if (hyper_watch_exec_pty(exec, pod) < 0) {
-			fprintf(stderr, "add pts master event failed\n");
-			goto out;
-		}
-
+		exec->ref++;
+		fprintf(stdout, "create exec cmd %s pid %d,ref %d\n", exec->argv[0], pid, exec->ref);
 		ret = 0;
 		goto out;
 	}
@@ -418,12 +435,28 @@ out:
 	_exit(ret);
 }
 
+static void hyper_free_exec(struct hyper_exec *exec)
+{
+	int i;
+
+	free(exec->id);
+
+	for (i = 0; i < exec->argc; i++) {
+		//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
+		free(exec->argv[i]);
+	}
+
+	free(exec->argv);
+	free(exec);
+}
+
 int hyper_exec_cmd(char *json, int length)
 {
 	struct hyper_exec *exec;
 	struct hyper_pod *pod = &global_pod;
 	int stacksize = getpagesize() * 4;
-	void *stack = NULL;	struct hyper_exec_arg arg = {
+	void *stack = NULL;
+	struct hyper_exec_arg arg = {
 		.pod	= pod,
 		.exec	= NULL,
 		.pipe	= {-1, -1},
@@ -442,17 +475,17 @@ int hyper_exec_cmd(char *json, int length)
 	if (exec->argv == NULL) {
 		fprintf(stderr, "cmd is %p, seq %" PRIu64 ", container %s\n",
 			exec->argv, exec->seq, exec->id);
-		goto out;
+		goto free_exec;
 	}
 
 	if (hyper_setup_exec_tty(exec) < 0) {
 		fprintf(stderr, "setup exec tty failed\n");
-		goto out;
+		goto free_exec;
 	}
 
 	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between pod init execcmd failed");
-		goto out;
+		goto close_tty;
 	}
 
 	arg.exec = exec;
@@ -460,7 +493,7 @@ int hyper_exec_cmd(char *json, int length)
 	stack = malloc(stacksize);
 	if (stack == NULL) {
 		perror("fail to allocate stack for container init");
-		goto out;
+		goto close_tty;
 	}
 
 	pid = clone(hyper_do_exec_cmd, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
@@ -468,12 +501,12 @@ int hyper_exec_cmd(char *json, int length)
 	free(stack);
 	if (pid < 0) {
 		perror("clone hyper_do_exec_cmd failed");
-		goto out;
+		goto close_tty;
 	}
 
 	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
 		fprintf(stderr, "hyper init doesn't get execcmd ready message\n");
-		return -1;
+		goto close_tty;
 	}
 
 	fprintf(stdout, "%s get ready message %"PRIu32 "\n", __func__, type);
@@ -481,29 +514,26 @@ int hyper_exec_cmd(char *json, int length)
 out:
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
-
 	return ret;
+close_tty:
+	close(exec->ptyfd);
+	close(exec->errfd);
+	close(exec->e.fd);
+free_exec:
+	hyper_free_exec(exec);
+	goto out;
 }
 
 int hyper_release_exec(struct hyper_exec *exec,
 		       struct hyper_pod *pod)
 {
-	int i;
-
-	if (!exec->exit && exec->seq) {
-		fprintf(stdout, "first user of exec exit\n");
-		exec->exit = 1;
-		close(exec->ptyfd);
-		exec->ptyfd = -1;
+	if (--exec->ref != 0) {
+		fprintf(stdout, "still have %d user of exec\n", exec->ref);
 		return 0;
 	}
 
 	/* exec has no pty or the pty user already exited */
 	fprintf(stdout, "last user of exec exit, release\n");
-	close(exec->e.fd);
-	close(exec->errev.fd);
-	close(exec->ptyfd);
-	close(exec->errfd);
 
 	hyper_reset_event(&exec->e);
 	hyper_reset_event(&exec->errev);
@@ -544,15 +574,7 @@ int hyper_release_exec(struct hyper_exec *exec,
 		return 0;
 	}
 
-	free(exec->id);
-
-	for (i = 0; i < exec->argc; i++) {
-		//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
-		free(exec->argv[i]);
-	}
-
-	free(exec->argv);
-	free(exec);
+	hyper_free_exec(exec);
 
 	return 0;
 }
@@ -604,11 +626,18 @@ int hyper_send_exec_eof(int to, struct hyper_pod *pod,
 		__func__, exec->pid, exec->seq, exec->id ? exec->id : "pod");
 
 	exec->code = code;
+	exec->exit = 1;
+
+	close(exec->ptyfd);
+	exec->ptyfd = -1;
+	close(exec->errfd);
+	exec->errfd = -1;
+
 	hyper_release_exec(exec, pod);
 
 	return 0;
 }
-
+/*
 void hyper_cleanup_exec(struct hyper_pod *pod)
 {
 	struct hyper_exec *exec, *next;
@@ -618,3 +647,4 @@ void hyper_cleanup_exec(struct hyper_pod *pod)
 		hyper_release_exec(exec, pod);
 	}
 }
+*/

@@ -505,6 +505,11 @@ int hyper_start_container(struct hyper_container *container,
 		goto fail;
 	}
 
+	if (hyper_watch_exec_pty(&container->exec, pod) < 0) {
+		fprintf(stderr, "faile to watch container pty\n");
+		goto fail;
+	}
+
 	stack = malloc(stacksize);
 	if (stack == NULL) {
 		perror("fail to allocate stack for container init");
@@ -518,7 +523,7 @@ int hyper_start_container(struct hyper_container *container,
 		goto fail;
 	}
 	sprintf(path, "/proc/%d/ns/mnt", pid);
-	container->exec.pid = pid;
+
 	container->ns = open(path, O_RDONLY | O_CLOEXEC);
 	if (container->ns < 0) {
 		perror("open container mount ns failed");
@@ -531,24 +536,26 @@ int hyper_start_container(struct hyper_container *container,
 		goto fail;
 	}
 
+	container->exec.pid = pid;
+	list_add_tail(&container->exec.list, &pod->exec_head);
+	container->exec.ref++;
+
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
 
-	if (hyper_watch_exec_pty(&container->exec, pod) < 0) {
-		fprintf(stderr, "faile to watch container pty\n");
-		goto fail;
-	}
-
-	fprintf(stdout, "container %s init pid is %d\n", container->id, pid);
+	fprintf(stdout, "container %s,init pid %d,ref %d\n", container->id, pid, container->exec.ref);
 	return 0;
 fail:
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
 	close(container->ns);
+	hyper_reset_event(&container->exec.e);
+	hyper_reset_event(&container->exec.errev);
 	container->ns = -1;
 	fprintf(stdout, "container %s init exit code %d\n", container->id, -1);
 	container->exec.code = -1;
 	container->exec.seq = 0;
+	container->exec.ref = 0;
 	return -1;
 }
 
@@ -624,6 +631,13 @@ void hyper_cleanup_container(struct hyper_pod *pod)
 		}
 		free(c->maps);
 		close(c->ns);
+
+		free(c->exec.id);
+		for (i = 0; i < c->exec.argc; i++) {
+			//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
+			free(c->exec.argv[i]);
+		}
+		free(c->exec.argv);
 	}
 
 	free(pod->c);
