@@ -636,14 +636,20 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 
 	return 0;
 }
-/*
+
 void hyper_cleanup_exec(struct hyper_pod *pod)
 {
 	struct hyper_exec *exec, *next;
+	uint8_t buf[12];
 
+	if (hyper_setfd_block(ctl.tty.fd) < 0)
+		return;
+
+	hyper_set_be32(buf + 8, 12);
 	list_for_each_entry_safe(exec, next, &pod->exec_head, list) {
-		fprintf(stdout, "cleanup exec seq %" PRIu64 "\n", exec->seq);
-		hyper_release_exec(exec, pod);
+		fprintf(stdout, "send eof for exec seq %" PRIu64 "\n", exec->seq);
+		hyper_set_be64(buf, exec->seq);
+		if (hyper_send_data(ctl.tty.fd, buf, 12) < 0)
+			fprintf(stderr, "send eof failed\n");
 	}
 }
-*/

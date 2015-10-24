@@ -304,7 +304,7 @@ int hyper_setfd_block(int fd)
 		return -1;
 	}
 
-	return 0;
+	return flags;
 }
 
 int hyper_setfd_nonblock(int fd)
@@ -321,7 +321,7 @@ int hyper_setfd_nonblock(int fd)
 		return -1;
 	}
 
-	return 0;
+	return flags;
 }
 
 int hyper_socketpair(int domain, int type, int protocol, int sv[2])
@@ -384,46 +384,6 @@ void hyper_unmount_all(void)
 	sync();
 }
 
-void hyper_kill_all(void)
-{
-	int npids = 0;
-	int index = 0;
-	int pid;
-	DIR *dp;
-	struct dirent *de;
-	pid_t *pids = NULL;
-
-	dp = opendir("/proc");
-	if (dp == NULL)
-		return;
-
-	while ((de = readdir(dp)) && de != NULL) {
-		if (!isdigit(de->d_name[0]))
-			continue;
-		pid = atoi(de->d_name);
-		if (pid == 1)
-			continue;
-		if (index <= npids) {
-			pids = realloc(pids, npids + 16384);
-			if (pids == NULL)
-				return;
-			npids += 16384;
-		}
-
-		pids[index++] = pid;
-	}
-
-	fprintf(stdout, "Sending SIGTERM\n");
-
-	for (--index; index >= 0; --index) {
-		fprintf(stdout, "kill process %d\n", pids[index]);
-		kill(pids[index], SIGTERM);
-	}
-
-	free(pids);
-	closedir(dp);
-}
-
 int hyper_send_finish(struct hyper_pod *pod)
 {
 	int i, ret;
@@ -440,8 +400,10 @@ int hyper_send_finish(struct hyper_pod *pod)
 void hyper_shutdown(struct hyper_pod *pod)
 {
 	hyper_send_finish(pod);
-
-	//hyper_kill_all();
+	/* vm will shutdown immediately after we call reboot,
+	 * no chance to send out eof message in release exec.
+	 * send it out by ourself */
+	hyper_cleanup_exec(pod);
 
 	hyper_unmount_all();
 
