@@ -610,8 +610,7 @@ struct hyper_exec *hyper_find_exec_by_seq(struct hyper_pod *pod, uint64_t seq)
 	return NULL;
 }
 
-int hyper_send_exec_eof(int to, struct hyper_pod *pod,
-			int pid, uint8_t code)
+int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 {
 	struct hyper_exec *exec;
 

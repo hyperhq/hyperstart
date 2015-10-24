@@ -198,7 +198,7 @@ static int hyper_handle_exit(struct hyper_pod *pod)
 				pid, WTERMSIG(status));
 		}
 
-		if (pod && hyper_send_exec_eof(ctl.tty.fd, pod, pid, data[4]) < 0)
+		if (pod && hyper_handle_exec_exit(pod, pid, data[4]) < 0)
 			fprintf(stderr, "signal_loop send eof failed\n");
 	}
 
