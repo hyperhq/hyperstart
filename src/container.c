@@ -109,6 +109,16 @@ static int container_setup_mount(struct hyper_container *container)
 		return -1;
 	}
 
+	if (hyper_mkdir("/dev/shm") < 0) {
+		fprintf(stderr, "create /dev/shm failed\n");
+		return -1;
+	}
+
+	if (mount("tmpfs", "/dev/shm/", "tmpfs", 0, NULL) < 0) {
+		perror("mount shm failed");
+		return -1;
+	}
+
 	if (hyper_mkdir("/dev/pts") < 0) {
 		fprintf(stderr, "create /dev/pts failed\n");
 		return -1;
