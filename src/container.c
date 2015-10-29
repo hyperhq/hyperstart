@@ -102,9 +102,9 @@ static int container_setup_mount(struct hyper_container *container)
 	hyper_mkdir("/sys");
 	hyper_mkdir("/dev");
 
-	if (mount("proc", "/proc", "proc", 0, NULL) < 0 ||
-	    mount("sysfs", "/sys", "sysfs", 0, NULL) < 0 ||
-	    mount("devtmpfs", "/dev", "devtmpfs", 0, NULL) < 0) {
+	if (mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
+	    mount("sysfs", "/sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
+	    mount("devtmpfs", "/dev", "devtmpfs", MS_NOSUID, NULL) < 0) {
 		perror("mount basic filesystem for container failed");
 		return -1;
 	}
@@ -114,7 +114,7 @@ static int container_setup_mount(struct hyper_container *container)
 		return -1;
 	}
 
-	if (mount("tmpfs", "/dev/shm/", "tmpfs", 0, NULL) < 0) {
+	if (mount("tmpfs", "/dev/shm/", "tmpfs", MS_NOSUID| MS_NODEV, NULL) < 0) {
 		perror("mount shm failed");
 		return -1;
 	}
