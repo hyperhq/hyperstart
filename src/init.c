@@ -349,16 +349,24 @@ fail:
 	goto out;
 }
 
-static int hyper_do_start_containers(void *data)
+struct hyper_stage0_arg {
+	struct hyper_pod	*pod;
+	struct hyper_container	*container;
+	int			ctl_pipe[2];
+};
+
+// stage0: enter the pidns
+static int hyper_container_stage0(void *data)
 {
-	int i, pidns, ipcns, utsns, ret;
+	int pidns, ipcns, utsns, ret;
 	struct hyper_container *c;
-	struct hyper_pod_arg *arg;
+	struct hyper_stage0_arg *arg;
 	struct hyper_pod *pod;
 	char path[64];
 
 	arg = data;
 	pod = arg->pod;
+	c   = arg->container;
 
 	ret = pidns = ipcns = utsns = -1;
 
@@ -390,15 +398,7 @@ static int hyper_do_start_containers(void *data)
 		goto out;
 	}
 
-	for (i = 0; i < pod->c_num; i++) {
-		c = &pod->c[i];
-		if (hyper_start_container(c, utsns, ipcns, pod) < 0) {
-			fprintf(stderr, "fail to start container\n");
-			goto out;
-		}
-	}
-
-	ret = 0;
+	ret = hyper_start_container(c, utsns, ipcns, pod);
 out:
 	if (hyper_send_type(arg->ctl_pipe[1], ret ? ERROR : READY) < 0) {
 		fprintf(stderr, "container init send ready message failed\n");
@@ -413,12 +413,13 @@ out:
 	_exit(ret);
 }
 
-int hyper_start_containers(struct hyper_pod *pod)
+int hyper_start_container_stage0(struct hyper_container *c, struct hyper_pod *pod)
 {
 	int stacksize = getpagesize() * 4;
 	void *stack = NULL;
-	struct hyper_pod_arg arg = {
+	struct hyper_stage0_arg arg = {
 		.pod		= pod,
+		.container	= c,
 		.ctl_pipe	= {-1, -1},
 	};
 	int ret = -1, pid;
@@ -436,7 +437,7 @@ int hyper_start_containers(struct hyper_pod *pod)
 		goto out;
 	}
 
-	pid = clone(hyper_do_start_containers, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
+	pid = clone(hyper_container_stage0, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
 	free(stack);
 	if (pid < 0) {
 		perror("enter container pid ns failed");
@@ -460,6 +461,18 @@ out:
 	close(arg.ctl_pipe[0]);
 	close(arg.ctl_pipe[1]);
 	return ret;
+}
+
+int hyper_start_containers(struct hyper_pod *pod)
+{
+	int i, ret = 0;
+
+	for (i = 0; i < pod->c_num; i++) {
+		ret = hyper_start_container_stage0(&pod->c[i], pod);
+		if (ret)
+			return ret;
+	}
+	return 0;
 }
 
 static int hyper_setup_container(struct hyper_pod *pod)
