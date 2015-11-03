@@ -319,7 +319,7 @@ static int hyper_pod_init(void *data)
 		goto fail;
 	}
 
-	if (mount("proc", "/proc", "proc", 0, NULL) < 0) {
+	if (mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0) {
 		perror("mount proc filesystem failed\n");
 		goto fail;
 	}
@@ -1204,19 +1204,19 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	if (mount("proc", "/proc", "proc", 0, NULL) == -1) {
+	if (mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) == -1) {
 		perror("mount proc failed");
 		return -1;
 	}
 
 	hyper_print_uptime();
 
-	if (mount("sysfs", "/sys", "sysfs", 0, NULL) == -1) {
+	if (mount("sysfs", "/sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) == -1) {
 		perror("mount sysfs failed");
 		return -1;
 	}
 
-	if (mount("dev", "/dev", "devtmpfs", 0, NULL) == -1) {
+	if (mount("dev", "/dev", "devtmpfs", MS_NOSUID, NULL) == -1) {
 		perror("mount sysfs failed");
 		return -1;
 	}
@@ -1226,7 +1226,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	if (mount("devpts", "/dev/pts", "devpts", 0, NULL) == -1) {
+	if (mount("devpts", "/dev/pts", "devpts", MS_NOSUID| MS_NOEXEC, NULL) == -1) {
 		perror("mount devpts failed");
 		return -1;
 	}
