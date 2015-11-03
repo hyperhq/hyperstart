@@ -10,6 +10,7 @@
 #include <termios.h>
 
 #include "hyper.h"
+#include "util.h"
 #include "../config.h"
 
 void hyper_set_be32(uint8_t *buf, uint32_t val)
@@ -115,14 +116,9 @@ int hyper_get_type_block(int fd, uint32_t *type)
 {
 	int ret = 0, flags;
 
-	flags = fcntl(fd, F_GETFL, 0);
+	flags = hyper_setfd_block(fd);
 	if (flags < 0) {
-		fprintf(stderr, "%s get fd flag failed\n", __func__);
-		return -1;
-	}
-
-	if (fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
-		perror("set fd BLOCK failed");
+		fprintf(stderr, "%s fail to set fd block\n", __func__);
 		return -1;
 	}
 
@@ -144,14 +140,9 @@ int hyper_send_type_block(int fd, uint32_t type, int need_ack)
 	int ret = 0, flags;
 	uint32_t t;
 
-	flags = fcntl(fd, F_GETFL, 0);
+	flags = hyper_setfd_block(fd);
 	if (flags < 0) {
-		fprintf(stderr, "get fd flag failed\n");
-		return -1;
-	}
-
-	if (fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
-		perror("set fd BLOCK failed");
+		fprintf(stderr, "%s fail to set fd block\n", __func__);
 		return -1;
 	}
 
