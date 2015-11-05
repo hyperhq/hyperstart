@@ -349,16 +349,24 @@ fail:
 	goto out;
 }
 
-static int hyper_do_start_containers(void *data)
+struct hyper_stage0_arg {
+	struct hyper_pod	*pod;
+	struct hyper_container	*container;
+	int			ctl_pipe[2];
+};
+
+// stage0: enter the pidns
+static int hyper_container_stage0(void *data)
 {
-	int i, pidns, ipcns, utsns, ret;
+	int pidns, ipcns, utsns, ret;
 	struct hyper_container *c;
-	struct hyper_pod_arg *arg;
+	struct hyper_stage0_arg *arg;
 	struct hyper_pod *pod;
 	char path[64];
 
 	arg = data;
 	pod = arg->pod;
+	c   = arg->container;
 
 	ret = pidns = ipcns = utsns = -1;
 
@@ -390,15 +398,7 @@ static int hyper_do_start_containers(void *data)
 		goto out;
 	}
 
-	for (i = 0; i < pod->c_num; i++) {
-		c = &pod->c[i];
-		if (hyper_start_container(c, utsns, ipcns, pod) < 0) {
-			fprintf(stderr, "fail to start container\n");
-			goto out;
-		}
-	}
-
-	ret = 0;
+	ret = hyper_start_container(c, utsns, ipcns, pod);
 out:
 	if (hyper_send_type(arg->ctl_pipe[1], ret ? ERROR : READY) < 0) {
 		fprintf(stderr, "container init send ready message failed\n");
@@ -413,12 +413,13 @@ out:
 	_exit(ret);
 }
 
-int hyper_start_containers(struct hyper_pod *pod)
+int hyper_start_container_stage0(struct hyper_container *c, struct hyper_pod *pod)
 {
 	int stacksize = getpagesize() * 4;
 	void *stack = NULL;
-	struct hyper_pod_arg arg = {
+	struct hyper_stage0_arg arg = {
 		.pod		= pod,
+		.container	= c,
 		.ctl_pipe	= {-1, -1},
 	};
 	int ret = -1, pid;
@@ -436,7 +437,7 @@ int hyper_start_containers(struct hyper_pod *pod)
 		goto out;
 	}
 
-	pid = clone(hyper_do_start_containers, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
+	pid = clone(hyper_container_stage0, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
 	free(stack);
 	if (pid < 0) {
 		perror("enter container pid ns failed");
@@ -460,6 +461,18 @@ out:
 	close(arg.ctl_pipe[0]);
 	close(arg.ctl_pipe[1]);
 	return ret;
+}
+
+int hyper_start_containers(struct hyper_pod *pod)
+{
+	int i, ret = 0;
+
+	for (i = 0; i < pod->c_num; i++) {
+		ret = hyper_start_container_stage0(&pod->c[i], pod);
+		if (ret)
+			return ret;
+	}
+	return 0;
 }
 
 static int hyper_setup_container(struct hyper_pod *pod)
@@ -555,7 +568,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 {
 	struct vbsf_mount_info_new mntinf;
 
-	if (pod->tag == NULL) {
+	if (pod->share_tag == NULL) {
 		fprintf(stdout, "no shared directroy\n");
 		return 0;
 	}
@@ -573,7 +586,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 	mntinf.length		= sizeof(mntinf);
 	mntinf.dmode		= ~0U;
 	mntinf.fmode		= ~0U;
-	strcpy(mntinf.name, pod->tag);
+	strcpy(mntinf.name, pod->share_tag);
 
 	if (mount(NULL, "/tmp/hyper/shared", "vboxsf",
 		  MS_NODEV, &mntinf) < 0) {
@@ -586,7 +599,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 #else
 static int hyper_setup_shared(struct hyper_pod *pod)
 {
-	if (pod->tag == NULL) {
+	if (pod->share_tag == NULL) {
 		fprintf(stdout, "no shared directroy\n");
 		return 0;
 	}
@@ -596,7 +609,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 		return -1;
 	}
 
-	if (mount(pod->tag, "/tmp/hyper/shared", "9p",
+	if (mount(pod->share_tag, "/tmp/hyper/shared", "9p",
 		  MS_MGC_VAL| MS_NODEV, "trans=virtio,cache=loose") < 0) {
 
 		perror("fail to mount shared dir");
@@ -669,6 +682,32 @@ static int hyper_start_pod(char *json, int length)
 	if (hyper_setup_pod(pod) < 0) {
 		hyper_shutdown(pod);
 		return -1;
+	}
+
+	return 0;
+}
+
+static int hyper_new_container(char *json, int length)
+{
+	int ret;
+	struct hyper_pod *pod = &global_pod;
+
+	fprintf(stdout, "call hyper_new_container, json %s, len %d\n", json, length);
+
+	if (!pod->init_pid)
+		fprintf(stdout, "the pod is not created yet\n");
+
+	if (hyper_parse_new_container(pod, json, length) < 0) {
+		fprintf(stderr, "parse container json failed\n");
+		return -1;
+	}
+
+	ret = hyper_start_container_stage0(&pod->c[pod->c_num - 1], pod);
+	if (ret < 0) {
+		//TODO full grace cleanup
+		pod->remains -= 1;
+		pod->c_num -= 1;
+		return ret;
 	}
 
 	return 0;
@@ -917,16 +956,16 @@ static void hyper_cleanup_hostname(struct hyper_pod *pod)
 
 static void hyper_cleanup_shared(struct hyper_pod *pod)
 {
-	if (pod->tag == NULL) {
+	if (pod->share_tag == NULL) {
 		fprintf(stdout, "no shared directroy\n");
 		return;
 	}
 
-	free(pod->tag);
-	pod->tag = NULL;
+	free(pod->share_tag);
+	pod->share_tag = NULL;
 	if (umount("/tmp/hyper/shared") < 0 &&
 	    umount2("/tmp/hyper/shared", MNT_DETACH)) {
-		perror("fail to umount 9p dir");
+		perror("fail to umount shared dir");
 		return;
 	}
 
@@ -1098,6 +1137,9 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		break;
 	case WINSIZE:
 		ret = hyper_set_win_size((char *)buf->data + 8, len - 8);
+		break;
+	case NEWCONTAINER:
+		ret = hyper_new_container((char *)buf->data + 8, len - 8);
 		break;
 	default:
 		ret = -1;

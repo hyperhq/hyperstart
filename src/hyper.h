@@ -27,6 +27,7 @@ enum {
 	NEXT,
 	WRITEFILE,
 	READFILE,
+	NEWCONTAINER,
 };
 
 enum {
@@ -43,7 +44,7 @@ struct hyper_pod {
 	struct list_head	exec_head;
 	//struct list_head	ce_head;
 	char			*hostname;
-	char			*tag;
+	char			*share_tag;
 	int			init_pid;
 	uint32_t		c_num;
 	uint32_t		i_num;
