@@ -568,7 +568,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 {
 	struct vbsf_mount_info_new mntinf;
 
-	if (pod->share_tag == NULL) {
+	if (pod->share_tag == NULL || strlen(pod->share_tag) == 0) {
 		fprintf(stdout, "no shared directroy\n");
 		return 0;
 	}
@@ -599,7 +599,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 #else
 static int hyper_setup_shared(struct hyper_pod *pod)
 {
-	if (pod->share_tag == NULL) {
+	if (pod->share_tag == NULL || strlen(pod->share_tag) == 0) {
 		fprintf(stdout, "no shared directroy\n");
 		return 0;
 	}
