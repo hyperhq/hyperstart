@@ -586,6 +586,16 @@ struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id)
 		return container;
 	}
 
+	list_for_each_entry(container, &pod->dyn_containers, dyn) {
+		if (strlen(container->id) != strlen(id))
+			continue;
+
+		if (strncmp(container->id, id, strlen(id)))
+			continue;
+
+		return container;
+	}
+
 	return NULL;
 }
 

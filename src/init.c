@@ -29,6 +29,7 @@
 #include "container.h"
 
 struct hyper_pod global_pod = {
+	.dyn_containers	=	LIST_HEAD_INIT(global_pod.dyn_containers),
 	.exec_head	=	LIST_HEAD_INIT(global_pod.exec_head),
 };
 struct hyper_exec *global_exec;
@@ -690,6 +691,7 @@ static int hyper_start_pod(char *json, int length)
 static int hyper_new_container(char *json, int length)
 {
 	int ret;
+	struct hyper_container *c;
 	struct hyper_pod *pod = &global_pod;
 
 	fprintf(stdout, "call hyper_new_container, json %s, len %d\n", json, length);
@@ -697,19 +699,21 @@ static int hyper_new_container(char *json, int length)
 	if (!pod->init_pid)
 		fprintf(stdout, "the pod is not created yet\n");
 
-	if (hyper_parse_new_container(pod, json, length) < 0) {
+	c = hyper_parse_new_container(pod, json, length);
+	if (c == NULL) {
 		fprintf(stderr, "parse container json failed\n");
 		return -1;
 	}
 
-	ret = hyper_start_container_stage0(&pod->c[pod->c_num - 1], pod);
+	ret = hyper_start_container_stage0(c, pod);
 	if (ret < 0) {
 		//TODO full grace cleanup
-		pod->remains -= 1;
-		pod->c_num -= 1;
+		hyper_cleanup_container(c);
+		free(c);
 		return ret;
 	}
 
+	list_add_tail(&c->dyn, &pod->dyn_containers);
 	return 0;
 }
 
@@ -977,7 +981,7 @@ static void hyper_cleanup_shared(struct hyper_pod *pod)
 
 void hyper_cleanup_pod(struct hyper_pod *pod)
 {
-	hyper_cleanup_container(pod);
+	hyper_cleanup_containers(pod);
 	hyper_cleanup_network(pod);
 	hyper_cleanup_shared(pod);
 	hyper_cleanup_dns(pod);
