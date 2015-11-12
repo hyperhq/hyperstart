@@ -575,7 +575,7 @@ struct hyper_container *hyper_parse_new_container(struct hyper_pod *pod, char *j
 	jsmn_parser p;
 	int toks_num = 100;
 	jsmntok_t *toks = NULL;
-	struct hyper_container *c;
+	struct hyper_container *c = NULL;
 
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
