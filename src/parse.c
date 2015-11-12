@@ -40,6 +40,11 @@ static int container_parse_cmd(struct hyper_container *c, char *json, jsmntok_t 
 	c->exec.argc = toks[i].size;
 
 	c->exec.argv = calloc(c->exec.argc + 1, sizeof(*c->exec.argv));
+	if (c->exec.argv == NULL) {
+		fprintf(stderr, "allocate memory for exec argv failed\n");
+		return -1;
+	}
+
 	c->exec.argv[c->exec.argc] = NULL;
 
 	for (j = 0; j < c->exec.argc; j++) {
@@ -61,7 +66,12 @@ static int container_parse_volumes(struct hyper_container *c, char *json, jsmnto
 	}
 	c->vols_num = toks[i].size;
 	fprintf(stdout, "volumes num %d\n", c->vols_num);
+
 	c->vols = calloc(c->vols_num, sizeof(*c->vols));
+	if (c->vols == NULL) {
+		fprintf(stderr, "allocate memory for volume failed\n");
+		return -1;
+	}
 
 	for (j = 0; j < c->vols_num; j++) {
 		int i_volume, next_volume;
@@ -110,7 +120,12 @@ static int container_parse_fsmap(struct hyper_container *c, char *json, jsmntok_
 
 	c->maps_num = toks[i].size;
 	fprintf(stdout, "fsmap num %d\n", c->maps_num);
+
 	c->maps = calloc(c->maps_num, sizeof(*c->maps));
+	if (c->maps == NULL) {
+		fprintf(stderr, "allocate memory for fsmap failed\n");
+		return -1;
+	}
 
 	for (j = 0; j < c->maps_num; j++) {
 		int i_map, next_map;
@@ -156,7 +171,12 @@ static int container_parse_envs(struct hyper_container *c, char *json, jsmntok_t
 
 	c->envs_num = toks[i].size;
 	fprintf(stdout, "envs num %d\n", c->envs_num);
+
 	c->envs = calloc(c->envs_num, sizeof(*c->envs));
+	if (c->envs == NULL) {
+		fprintf(stderr, "allocate memory for env failed\n");
+		return -1;
+	}
 
 	for (j = 0; j < c->envs_num; j++) {
 		int i_env, next_env;
@@ -198,7 +218,12 @@ static int container_parse_sysctl(struct hyper_container *c, char *json, jsmntok
 
 	c->sys_num = toks[i].size;
 	fprintf(stdout, "sysctl size %d\n", c->sys_num);
+
 	c->sys = calloc(c->sys_num, sizeof(*c->sys));
+	if (c->sys == NULL) {
+		fprintf(stderr, "allocate memory for sysctl failed\n");
+		return -1;
+	}
 
 	for (j = 0; j < c->sys_num; j++) {
 		c->sys[j].path = strdup(json_token_str(json, &toks[++i]));
@@ -320,8 +345,8 @@ static int hyper_parse_containers(struct hyper_pod *pod, char *json, jsmntok_t *
 
 	pod->remains = pod->c_num = toks[i].size;
 	fprintf(stdout, "container count %d\n", pod->c_num);
-	pod->c = calloc(pod->c_num, sizeof(*pod->c));
 
+	pod->c = calloc(pod->c_num, sizeof(*pod->c));
 	if (pod->c == NULL) {
 		fprintf(stdout, "alloc memory for container failed\n");
 		return -1;
@@ -350,7 +375,12 @@ static int hyper_parse_interfaces(struct hyper_pod *pod, char *json, jsmntok_t *
 
 	pod->i_num = toks[i].size;
 	fprintf(stdout, "network interfaces num %d\n", pod->i_num);
+
 	pod->iface = calloc(pod->i_num, sizeof(*iface));
+	if (pod->iface == NULL) {
+		fprintf(stdout, "alloc memory for interface failed\n");
+		return -1;
+	}
 
 	for (j = 0; j < pod->i_num; j++) {
 		int i_if;
@@ -393,7 +423,12 @@ static int hyper_parse_routes(struct hyper_pod *pod, char *json, jsmntok_t *toks
 
 	pod->r_num = toks[i].size;
 	fprintf(stdout, "network routes num %d\n", pod->r_num);
+
 	pod->rt = calloc(pod->r_num, sizeof(*rt));
+	if (pod->rt == NULL) {
+		fprintf(stdout, "alloc memory for router failed\n");
+		return -1;
+	}
 
 	for (j = 0; j < pod->r_num; j++) {
 		int i_rt;
@@ -435,10 +470,10 @@ static int hyper_parse_dns(struct hyper_pod *pod, char *json, jsmntok_t *toks)
 
 	pod->d_num = toks[i].size;
 	fprintf(stdout, "dns count %d\n", pod->d_num);
-	pod->dns = calloc(pod->d_num, sizeof(*pod->dns));
 
+	pod->dns = calloc(pod->d_num, sizeof(*pod->dns));
 	if (pod->dns == NULL) {
-		fprintf(stdout, "alloc memory for container failed\n");
+		fprintf(stdout, "alloc memory for dns failed\n");
 		return -1;
 	}
 
@@ -459,6 +494,10 @@ int hyper_parse_pod(struct hyper_pod *pod, char *json, int length)
 
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
+	if (toks == NULL) {
+		fprintf(stderr, "allocate tokens for pod failed\n");
+		goto out;
+	}
 
 	fprintf(stdout, "call hyper_start_pod, json %s, len %d\n", json, length);
 	jsmn_init(&p);
@@ -540,6 +579,10 @@ struct hyper_container *hyper_parse_new_container(struct hyper_pod *pod, char *j
 
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
+	if (toks == NULL) {
+		fprintf(stderr, "allocate tokens for new container failed\n");
+		goto fail;
+	}
 
 	jsmn_init(&p);
 	n = jsmn_parse(&p, json, length, toks, toks_num);
@@ -582,6 +625,10 @@ int hyper_parse_winsize(struct hyper_win_size *ws, char *json, int length)
 
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
+	if (toks == NULL) {
+		fprintf(stderr, "allocate tokens for winsize failed\n");
+		goto fail;
+	}
 
 	jsmn_init(&p);
 
@@ -634,7 +681,6 @@ struct hyper_exec *hyper_parse_execcmd(char *json, int length)
 {
 	int i, j, n, has_seq = 0;
 	struct hyper_exec *exec = NULL;
-	char **argv = NULL;
 
 	jsmn_parser p;
 	int toks_num = 10;
@@ -642,6 +688,10 @@ struct hyper_exec *hyper_parse_execcmd(char *json, int length)
 
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
+	if (toks == NULL) {
+		fprintf(stderr, "allocate tokens for execcmd failed\n");
+		goto fail;
+	}
 
 	jsmn_init(&p);
 	n = jsmn_parse(&p, json, length,  toks, toks_num);
@@ -655,8 +705,10 @@ realloc:
 	}
 
 	exec = calloc(1, sizeof(*exec));
-	if (exec == NULL)
+	if (exec == NULL) {
+		fprintf(stderr, "allocate memory for exec cmd failed\n");
 		goto out;
+	}
 
 	exec->ptyfd = -1;
 	exec->errfd = -1;
@@ -691,12 +743,16 @@ realloc:
 				goto fail;
 			}
 
+			exec->argv = calloc(toks[i].size + 1, sizeof(*exec->argv));
+			if (exec->argv == NULL) {
+				fprintf(stdout, "allocate memory for exec cmd argv failed\n");
+				goto fail;
+			}
 			exec->argc = toks[i].size;
-			argv = calloc(exec->argc + 1, sizeof(*argv));
-			argv[exec->argc] = NULL;
+			exec->argv[exec->argc] = NULL;
 		} else if (j < exec->argc) {
-			argv[j++] = strdup(json_token_str(json, &toks[i]));
-			fprintf(stdout, "argv %d, %s\n", j - 1, argv[j - 1]);
+			exec->argv[j++] = strdup(json_token_str(json, &toks[i]));
+			fprintf(stdout, "argv %d, %s\n", j - 1, exec->argv[j - 1]);
 		}
 	}
 
@@ -704,14 +760,14 @@ realloc:
 		fprintf(stderr, "execcmd format error, has no seq\n");
 		goto fail;
 	}
-	exec->argv = argv;
+
 out:
 	free(toks);
 	return exec;
 fail:
 	free(exec->id);
 	for (i = 0; i < exec->argc; i++)
-		free(argv[i]);
+		free(exec->argv[i]);
 
 	free(exec->argv);
 	free(exec);
@@ -722,28 +778,35 @@ fail:
 
 int hyper_parse_write_file(struct hyper_writter *writter, char *json, int length)
 {
-	int i, n, ret = 0;
+	int i, n, ret = -1;
 
 	jsmn_parser p;
 	int toks_num = 10;
 	jsmntok_t *toks = NULL;
 
+	memset(writter, 0, sizeof(*writter));
+
 	toks = calloc(toks_num, sizeof(jsmntok_t));
+	if (toks == NULL) {
+		fprintf(stderr, "fail to allocate tokens for write file cmd\n");
+		goto fail;
+	}
 
 	jsmn_init(&p);
 	n = jsmn_parse(&p, json, length,  toks, toks_num);
 	/* Must be json first */
 	if (n <= 0) {
 		fprintf(stdout, "jsmn parse failed, n is %d\n", n);
-		ret = -1;
-		goto out;
+		goto fail;
 	}
 
 	writter->len = length - toks[0].end;
 	writter->data = malloc(writter->len);
 
-	if (writter->data == NULL)
+	if (writter->data == NULL) {
+		fprintf(stderr, "fail to allocate memory for writter data\n");
 		goto fail;
+	}
 
 	memcpy(writter->data, json + toks[0].end, writter->len);
 	fprintf(stdout, "writefile get data len %d %s\n", writter->len, writter->data);
@@ -767,9 +830,16 @@ int hyper_parse_write_file(struct hyper_writter *writter, char *json, int length
 			writter->file = strdup(json_token_str(json, &toks[i]));
 			fprintf(stdout, "writefile get file %s\n", writter->file);
 		} else {
-			fprintf(stdout, "in writefile incorrect %s\n", json_token_str(json, &toks[i]));
+			fprintf(stderr, "in writefile incorrect %s\n", json_token_str(json, &toks[i]));
 		}
 	}
+
+	if (writter->id == NULL || writter->file == NULL) {
+		fprintf(stderr, "writefile format incorrect\n");
+		goto fail;
+	}
+
+	ret = 0;
 out:
 	free(toks);
 	return ret;
@@ -777,24 +847,24 @@ fail:
 	free(writter->id);
 	free(writter->file);
 	free(writter->data);
-
-	ret = -1;
 	goto out;
 }
 
 int hyper_parse_read_file(struct hyper_reader *reader, char *json, int length)
 {
-	int i, n, ret = 0;
+	int i, n, ret = -1;
 
 	jsmn_parser p;
 	int toks_num = 10;
 	jsmntok_t *toks = NULL;
 
+	memset(reader, 0, sizeof(*reader));
+
 	toks = calloc(toks_num, sizeof(jsmntok_t));
 	if (toks == NULL) {
 		fprintf(stderr, "fail to allocate tokens for read file cmd\n");
 		ret = -1;
-		goto out;
+		goto fail;
 	}
 
 	jsmn_init(&p);
@@ -802,7 +872,7 @@ int hyper_parse_read_file(struct hyper_reader *reader, char *json, int length)
 	if (n < 0) {
 		fprintf(stdout, "jsmn parse failed, n is %d\n", n);
 		ret = -1;
-		goto out;
+		goto fail;
 	}
 
 	for (i = 0; i < n; i++) {
@@ -828,13 +898,17 @@ int hyper_parse_read_file(struct hyper_reader *reader, char *json, int length)
 		}
 	}
 
+	if (reader->id == NULL || reader->file == NULL) {
+		fprintf(stderr, "readfile format incorrect\n");
+		goto fail;
+	}
+
+	ret = 0;
 out:
 	free(toks);
 	return ret;
 fail:
 	free(reader->id);
 	free(reader->file);
-
-	ret = -1;
 	goto out;
 }

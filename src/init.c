@@ -728,7 +728,6 @@ static int hyper_cmd_write_file(char *json, int length)
 	int len = 0, size, ret = -1;
 
 	fprintf(stdout, "%s\n", __func__);
-	memset(&writter, 0, sizeof(writter));
 
 	if (hyper_parse_write_file(&writter, json, length) < 0) {
 		goto out;
@@ -896,7 +895,6 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 	uint32_t type;
 
 	fprintf(stdout, "%s\n", __func__);
-	memset(&reader, 0, sizeof(reader));
 
 	if (hyper_parse_read_file(&reader, json, length) < 0) {
 		goto out;
