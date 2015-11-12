@@ -599,18 +599,13 @@ struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id)
 	return NULL;
 }
 
-void hyper_cleanup_container(struct hyper_container *c)
+void hyper_free_container(struct hyper_container *c)
 {
 	int i;
 	struct volume *vol;
 	struct env *env;
 	struct fsmap *map;
 	struct sysctl *sys;
-	char root[512];
-
-	sprintf(root, "/tmp/hyper/%s/devpts/", c->id);
-	if (umount(root) < 0 && umount2(root, MNT_DETACH))
-		perror("umount devpts failed");
 
 	free(c->id);
 	free(c->rootfs);
@@ -646,7 +641,6 @@ void hyper_cleanup_container(struct hyper_container *c)
 		free(map->path);
 	}
 	free(c->maps);
-	close(c->ns);
 
 	free(c->exec.id);
 	for (i = 0; i < c->exec.argc; i++) {
@@ -654,6 +648,18 @@ void hyper_cleanup_container(struct hyper_container *c)
 		free(c->exec.argv[i]);
 	}
 	free(c->exec.argv);
+}
+
+void hyper_cleanup_container(struct hyper_container *c)
+{
+	char root[512];
+
+	sprintf(root, "/tmp/hyper/%s/devpts/", c->id);
+	if (umount(root) < 0 && umount2(root, MNT_DETACH))
+		perror("umount devpts failed");
+
+	close(c->ns);
+	hyper_free_container(c);
 }
 
 void hyper_cleanup_containers(struct hyper_pod *pod)
