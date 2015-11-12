@@ -545,9 +545,6 @@ int hyper_release_exec(struct hyper_exec *exec,
 		fprintf(stdout, "%s container init exited, type %d, remains %d, policy %d\n",
 			__func__, pod->type, pod->remains, pod->policy);
 
-		if (exec->code)
-			pod->code = exec->code;
-
 		if (exec->init == 2) { // dynamic container
 			struct hyper_container *c = container_of(exec, struct hyper_container, exec);
 			// TODO send finish of this container and full cleanup
@@ -560,26 +557,16 @@ int hyper_release_exec(struct hyper_exec *exec,
 		if (--pod->remains > 0)
 			return 0;
 
-		/* stop pod, should not restart container */
 		if (pod->type == STOPPOD) {
+			/* stop pod manually */
 			hyper_send_type(ctl.chan.fd, ACK);
-			hyper_cleanup_pod(pod);
-			return 0;
-		}
 
-		/* should shutdown? */
-		if (pod->policy == POLICY_NEVER ||
-		   ((pod->policy == POLICY_ONFAILURE) && pod->code == 0)) {
+		} else {
+			/* send out pod finish message, hyper will decide if restart pod or not */
 			hyper_send_finish(pod);
-			hyper_cleanup_pod(pod);
-			return 0;
 		}
 
-		if (hyper_start_containers(pod) < 0) {
-			fprintf(stderr, "restart container failed\n");
-			return -1;
-		}
-
+		hyper_cleanup_pod(pod);
 		return 0;
 	}
 
