@@ -42,6 +42,7 @@ struct hyper_container {
 	int			sys_num;
 	int			ns;
 	uint32_t		code;
+	struct list_head	dyn;
 	struct hyper_exec	exec;
 };
 
@@ -50,6 +51,7 @@ struct hyper_pod;
 int hyper_start_container(struct hyper_container *container,
 			  int utsns, int ipcns, struct hyper_pod *pod);
 struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id);
-void hyper_cleanup_container(struct hyper_pod *pod);
+void hyper_cleanup_container(struct hyper_container *container);
+void hyper_cleanup_containers(struct hyper_pod *pod);
 
 #endif

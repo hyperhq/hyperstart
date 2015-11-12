@@ -530,7 +530,7 @@ out:
 	return next;
 }
 
-int hyper_parse_new_container(struct hyper_pod *pod, char *json, int length)
+struct hyper_container *hyper_parse_new_container(struct hyper_pod *pod, char *json, int length)
 {
 	int n;
 	jsmn_parser p;
@@ -553,26 +553,24 @@ realloc:
 		goto fail;
 	}
 
-	c = realloc(pod->c, (pod->c_num + 1) * sizeof(*pod->c));
+	c = calloc(1, sizeof(*c));
 	if (c == NULL) {
 		fprintf(stdout, "alloc memory for container failed\n");
 		goto fail;
 	}
-	pod->c = c;
-	memset(&pod->c[pod->c_num], 0, sizeof(pod->c[pod->c_num]));
 
 	// trick: toks-1, TODO: change all "i = 1" to "i = 0"
-	if (hyper_parse_container(pod, &pod->c[pod->c_num], json, toks-1) < 0)
+	if (hyper_parse_container(pod, c, json, toks-1) < 0)
 		goto fail;
 
-	pod->remains += 1;
-	pod->c_num += 1;
+	c->exec.init = 2; // dynamic container type
 	free(toks);
-	return 0;
+	return c;
 
 fail:
 	free(toks);
-	return -1;
+	free(c);
+	return NULL;
 }
 
 int hyper_parse_winsize(struct hyper_win_size *ws, char *json, int length)

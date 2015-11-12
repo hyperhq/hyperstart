@@ -548,6 +548,15 @@ int hyper_release_exec(struct hyper_exec *exec,
 		if (exec->code)
 			pod->code = exec->code;
 
+		if (exec->init == 2) { // dynamic container
+			struct hyper_container *c = container_of(exec, struct hyper_container, exec);
+			// TODO send finish of this container and full cleanup
+			hyper_cleanup_container(c);
+			list_del(&c->dyn);
+			free(c);
+			return 0;
+		}
+
 		if (--pod->remains > 0)
 			return 0;
 

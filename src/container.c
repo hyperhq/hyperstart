@@ -586,69 +586,82 @@ struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id)
 		return container;
 	}
 
+	list_for_each_entry(container, &pod->dyn_containers, dyn) {
+		if (strlen(container->id) != strlen(id))
+			continue;
+
+		if (strncmp(container->id, id, strlen(id)))
+			continue;
+
+		return container;
+	}
+
 	return NULL;
 }
 
-void hyper_cleanup_container(struct hyper_pod *pod)
+void hyper_cleanup_container(struct hyper_container *c)
 {
-	int i, j;
-	struct hyper_container *c;
+	int i;
 	struct volume *vol;
 	struct env *env;
 	struct fsmap *map;
 	struct sysctl *sys;
 	char root[512];
 
-	for (i = 0; i < pod->c_num; i++) {
-		c = &pod->c[i];
+	sprintf(root, "/tmp/hyper/%s/devpts/", c->id);
+	if (umount(root) < 0 && umount2(root, MNT_DETACH))
+		perror("umount devpts failed");
 
-		sprintf(root, "/tmp/hyper/%s/devpts/", c->id);
-		if (umount(root) < 0 && umount2(root, MNT_DETACH))
-			perror("umount devpts failed");
+	free(c->id);
+	free(c->rootfs);
+	free(c->image);
+	free(c->workdir);
+	free(c->fstype);
 
-		free(c->id);
-		free(c->rootfs);
-		free(c->image);
-		free(c->workdir);
-		free(c->fstype);
-
-		for (j = 0; j < c->vols_num; j++) {
-			vol = &(c->vols[j]);
-			free(vol->device);
-			free(vol->mountpoint);
-			free(vol->fstype);
-		}
-		free(c->vols);
-
-		for (j = 0; j < c->envs_num; j++) {
-			env = &(c->envs[j]);
-			free(env->env);
-			free(env->value);
-		}
-		free(c->envs);
-
-		for (j = 0; j < c->sys_num; j++) {
-			sys = &(c->sys[j]);
-			free(sys->path);
-			free(sys->value);
-		}
-		free(c->sys);
-
-		for (j = 0; j < c->maps_num; j++) {
-			map = &(c->maps[j]);
-			free(map->source);
-			free(map->path);
-		}
-		free(c->maps);
-		close(c->ns);
-
-		free(c->exec.id);
-		for (i = 0; i < c->exec.argc; i++) {
-			//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
-			free(c->exec.argv[i]);
-		}
-		free(c->exec.argv);
+	for (i = 0; i < c->vols_num; i++) {
+		vol = &(c->vols[i]);
+		free(vol->device);
+		free(vol->mountpoint);
+		free(vol->fstype);
 	}
+	free(c->vols);
+
+	for (i = 0; i < c->envs_num; i++) {
+		env = &(c->envs[i]);
+		free(env->env);
+		free(env->value);
+	}
+	free(c->envs);
+
+	for (i = 0; i < c->sys_num; i++) {
+		sys = &(c->sys[i]);
+		free(sys->path);
+		free(sys->value);
+	}
+	free(c->sys);
+
+	for (i = 0; i < c->maps_num; i++) {
+		map = &(c->maps[i]);
+		free(map->source);
+		free(map->path);
+	}
+	free(c->maps);
+	close(c->ns);
+
+	free(c->exec.id);
+	for (i = 0; i < c->exec.argc; i++) {
+		//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
+		free(c->exec.argv[i]);
+	}
+	free(c->exec.argv);
+}
+
+void hyper_cleanup_containers(struct hyper_pod *pod)
+{
+	int i;
+
+	for (i = 0; i < pod->c_num; i++)
+		hyper_cleanup_container(&pod->c[i]);
 
 	free(pod->c);
 	pod->c = NULL;
