@@ -16,6 +16,7 @@
 
 #include "util.h"
 #include "hyper.h"
+#include "parse.h"
 
 static int container_setup_volume(struct hyper_container *container)
 {
@@ -597,57 +598,6 @@ struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id)
 	}
 
 	return NULL;
-}
-
-void hyper_free_container(struct hyper_container *c)
-{
-	int i;
-	struct volume *vol;
-	struct env *env;
-	struct fsmap *map;
-	struct sysctl *sys;
-
-	free(c->id);
-	free(c->rootfs);
-	free(c->image);
-	free(c->workdir);
-	free(c->fstype);
-
-	for (i = 0; i < c->vols_num; i++) {
-		vol = &(c->vols[i]);
-		free(vol->device);
-		free(vol->mountpoint);
-		free(vol->fstype);
-	}
-	free(c->vols);
-
-	for (i = 0; i < c->envs_num; i++) {
-		env = &(c->envs[i]);
-		free(env->env);
-		free(env->value);
-	}
-	free(c->envs);
-
-	for (i = 0; i < c->sys_num; i++) {
-		sys = &(c->sys[i]);
-		free(sys->path);
-		free(sys->value);
-	}
-	free(c->sys);
-
-	for (i = 0; i < c->maps_num; i++) {
-		map = &(c->maps[i]);
-		free(map->source);
-		free(map->path);
-	}
-	free(c->maps);
-
-	free(c->exec.id);
-	for (i = 0; i < c->exec.argc; i++) {
-		//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
-		free(c->exec.argv[i]);
-	}
-	free(c->exec.argv);
 }
 
 void hyper_cleanup_container(struct hyper_container *c)
