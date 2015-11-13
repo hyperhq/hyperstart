@@ -335,16 +335,26 @@ void hyper_free_container(struct hyper_container *c)
 	container_free_sysctl(c);
 	container_free_fsmap(c);
 	container_free_cmd(c);
+
+	list_del_init(&c->list);
+	free(c);
 }
 
-static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *c,
+static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container **container,
 				 char *json, jsmntok_t *toks)
 {
 	int i = 0, j, next, next_container;
+	struct hyper_container *c = NULL;
 	jsmntok_t *t;
 
 	if (toks[i].type != JSMN_OBJECT) {
 		fprintf(stderr, "format incorrect\n");
+		return -1;
+	}
+
+	c = calloc(1, sizeof(*c));
+	if (c == NULL) {
+		fprintf(stdout, "alloc memory for container failed\n");
 		return -1;
 	}
 
@@ -355,6 +365,7 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 	c->exec.ptyfd = -1;
 	c->exec.errfd = -1;
 	c->ns = -1;
+	INIT_LIST_HEAD(&c->list);
 
 	next_container = toks[i].size;
 	fprintf(stdout, "next container %d\n", next_container);
@@ -426,47 +437,44 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 		}
 	}
 
+	*container = c;
 	return i;
-
 fail:
 	hyper_free_container(c);
+	*container = NULL;
 	return -1;
 }
 
 static int hyper_parse_containers(struct hyper_pod *pod, char *json, jsmntok_t *toks)
 {
-	int i = 0, j = 0, next;
+	int i = 0, j = 0, next, c_num;
+	struct hyper_container *c, *n;
 
 	if (toks[i].type != JSMN_ARRAY) {
 		fprintf(stdout, "format incorrect\n");
 		return -1;
 	}
 
-	pod->c = calloc(toks[i].size, sizeof(*pod->c));
-	if (pod->c == NULL) {
-		fprintf(stdout, "alloc memory for container failed\n");
-		goto fail;
-	}
-
-	pod->remains = pod->c_num = toks[i].size;
-	fprintf(stdout, "container count %d\n", pod->c_num);
+	c_num = toks[i].size;
+	fprintf(stdout, "container count %d\n", c_num);
 
 	i++;
-	for (j = 0; j < pod->c_num; j++) {
-		next = hyper_parse_container(pod, &pod->c[j], json, toks + i);
+	for (j = 0; j < c_num; j++) {
+		next = hyper_parse_container(pod, &c, json, toks + i);
 		if (next < 0)
 			goto fail;
 
+		/* Pod created containers, Add to list immediately */
+		list_add_tail(&c->list, &pod->containers);
 		i += next;
 	}
 
+	pod->remains = c_num;
 	return i;
 fail:
-	for (; j > 0; j--)
-		hyper_free_container(&pod->c[j]);
+	list_for_each_entry_safe(c, n, &pod->containers, list)
+		hyper_free_container(c);
 
-	free(pod->c);
-	pod->c = NULL;
 	return -1;
 }
 
@@ -722,13 +730,7 @@ realloc:
 		goto fail;
 	}
 
-	c = calloc(1, sizeof(*c));
-	if (c == NULL) {
-		fprintf(stdout, "alloc memory for container failed\n");
-		goto fail;
-	}
-
-	if (hyper_parse_container(pod, c, json, toks) < 0)
+	if (hyper_parse_container(pod, &c, json, toks) < 0)
 		goto fail;
 
 	c->exec.init = 2; // dynamic container type
@@ -737,7 +739,6 @@ realloc:
 
 fail:
 	free(toks);
-	free(c);
 	return NULL;
 }
 

@@ -29,7 +29,7 @@
 #include "container.h"
 
 struct hyper_pod global_pod = {
-	.dyn_containers	=	LIST_HEAD_INIT(global_pod.dyn_containers),
+	.containers	=	LIST_HEAD_INIT(global_pod.containers),
 	.exec_head	=	LIST_HEAD_INIT(global_pod.exec_head),
 };
 struct hyper_exec *global_exec;
@@ -144,6 +144,7 @@ static void hyper_term_all(struct hyper_pod *pod)
 	DIR *dp;
 	struct dirent *de;
 	pid_t *pids = NULL;
+	struct hyper_container *c;
 
 	dp = opendir("/proc");
 	if (dp == NULL)
@@ -175,9 +176,8 @@ static void hyper_term_all(struct hyper_pod *pod)
 	free(pids);
 	closedir(dp);
 
-	for (index = 0; index < pod->c_num; index++) {
-		hyper_kill_process(pod->c[index].exec.pid);
-	}
+	list_for_each_entry(c, &pod->containers, list)
+		hyper_kill_process(c->exec.pid);
 }
 
 static int hyper_handle_exit(struct hyper_pod *pod)
@@ -466,13 +466,13 @@ out:
 
 int hyper_start_containers(struct hyper_pod *pod)
 {
-	int i, ret = 0;
+	struct hyper_container *c;
 
-	for (i = 0; i < pod->c_num; i++) {
-		ret = hyper_start_container_stage0(&pod->c[i], pod);
-		if (ret)
-			return ret;
+	list_for_each_entry(c, &pod->containers, list) {
+		if (hyper_start_container_stage0(c, pod) < 0)
+			return -1;
 	}
+
 	return 0;
 }
 
@@ -709,11 +709,10 @@ static int hyper_new_container(char *json, int length)
 	if (ret < 0) {
 		//TODO full grace cleanup
 		hyper_cleanup_container(c);
-		free(c);
 		return ret;
 	}
 
-	list_add_tail(&c->dyn, &pod->dyn_containers);
+	list_add_tail(&c->list, &pod->containers);
 	return 0;
 }
 

@@ -42,7 +42,7 @@ struct hyper_container {
 	int			sys_num;
 	int			ns;
 	uint32_t		code;
-	struct list_head	dyn;
+	struct list_head	list;
 	struct hyper_exec	exec;
 };
 

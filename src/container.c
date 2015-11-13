@@ -572,29 +572,16 @@ fail:
 
 struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id)
 {
-	int i;
-	struct hyper_container *container;
+	struct hyper_container *c;
 
-	for (i = 0; i < pod->c_num; i++) {
-		container = &pod->c[i];
-
-		if (strlen(container->id) != strlen(id))
+	list_for_each_entry(c, &pod->containers, list) {
+		if (strlen(c->id) != strlen(id))
 			continue;
 
-		if (strncmp(container->id, id, strlen(id)))
+		if (strncmp(c->id, id, strlen(id)))
 			continue;
 
-		return container;
-	}
-
-	list_for_each_entry(container, &pod->dyn_containers, dyn) {
-		if (strlen(container->id) != strlen(id))
-			continue;
-
-		if (strncmp(container->id, id, strlen(id)))
-			continue;
-
-		return container;
+		return c;
 	}
 
 	return NULL;
@@ -614,12 +601,10 @@ void hyper_cleanup_container(struct hyper_container *c)
 
 void hyper_cleanup_containers(struct hyper_pod *pod)
 {
-	int i;
+	struct hyper_container *c, *n;
 
-	for (i = 0; i < pod->c_num; i++)
-		hyper_cleanup_container(&pod->c[i]);
+	list_for_each_entry_safe(c, n, &pod->containers, list)
+		hyper_cleanup_container(c);
 
-	free(pod->c);
-	pod->c = NULL;
-	pod->c_num = 0;
+	pod->remains = 0;
 }
