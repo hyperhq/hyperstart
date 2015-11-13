@@ -748,6 +748,7 @@ int hyper_parse_winsize(struct hyper_win_size *ws, char *json, int length)
 	int toks_num = 10;
 	jsmntok_t *toks = NULL;
 
+	memset(ws, 0, sizeof(*ws));
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
 	if (toks == NULL) {
@@ -775,28 +776,28 @@ realloc:
 			continue;
 
 		if (i++ == n)
-			goto out;
+			goto fail;
 
 		if (json_token_streq(json, t, "tty")) {
 			if (toks[i].type != JSMN_STRING)
-				goto out;
+				goto fail;
 			ws->tty = strdup(json_token_str(json, &toks[i]));
 		} else if (json_token_streq(json, t, "seq")) {
 			if (toks[i].type != JSMN_PRIMITIVE)
-				goto out;
+				goto fail;
 			ws->seq = json_token_ll(json, &toks[i]);
 		} else if (json_token_streq(json, t, "row")) {
 			if (toks[i].type != JSMN_PRIMITIVE)
-				goto out;
+				goto fail;
 			ws->row = json_token_int(json, &toks[i]);
 		} else if (json_token_streq(json, t, "column")) {
 			if (toks[i].type != JSMN_PRIMITIVE)
-				goto out;
+				goto fail;
 			ws->column = json_token_int(json, &toks[i]);
 		} else {
 			fprintf(stderr, "get unknown section %s in winsize\n",
 				json_token_str(json, t));
-			goto out;
+			goto fail;
 		}
 	}
 
@@ -804,6 +805,10 @@ realloc:
 out:
 	free(toks);
 	return ret;
+fail:
+	free(ws->tty);
+	ws->tty = NULL;
+	goto out;
 }
 
 struct hyper_exec *hyper_parse_execcmd(char *json, int length)
