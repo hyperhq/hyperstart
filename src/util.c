@@ -384,7 +384,7 @@ void hyper_unmount_all(void)
 	sync();
 }
 
-int hyper_send_finish(struct hyper_pod *pod)
+int hyper_send_pod_finished(struct hyper_pod *pod)
 {
 	int ret = -1;
 	struct hyper_container *c;
@@ -401,7 +401,7 @@ int hyper_send_finish(struct hyper_pod *pod)
 		data = new;
 	}
 
-	ret = hyper_send_msg(ctl.chan.fd, FINISH, c_num * 4, data);
+	ret = hyper_send_msg(ctl.chan.fd, PODFINISHED, c_num * 4, data);
 out:
 	free(data);
 	return ret;
@@ -409,7 +409,7 @@ out:
 
 void hyper_shutdown(struct hyper_pod *pod)
 {
-	hyper_send_finish(pod);
+	hyper_send_pod_finished(pod);
 	/* vm will shutdown immediately after we call reboot,
 	 * no chance to send out eof message in release exec.
 	 * send it out by ourself */

@@ -555,7 +555,7 @@ int hyper_release_exec(struct hyper_exec *exec,
 
 		} else {
 			/* send out pod finish message, hyper will decide if restart pod or not */
-			hyper_send_finish(pod);
+			hyper_send_pod_finished(pod);
 		}
 
 		hyper_cleanup_pod(pod);
