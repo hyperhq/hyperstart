@@ -51,6 +51,7 @@ struct hyper_pod {
 	uint32_t		e_num;
 	uint32_t		d_num;
 	uint32_t		type;
+	/* how many containers are running */
 	uint32_t		remains;
 	uint8_t			policy;
 	int			efd;

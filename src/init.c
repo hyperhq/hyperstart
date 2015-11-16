@@ -457,6 +457,8 @@ int hyper_start_container_stage0(struct hyper_container *c, struct hyper_pod *po
 		goto out;
 	}
 
+	/* container process is spawned and ready to execute */
+	pod->remains++;
 	ret = 0;
 out:
 	close(arg.ctl_pipe[0]);
@@ -696,8 +698,10 @@ static int hyper_new_container(char *json, int length)
 
 	fprintf(stdout, "call hyper_new_container, json %s, len %d\n", json, length);
 
-	if (!pod->init_pid)
+	if (!pod->init_pid) {
 		fprintf(stdout, "the pod is not created yet\n");
+		return -1;
+	}
 
 	c = hyper_parse_new_container(pod, json, length);
 	if (c == NULL) {
@@ -705,15 +709,14 @@ static int hyper_new_container(char *json, int length)
 		return -1;
 	}
 
+	list_add_tail(&c->list, &pod->containers);
 	ret = hyper_start_container_stage0(c, pod);
 	if (ret < 0) {
 		//TODO full grace cleanup
 		hyper_cleanup_container(c);
-		return ret;
 	}
 
-	list_add_tail(&c->list, &pod->containers);
-	return 0;
+	return ret;
 }
 
 static int hyper_cmd_write_file(char *json, int length)
@@ -1114,7 +1117,7 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		hyper_print_uptime();
 		break;
 	case STOPPOD:
-		ret = hyper_stop_pod(pod);
+		hyper_stop_pod(pod);
 		return 0;
 		//break;
 	case DESTROYPOD:

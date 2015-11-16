@@ -469,7 +469,6 @@ static int hyper_parse_containers(struct hyper_pod *pod, char *json, jsmntok_t *
 		i += next;
 	}
 
-	pod->remains = c_num;
 	return i;
 fail:
 	list_for_each_entry_safe(c, n, &pod->containers, list)
@@ -733,7 +732,6 @@ realloc:
 	if (hyper_parse_container(pod, &c, json, toks) < 0)
 		goto fail;
 
-	c->exec.init = 2; // dynamic container type
 	free(toks);
 	return c;
 
