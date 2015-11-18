@@ -719,6 +719,29 @@ static int hyper_new_container(char *json, int length)
 	return ret;
 }
 
+static int hyper_kill_container(char *json, int length)
+{
+	struct hyper_killer killer;
+	struct hyper_container *c;
+	struct hyper_pod *pod = &global_pod;
+	int ret = -1;
+
+	if (hyper_parse_kill_container(&killer, json, length) < 0) {
+		goto out;
+	}
+
+	c = hyper_find_container(pod, killer.id);
+	if (c == NULL) {
+		fprintf(stderr, "can not find container whose id is %s\n", killer.id);
+		goto out;
+	}
+
+	kill(c->exec.pid, killer.signal);
+	ret = 0;
+out:
+	return ret;
+}
+
 static int hyper_cmd_write_file(char *json, int length)
 {
 	struct hyper_writter writter;
@@ -1144,6 +1167,9 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		break;
 	case NEWCONTAINER:
 		ret = hyper_new_container((char *)buf->data + 8, len - 8);
+		break;
+	case KILLCONTAINER:
+		ret = hyper_kill_container((char *)buf->data + 8, len - 8);
 		break;
 	default:
 		ret = -1;

@@ -28,6 +28,7 @@ enum {
 	WRITEFILE,
 	READFILE,
 	NEWCONTAINER,
+	KILLCONTAINER,
 };
 
 enum {
@@ -63,6 +64,11 @@ struct hyper_win_size {
 	int		row;
 	int		column;
 	uint64_t	seq;
+};
+
+struct hyper_killer {
+	char		*id;
+	int		signal;
 };
 
 struct hyper_reader {
