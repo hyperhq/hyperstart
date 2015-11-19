@@ -25,8 +25,8 @@ struct hyper_exec {
 
 struct hyper_pod;
 
-int hyper_exec_cmd(char *json, int length);
-int hyper_release_exec(struct hyper_exec *, struct hyper_pod *);
+int hyper_exec_cmd(struct hyper_pod *pod, char *json, int length);
+int hyper_release_exec(struct hyper_exec *exec, struct hyper_pod *pod);
 int hyper_container_execcmd(struct hyper_pod *pod);
 int hyper_setup_exec_tty(struct hyper_exec *e);
 int hyper_dup_exec_tty(int fd, struct hyper_exec *e);
