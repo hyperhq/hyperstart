@@ -25,7 +25,7 @@ int hyper_setfd_block(int fd);
 int hyper_setfd_nonblock(int fd);
 int hyper_socketpair(int domain, int type, int protocol, int sv[2]);
 void hyper_shutdown(struct hyper_pod *pod);
-int hyper_send_finish(struct hyper_pod *pod);
+int hyper_send_pod_finished(struct hyper_pod *pod);
 void hyper_unmount_all(void);
 int hyper_insmod(char *module);
 #endif

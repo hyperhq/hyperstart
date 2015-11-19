@@ -16,6 +16,7 @@
 
 #include "util.h"
 #include "hyper.h"
+#include "parse.h"
 
 static int container_setup_volume(struct hyper_container *container)
 {
@@ -571,29 +572,16 @@ fail:
 
 struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id)
 {
-	int i;
-	struct hyper_container *container;
+	struct hyper_container *c;
 
-	for (i = 0; i < pod->c_num; i++) {
-		container = &pod->c[i];
-
-		if (strlen(container->id) != strlen(id))
+	list_for_each_entry(c, &pod->containers, list) {
+		if (strlen(c->id) != strlen(id))
 			continue;
 
-		if (strncmp(container->id, id, strlen(id)))
+		if (strncmp(c->id, id, strlen(id)))
 			continue;
 
-		return container;
-	}
-
-	list_for_each_entry(container, &pod->dyn_containers, dyn) {
-		if (strlen(container->id) != strlen(id))
-			continue;
-
-		if (strncmp(container->id, id, strlen(id)))
-			continue;
-
-		return container;
+		return c;
 	}
 
 	return NULL;
@@ -601,69 +589,22 @@ struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id)
 
 void hyper_cleanup_container(struct hyper_container *c)
 {
-	int i;
-	struct volume *vol;
-	struct env *env;
-	struct fsmap *map;
-	struct sysctl *sys;
 	char root[512];
 
 	sprintf(root, "/tmp/hyper/%s/devpts/", c->id);
 	if (umount(root) < 0 && umount2(root, MNT_DETACH))
 		perror("umount devpts failed");
 
-	free(c->id);
-	free(c->rootfs);
-	free(c->image);
-	free(c->workdir);
-	free(c->fstype);
-
-	for (i = 0; i < c->vols_num; i++) {
-		vol = &(c->vols[i]);
-		free(vol->device);
-		free(vol->mountpoint);
-		free(vol->fstype);
-	}
-	free(c->vols);
-
-	for (i = 0; i < c->envs_num; i++) {
-		env = &(c->envs[i]);
-		free(env->env);
-		free(env->value);
-	}
-	free(c->envs);
-
-	for (i = 0; i < c->sys_num; i++) {
-		sys = &(c->sys[i]);
-		free(sys->path);
-		free(sys->value);
-	}
-	free(c->sys);
-
-	for (i = 0; i < c->maps_num; i++) {
-		map = &(c->maps[i]);
-		free(map->source);
-		free(map->path);
-	}
-	free(c->maps);
 	close(c->ns);
-
-	free(c->exec.id);
-	for (i = 0; i < c->exec.argc; i++) {
-		//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
-		free(c->exec.argv[i]);
-	}
-	free(c->exec.argv);
+	hyper_free_container(c);
 }
 
 void hyper_cleanup_containers(struct hyper_pod *pod)
 {
-	int i;
+	struct hyper_container *c, *n;
 
-	for (i = 0; i < pod->c_num; i++)
-		hyper_cleanup_container(&pod->c[i]);
+	list_for_each_entry_safe(c, n, &pod->containers, list)
+		hyper_cleanup_container(c);
 
-	free(pod->c);
-	pod->c = NULL;
-	pod->c_num = 0;
+	pod->remains = 0;
 }

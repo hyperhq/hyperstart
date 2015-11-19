@@ -29,7 +29,7 @@
 #include "container.h"
 
 struct hyper_pod global_pod = {
-	.dyn_containers	=	LIST_HEAD_INIT(global_pod.dyn_containers),
+	.containers	=	LIST_HEAD_INIT(global_pod.containers),
 	.exec_head	=	LIST_HEAD_INIT(global_pod.exec_head),
 };
 struct hyper_exec *global_exec;
@@ -144,6 +144,7 @@ static void hyper_term_all(struct hyper_pod *pod)
 	DIR *dp;
 	struct dirent *de;
 	pid_t *pids = NULL;
+	struct hyper_container *c;
 
 	dp = opendir("/proc");
 	if (dp == NULL)
@@ -175,9 +176,8 @@ static void hyper_term_all(struct hyper_pod *pod)
 	free(pids);
 	closedir(dp);
 
-	for (index = 0; index < pod->c_num; index++) {
-		hyper_kill_process(pod->c[index].exec.pid);
-	}
+	list_for_each_entry(c, &pod->containers, list)
+		hyper_kill_process(c->exec.pid);
 }
 
 static int hyper_handle_exit(struct hyper_pod *pod)
@@ -457,6 +457,8 @@ int hyper_start_container_stage0(struct hyper_container *c, struct hyper_pod *po
 		goto out;
 	}
 
+	/* container process is spawned and ready to execute */
+	pod->remains++;
 	ret = 0;
 out:
 	close(arg.ctl_pipe[0]);
@@ -466,13 +468,13 @@ out:
 
 int hyper_start_containers(struct hyper_pod *pod)
 {
-	int i, ret = 0;
+	struct hyper_container *c;
 
-	for (i = 0; i < pod->c_num; i++) {
-		ret = hyper_start_container_stage0(&pod->c[i], pod);
-		if (ret)
-			return ret;
+	list_for_each_entry(c, &pod->containers, list) {
+		if (hyper_start_container_stage0(c, pod) < 0)
+			return -1;
 	}
+
 	return 0;
 }
 
@@ -696,8 +698,10 @@ static int hyper_new_container(char *json, int length)
 
 	fprintf(stdout, "call hyper_new_container, json %s, len %d\n", json, length);
 
-	if (!pod->init_pid)
+	if (!pod->init_pid) {
 		fprintf(stdout, "the pod is not created yet\n");
+		return -1;
+	}
 
 	c = hyper_parse_new_container(pod, json, length);
 	if (c == NULL) {
@@ -705,16 +709,37 @@ static int hyper_new_container(char *json, int length)
 		return -1;
 	}
 
+	list_add_tail(&c->list, &pod->containers);
 	ret = hyper_start_container_stage0(c, pod);
 	if (ret < 0) {
 		//TODO full grace cleanup
 		hyper_cleanup_container(c);
-		free(c);
-		return ret;
 	}
 
-	list_add_tail(&c->dyn, &pod->dyn_containers);
-	return 0;
+	return ret;
+}
+
+static int hyper_kill_container(char *json, int length)
+{
+	struct hyper_killer killer;
+	struct hyper_container *c;
+	struct hyper_pod *pod = &global_pod;
+	int ret = -1;
+
+	if (hyper_parse_kill_container(&killer, json, length) < 0) {
+		goto out;
+	}
+
+	c = hyper_find_container(pod, killer.id);
+	if (c == NULL) {
+		fprintf(stderr, "can not find container whose id is %s\n", killer.id);
+		goto out;
+	}
+
+	kill(c->exec.pid, killer.signal);
+	ret = 0;
+out:
+	return ret;
 }
 
 static int hyper_cmd_write_file(char *json, int length)
@@ -1115,7 +1140,7 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		hyper_print_uptime();
 		break;
 	case STOPPOD:
-		ret = hyper_stop_pod(pod);
+		hyper_stop_pod(pod);
 		return 0;
 		//break;
 	case DESTROYPOD:
@@ -1142,6 +1167,9 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		break;
 	case NEWCONTAINER:
 		ret = hyper_new_container((char *)buf->data + 8, len - 8);
+		break;
+	case KILLCONTAINER:
+		ret = hyper_kill_container((char *)buf->data + 8, len - 8);
 		break;
 	default:
 		ret = -1;

@@ -17,17 +17,18 @@ enum {
 	DESTROYPOD,
 	RESTARTCONTAINER,
 	EXECCMD,
-	FINISHCMD,
+	CMDFINISHED,
 	READY,
 	ACK,
 	ERROR,
 	WINSIZE,
 	PING,
-	FINISH,
+	PODFINISHED,
 	NEXT,
 	WRITEFILE,
 	READFILE,
 	NEWCONTAINER,
+	KILLCONTAINER,
 };
 
 enum {
@@ -41,17 +42,17 @@ struct hyper_pod {
 	struct hyper_interface	*iface;
 	struct hyper_route	*rt;
 	char			**dns;
-	struct list_head	dyn_containers;
+	struct list_head	containers;
 	struct list_head	exec_head;
 	char			*hostname;
 	char			*share_tag;
 	int			init_pid;
-	uint32_t		c_num;
 	uint32_t		i_num;
 	uint32_t		r_num;
 	uint32_t		e_num;
 	uint32_t		d_num;
 	uint32_t		type;
+	/* how many containers are running */
 	uint32_t		remains;
 	uint8_t			policy;
 	int			efd;
@@ -63,6 +64,11 @@ struct hyper_win_size {
 	int		row;
 	int		column;
 	uint64_t	seq;
+};
+
+struct hyper_killer {
+	char		*id;
+	int		signal;
 };
 
 struct hyper_reader {
