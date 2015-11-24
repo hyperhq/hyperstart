@@ -1004,6 +1004,10 @@ static void hyper_cleanup_shared(struct hyper_pod *pod)
 
 void hyper_cleanup_pod(struct hyper_pod *pod)
 {
+	if (pod->init_pid) {
+		hyper_kill_process(pod->init_pid);
+		pod->init_pid = 0;
+	}
 	hyper_cleanup_containers(pod);
 	hyper_cleanup_network(pod);
 	hyper_cleanup_shared(pod);
@@ -1016,6 +1020,7 @@ static int hyper_stop_pod(struct hyper_pod *pod)
 	fprintf(stdout, "hyper_stop_pod init_pid %d\n", pod->init_pid);
 	if (pod->init_pid == 0) {
 		fprintf(stdout, "container init pid is already exit\n");
+		hyper_send_type(ctl.chan.fd, ACK);
 		return 0;
 	}
 
