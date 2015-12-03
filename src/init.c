@@ -27,6 +27,7 @@
 #include "event.h"
 #include "parse.h"
 #include "container.h"
+#include "syscall.h"
 
 struct hyper_pod global_pod = {
 	.containers	=	LIST_HEAD_INIT(global_pod.containers),

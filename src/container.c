@@ -17,6 +17,7 @@
 #include "util.h"
 #include "hyper.h"
 #include "parse.h"
+#include "syscall.h"
 
 static int container_setup_volume(struct hyper_container *container)
 {
