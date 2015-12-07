@@ -12,11 +12,11 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <inttypes.h>
-#include "syscall.h"
 
 #include "hyper.h"
 #include "util.h"
 #include "parse.h"
+#include "syscall.h"
 
 static void pts_hup(struct hyper_event *de, int efd, int out)
 {
