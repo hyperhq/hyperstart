@@ -516,7 +516,7 @@ static int hyper_setup_container(struct hyper_pod *pod)
 	fprintf(stdout, "pod init pid %d\n", pod->init_pid);
 
 	/* Wait for container start */
-	if (hyper_get_type_block(arg.ctl_pipe[0], &type) < 0) {
+	if (hyper_get_type(arg.ctl_pipe[0], &type) < 0) {
 		perror("get container init ready message failed");
 		goto out;
 	}
@@ -1183,9 +1183,9 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	}
 
 	if (ret < 0)
-		hyper_send_type(de->fd, ERROR);
+		hyper_send_msg_block(de->fd, ERROR, 0, NULL);
 	else
-		hyper_send_msg(de->fd, ACK, datalen, data);
+		hyper_send_msg_block(de->fd, ACK, datalen, data);
 
 	free(data);
 	return 0;

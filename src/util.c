@@ -401,7 +401,7 @@ int hyper_send_pod_finished(struct hyper_pod *pod)
 		data = new;
 	}
 
-	ret = hyper_send_msg(ctl.chan.fd, PODFINISHED, c_num * 4, data);
+	ret = hyper_send_msg_block(ctl.chan.fd, PODFINISHED, c_num * 4, data);
 out:
 	free(data);
 	return ret;

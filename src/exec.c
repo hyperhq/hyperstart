@@ -551,8 +551,7 @@ int hyper_release_exec(struct hyper_exec *exec,
 
 		if (pod->type == STOPPOD) {
 			/* stop pod manually */
-			hyper_send_type(ctl.chan.fd, ACK);
-
+			hyper_send_msg_block(ctl.chan.fd, ACK, 0, NULL);
 		} else {
 			/* send out pod finish message, hyper will decide if restart pod or not */
 			hyper_send_pod_finished(pod);
