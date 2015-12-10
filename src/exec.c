@@ -524,6 +524,29 @@ free_exec:
 	goto out;
 }
 
+static int hyper_send_pod_finished(struct hyper_pod *pod)
+{
+	int ret = -1;
+	struct hyper_container *c;
+	uint8_t *data = NULL, *new;
+	int c_num = 0;
+
+	list_for_each_entry(c, &pod->containers, list) {
+		c_num++;
+		new = realloc(data, c_num * 4);
+		if (new == NULL)
+			goto out;
+
+		hyper_set_be32(new + ((c_num - 1) * 4), c->exec.code);
+		data = new;
+	}
+
+	ret = hyper_send_msg_block(ctl.chan.fd, PODFINISHED, c_num * 4, data);
+out:
+	free(data);
+	return ret;
+}
+
 int hyper_release_exec(struct hyper_exec *exec,
 		       struct hyper_pod *pod)
 {
@@ -550,8 +573,11 @@ int hyper_release_exec(struct hyper_exec *exec,
 			return 0;
 
 		if (pod->type == STOPPOD) {
-			/* stop pod manually */
+			/* stop pod manually, hyper doesn't care the pod finished codes */
 			hyper_send_msg_block(ctl.chan.fd, ACK, 0, NULL);
+		} else if (pod->type == DESTROYPOD) {
+			/* shutdown vm manually, hyper doesn't care the pod finished codes */
+			hyper_shutdown();
 		} else {
 			/* send out pod finish message, hyper will decide if restart pod or not */
 			hyper_send_pod_finished(pod);
@@ -562,7 +588,6 @@ int hyper_release_exec(struct hyper_exec *exec,
 	}
 
 	hyper_free_exec(exec);
-
 	return 0;
 }
 

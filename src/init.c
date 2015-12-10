@@ -669,6 +669,18 @@ static void hyper_print_uptime(void)
 	close(fd);
 }
 
+static int hyper_destroy_pod(struct hyper_pod *pod)
+{
+	if (pod->init_pid == 0) {
+		/* Pod stopped, just shutdown */
+		hyper_shutdown();
+	} else {
+		/* Kill pod */
+		hyper_term_all(pod);
+	}
+	return 0;
+}
+
 static int hyper_start_pod(char *json, int length)
 {
 	struct hyper_pod *pod = &global_pod;
@@ -684,7 +696,7 @@ static int hyper_start_pod(char *json, int length)
 	}
 
 	if (hyper_setup_pod(pod) < 0) {
-		hyper_shutdown(pod);
+		hyper_destroy_pod(pod);
 		return -1;
 	}
 
@@ -1151,7 +1163,7 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		//break;
 	case DESTROYPOD:
 		fprintf(stdout, "get DESTROYPOD message\n");
-		hyper_shutdown(pod);
+		hyper_destroy_pod(pod);
 		return 0;
 	case EXECCMD:
 		ret = hyper_exec_cmd((char *)buf->data + 8, len - 8);
