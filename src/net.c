@@ -112,9 +112,9 @@ int hyper_get_type(int fd, uint32_t *type)
 	return 0;
 }
 
-int hyper_get_type_block(int fd, uint32_t *type)
+int hyper_send_msg_block(int fd, uint32_t type, uint32_t len, uint8_t *data)
 {
-	int ret = 0, flags;
+	int ret, flags;
 
 	flags = hyper_setfd_block(fd);
 	if (flags < 0) {
@@ -122,48 +122,8 @@ int hyper_get_type_block(int fd, uint32_t *type)
 		return -1;
 	}
 
-	ret = hyper_get_type(fd, type);
-	if (ret < 0) {
-		fprintf(stderr, "%s can not get type\n", __func__);
-	}
+	ret = hyper_send_msg(fd, type, len, data);
 
-	if (fcntl(fd, F_SETFL, flags) < 0) {
-		perror("restore fd flag failed");
-		return -1;
-	}
-
-	return ret;
-}
-
-int hyper_send_type_block(int fd, uint32_t type, int need_ack)
-{
-	int ret = 0, flags;
-	uint32_t t;
-
-	flags = hyper_setfd_block(fd);
-	if (flags < 0) {
-		fprintf(stderr, "%s fail to set fd block\n", __func__);
-		return -1;
-	}
-
-	ret = hyper_send_msg(fd, type, 0, NULL);
-	if (ret < 0)
-		goto out;
-
-	if (need_ack == 0)
-		goto out;
-
-	ret = hyper_get_type(fd, &t);
-	if (ret < 0) {
-		fprintf(stderr, "can not get type\n");
-		goto out;
-	}
-
-	fprintf(stdout, "get type %" PRIu32"\n", type);
-
-	if (t != ACK)
-		ret = -1;
-out:
 	if (fcntl(fd, F_SETFL, flags) < 0) {
 		perror("restore fd flag failed");
 		return -1;

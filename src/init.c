@@ -516,7 +516,7 @@ static int hyper_setup_container(struct hyper_pod *pod)
 	fprintf(stdout, "pod init pid %d\n", pod->init_pid);
 
 	/* Wait for container start */
-	if (hyper_get_type_block(arg.ctl_pipe[0], &type) < 0) {
+	if (hyper_get_type(arg.ctl_pipe[0], &type) < 0) {
 		perror("get container init ready message failed");
 		goto out;
 	}
@@ -669,6 +669,18 @@ static void hyper_print_uptime(void)
 	close(fd);
 }
 
+static int hyper_destroy_pod(struct hyper_pod *pod)
+{
+	if (pod->init_pid == 0) {
+		/* Pod stopped, just shutdown */
+		hyper_shutdown();
+	} else {
+		/* Kill pod */
+		hyper_term_all(pod);
+	}
+	return 0;
+}
+
 static int hyper_start_pod(char *json, int length)
 {
 	struct hyper_pod *pod = &global_pod;
@@ -684,7 +696,7 @@ static int hyper_start_pod(char *json, int length)
 	}
 
 	if (hyper_setup_pod(pod) < 0) {
-		hyper_shutdown(pod);
+		hyper_destroy_pod(pod);
 		return -1;
 	}
 
@@ -1151,7 +1163,7 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		//break;
 	case DESTROYPOD:
 		fprintf(stdout, "get DESTROYPOD message\n");
-		hyper_shutdown(pod);
+		hyper_destroy_pod(pod);
 		return 0;
 	case EXECCMD:
 		ret = hyper_exec_cmd((char *)buf->data + 8, len - 8);
@@ -1183,9 +1195,9 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	}
 
 	if (ret < 0)
-		hyper_send_type(de->fd, ERROR);
+		hyper_send_msg_block(de->fd, ERROR, 0, NULL);
 	else
-		hyper_send_msg(de->fd, ACK, datalen, data);
+		hyper_send_msg_block(de->fd, ACK, datalen, data);
 
 	free(data);
 	return 0;

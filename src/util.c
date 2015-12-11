@@ -339,7 +339,7 @@ int hyper_socketpair(int domain, int type, int protocol, int sv[2])
 	return 0;
 }
 
-void hyper_unmount_all(void)
+static void hyper_unmount_all(void)
 {
 	FILE *mtab;
 	struct mntent *mnt;
@@ -384,38 +384,9 @@ void hyper_unmount_all(void)
 	sync();
 }
 
-int hyper_send_pod_finished(struct hyper_pod *pod)
+void hyper_shutdown()
 {
-	int ret = -1;
-	struct hyper_container *c;
-	uint8_t *data = NULL, *new;
-	int c_num = 0;
-
-	list_for_each_entry(c, &pod->containers, list) {
-		c_num++;
-		new = realloc(data, c_num * 4);
-		if (new == NULL)
-			goto out;
-
-		hyper_set_be32(new + ((c_num - 1) * 4), c->exec.code);
-		data = new;
-	}
-
-	ret = hyper_send_msg(ctl.chan.fd, PODFINISHED, c_num * 4, data);
-out:
-	free(data);
-	return ret;
-}
-
-void hyper_shutdown(struct hyper_pod *pod)
-{
-	hyper_send_pod_finished(pod);
-	/* vm will shutdown immediately after we call reboot,
-	 * no chance to send out eof message in release exec.
-	 * send it out by ourself */
-	hyper_cleanup_exec(pod);
-
+	hyper_send_msg_block(ctl.chan.fd, ACK, 0, NULL);
 	hyper_unmount_all();
-
 	reboot(LINUX_REBOOT_CMD_POWER_OFF);
 }
