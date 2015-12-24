@@ -409,8 +409,9 @@ out:
 	close(pidns);
 	close(utsns);
 	close(ipcns);
-	close(arg->ctl_pipe[0]);
-	close(arg->ctl_pipe[1]);
+	/* hyper_container_stage0 shares fd table with init, let init closes pipe. */
+	//close(arg->ctl_pipe[0]);
+	//close(arg->ctl_pipe[1]);
 
 	_exit(ret);
 }
@@ -426,7 +427,6 @@ int hyper_start_container_stage0(struct hyper_container *c, struct hyper_pod *po
 	};
 	int ret = -1, pid;
 	uint32_t type;
-
 
 	if (pipe2(arg.ctl_pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between hyper init and pod init failed");
