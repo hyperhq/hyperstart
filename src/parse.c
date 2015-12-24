@@ -76,6 +76,7 @@ static void container_free_volumes(struct hyper_container *c)
 		free(c->vols[i].device);
 		free(c->vols[i].mountpoint);
 		free(c->vols[i].fstype);
+		free(c->vols[i].scsiaddr);
 	}
 	free(c->vols);
 	c->vols = NULL;
@@ -115,6 +116,9 @@ static int container_parse_volumes(struct hyper_container *c, char *json, jsmnto
 				c->vols[j].device =
 				strdup(json_token_str(json, &toks[++i]));
 				fprintf(stdout, "volume %d device %s\n", j, c->vols[j].device);
+			} else if (json_token_streq(json, &toks[i], "addr")) {
+				c->vols[j].scsiaddr = strdup(json_token_str(json, &toks[++i]));
+				fprintf(stdout, "volume %d scsi id %s\n", j, c->vols[j].scsiaddr);
 			} else if (json_token_streq(json, &toks[i], "mount")) {
 				c->vols[j].mountpoint =
 				strdup(json_token_str(json, &toks[++i]));
@@ -321,6 +325,9 @@ void hyper_free_container(struct hyper_container *c)
 	free(c->image);
 	c->image = NULL;
 
+	free(c->scsiaddr);
+	c->scsiaddr = NULL;
+
 	free(c->workdir);
 	c->workdir = NULL;
 
@@ -402,6 +409,10 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 		} else if (json_token_streq(json, t, "image") && t->size == 1) {
 			c->image = strdup(json_token_str(json, &toks[++i]));
 			fprintf(stdout, "container image %s\n", c->image);
+			i++;
+		} else if (json_token_streq(json, t, "addr") && t->size == 1) {
+			c->scsiaddr = strdup(json_token_str(json, &toks[++i]));
+			fprintf(stdout, "container image scsi id %s\n", c->scsiaddr);
 			i++;
 		} else if (json_token_streq(json, t, "fstype") && t->size == 1) {
 			c->fstype = strdup(json_token_str(json, &toks[++i]));
@@ -1098,6 +1109,8 @@ out:
 	return ret;
 fail:
 	free(reader->id);
+	reader->id = NULL;
 	free(reader->file);
+	reader->file = NULL;
 	goto out;
 }

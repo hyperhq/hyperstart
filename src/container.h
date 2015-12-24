@@ -10,6 +10,7 @@ struct env {
 
 struct volume {
 	char	*device;
+	char	*scsiaddr;
 	char	*mountpoint;
 	char	*fstype;
 	int	readonly;
@@ -30,6 +31,7 @@ struct hyper_container {
 	char			*id;
 	char			*rootfs;
 	char			*image;
+	char			*scsiaddr;
 	char			*workdir;
 	char			*fstype;
 	struct volume		*vols;
