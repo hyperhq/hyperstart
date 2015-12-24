@@ -32,6 +32,7 @@ AC_TYPE_UINT8_T
 # Checks for library functions.
 AC_FUNC_FORK
 AC_CHECK_FUNCS([dup2 memmove memset mkdir setenv socket strchr strdup strrchr strtoul], [fail=0], [fail=1])
+AC_CHECK_FUNCS([setns])
 
 if test "$fail" = "1" ; then
     AC_MSG_ERROR(Unable to find necessary functions)

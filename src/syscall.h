@@ -7,7 +7,7 @@
  * requires kernel-headers for syscall number hint.
  */
 
-#if !defined SYS_setns && defined __NR_setns
+#if !defined(HAVE_SETNS) && defined(__NR_setns)
 static inline int setns(int fd, int nstype)
 {
 	errno = syscall(__NR_setns, fd, nstype);
