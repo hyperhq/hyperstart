@@ -64,6 +64,40 @@ int hyper_list_dir(char *path)
 	return 0;
 }
 
+int hyper_find_sd(char *prefix, char *addr, char **dev) {
+	struct dirent **list;
+	struct dirent *dir;
+	char path[512];
+	int i, num;
+
+	sprintf(path, "%s/sys/class/scsi_disk/0:0:%s/device/block/", prefix, addr);
+	fprintf(stdout, "orig dev %s, scan path %s\n", *dev, path);
+
+	num = scandir(path, &list, NULL, NULL);
+	if (num < 0) {
+		perror("scan path failed");
+		return -1;
+	}
+
+	for (i = 0; i < num; i++) {
+		dir = list[i];
+		if (dir->d_name[0] == '.') {
+			continue;
+		}
+
+		fprintf(stdout, "%s get %s\n", path, dir->d_name);
+		free(*dev);
+		*dev = strdup(dir->d_name);
+		break;
+	}
+
+	for (i = 0; i < num; i++)
+		free(list[i]);
+
+	free(list);
+	return 0;
+}
+
 int hyper_mkdir(char *hyper_path)
 {
 	struct stat st;
