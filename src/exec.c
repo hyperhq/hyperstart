@@ -18,11 +18,57 @@
 #include "parse.h"
 #include "syscall.h"
 
+static int send_exec_finishing(uint64_t seq, int len, int code, int block)
+{
+	struct hyper_buf *buf = &ctl.tty.wbuf;
+
+	if (buf->get + len > buf->size) {
+		uint8_t *data;
+		fprintf(stdout, "%s: tty buf full\n", __func__);
+
+		data = realloc(buf->data, buf->size + len);
+		if (data == NULL) {
+			perror("realloc failed");
+			return -1;
+		}
+		buf->data = data;
+		buf->size += len;
+	}
+
+	/* no in event, no more data, send eof */
+	hyper_set_be64(buf->data + buf->get, seq);
+	hyper_set_be32(buf->data + buf->get + 8, len);
+	if (len > 12)
+		buf->data[buf->get + 12] = code;
+
+	buf->get += len;
+	if (!block) {
+		hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT);
+		return 0;
+	}
+
+	if (hyper_setfd_block(ctl.tty.fd) < 0 ||
+	    hyper_send_data(ctl.tty.fd, buf->data, buf->get) < 0 ||
+	    hyper_setfd_nonblock(ctl.tty.fd) < 0) {
+		fprintf(stderr, "send eof failed\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+static int hyper_send_exec_eof(struct hyper_exec *exec, int block) {
+	return send_exec_finishing(exec->seq, 12, -1, block);
+}
+
+static int hyper_send_exec_code(struct hyper_exec *exec, int block) {
+	return send_exec_finishing(exec->seq, 13, exec->code, block);
+}
+
 static void pts_hup(struct hyper_event *de, int efd, int out)
 {
 	struct hyper_exec *exec;
 	struct hyper_pod *pod = de->ptr;
-	struct hyper_buf *buf = &ctl.tty.wbuf;
 	uint64_t seq;
 
 	if (out) {
@@ -37,17 +83,7 @@ static void pts_hup(struct hyper_event *de, int efd, int out)
 
 	hyper_event_hup(de, efd);
 
-	if (buf->get + 12 > buf->size) {
-		fprintf(stdout, "%s: tty buf full\n", __func__);
-		return;
-	}
-
-	/* no in event, no more data, send eof */
-	hyper_set_be64(buf->data + buf->get, seq);
-	hyper_set_be32(buf->data + buf->get + 8, 12);
-	buf->get += 12;
-
-	hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT);
+	hyper_send_exec_eof(exec, 0);
 
 	hyper_release_exec(exec, pod);
 }
@@ -563,6 +599,8 @@ int hyper_release_exec(struct hyper_exec *exec,
 
 	list_del_init(&exec->list);
 
+	hyper_send_exec_code(exec, 0);
+
 	fprintf(stdout, "%s exit code %" PRIu8"\n", __func__, exec->code);
 	if (exec->init) {
 		fprintf(stdout, "%s container init exited, type %d, remains %d, policy %d\n",
@@ -652,16 +690,11 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 void hyper_cleanup_exec(struct hyper_pod *pod)
 {
 	struct hyper_exec *exec, *next;
-	uint8_t buf[12];
 
-	if (hyper_setfd_block(ctl.tty.fd) < 0)
-		return;
-
-	hyper_set_be32(buf + 8, 12);
 	list_for_each_entry_safe(exec, next, &pod->exec_head, list) {
 		fprintf(stdout, "send eof for exec seq %" PRIu64 "\n", exec->seq);
-		hyper_set_be64(buf, exec->seq);
-		if (hyper_send_data(ctl.tty.fd, buf, 12) < 0)
+		if (hyper_send_exec_eof(exec, 1) < 0 ||
+		    hyper_send_exec_code(exec, 1) < 0)
 			fprintf(stderr, "send eof failed\n");
 	}
 }
