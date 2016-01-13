@@ -8,8 +8,34 @@
 
 char *json_token_str(char *js, jsmntok_t *t)
 {
-	js[t->end] = '\0';
-	return js + t->start;
+	char *str;
+	int i, len = t->end - t->start + 1;
+
+	str = calloc(sizeof(char), len);
+	if (str == NULL)
+		return NULL;
+
+	memcpy(str, js + t->start, len - 1);
+
+	for (i = 0; str[i] != '\0'; i++) {
+		if (str[i] != '\\')
+			continue;
+
+		if ((str + i + 1) == strstr(str + i, "u003e")) {
+			str[i] = '>';
+			memmove(str + i + 1, str + i + 6, len - i - 6);
+		} else if ((str + i + 1) == strstr(str + i, "u003c")) {
+			str[i] = '<';
+			memmove(str + i + 1, str + i + 6, len - i - 6);
+		} else if ((str + i + 1) == strstr(str + i, "u0026")) {
+			str[i] = '&';
+			memmove(str + i + 1, str + i + 6, len - i - 6);
+		} else {
+			memmove(str + i, str + i + 1, len - i -1);
+		}
+	}
+
+	return str;
 }
 
 int json_token_int(char *js, jsmntok_t *t)
@@ -48,7 +74,7 @@ static int container_parse_cmd(struct hyper_container *c, char *json, jsmntok_t 
 
 	i++;
 	for (j = 0; j < c->exec.argc; j++, i++) {
-		c->exec.argv[j] = strdup(json_token_str(json, &toks[i]));
+		c->exec.argv[j] = (json_token_str(json, &toks[i]));
 		fprintf(stdout, "container init arg %d %s\n", j, c->exec.argv[j]);
 	}
 
@@ -114,18 +140,18 @@ static int container_parse_volumes(struct hyper_container *c, char *json, jsmnto
 		for (i_volume = 0; i_volume < next_volume; i_volume++, i++) {
 			if (json_token_streq(json, &toks[i], "device")) {
 				c->vols[j].device =
-				strdup(json_token_str(json, &toks[++i]));
+				(json_token_str(json, &toks[++i]));
 				fprintf(stdout, "volume %d device %s\n", j, c->vols[j].device);
 			} else if (json_token_streq(json, &toks[i], "addr")) {
-				c->vols[j].scsiaddr = strdup(json_token_str(json, &toks[++i]));
+				c->vols[j].scsiaddr = (json_token_str(json, &toks[++i]));
 				fprintf(stdout, "volume %d scsi id %s\n", j, c->vols[j].scsiaddr);
 			} else if (json_token_streq(json, &toks[i], "mount")) {
 				c->vols[j].mountpoint =
-				strdup(json_token_str(json, &toks[++i]));
+				(json_token_str(json, &toks[++i]));
 				fprintf(stdout, "volume %d mp %s\n", j, c->vols[j].mountpoint);
 			} else if (json_token_streq(json, &toks[i], "fstype")) {
 				c->vols[j].fstype =
-				strdup(json_token_str(json, &toks[++i]));
+				(json_token_str(json, &toks[++i]));
 				fprintf(stdout, "volume %d fstype %s\n", j, c->vols[j].fstype);
 			} else if (json_token_streq(json, &toks[i], "readOnly")) {
 				if (!json_token_streq(json, &toks[++i], "false"))
@@ -186,11 +212,11 @@ static int container_parse_fsmap(struct hyper_container *c, char *json, jsmntok_
 		for (i_map = 0; i_map < next_map; i_map++, i++) {
 			if (json_token_streq(json, &toks[i], "source")) {
 				c->maps[j].source =
-				strdup(json_token_str(json, &toks[++i]));
+				(json_token_str(json, &toks[++i]));
 				fprintf(stdout, "maps %d source %s\n", j, c->maps[j].source);
 			} else if (json_token_streq(json, &toks[i], "path")) {
 				c->maps[j].path =
-				strdup(json_token_str(json, &toks[++i]));
+				(json_token_str(json, &toks[++i]));
 				fprintf(stdout, "maps %d path %s\n", j, c->maps[j].path);
 			} else if (json_token_streq(json, &toks[i], "readOnly")) {
 				if (!json_token_streq(json, &toks[++i], "false"))
@@ -252,11 +278,11 @@ static int container_parse_envs(struct hyper_container *c, char *json, jsmntok_t
 		for (i_env = 0; i_env < next_env; i_env++, i++) {
 			if (json_token_streq(json, &toks[i], "env")) {
 				c->envs[j].env =
-				strdup(json_token_str(json, &toks[++i]));
+				(json_token_str(json, &toks[++i]));
 				fprintf(stdout, "envs %d env %s\n", j, c->envs[j].env);
 			} else if (json_token_streq(json, &toks[i], "value")) {
 				c->envs[j].value =
-				strdup(json_token_str(json, &toks[++i]));
+				(json_token_str(json, &toks[++i]));
 				fprintf(stdout, "envs %d value %s\n", j, c->envs[j].value);
 			} else {
 				fprintf(stdout, "get unknown section %s in envs\n",
@@ -304,11 +330,11 @@ static int container_parse_sysctl(struct hyper_container *c, char *json, jsmntok
 
 	i++;
 	for (j = 0; j < c->sys_num; j++) {
-		c->sys[j].path = strdup(json_token_str(json, &toks[++i]));
+		c->sys[j].path = (json_token_str(json, &toks[++i]));
 		while((p = strchr(c->sys[j].path, '.')) != NULL) {
 			*p = '/';
 		}
-		c->sys[j].value = strdup(json_token_str(json, &toks[++i]));
+		c->sys[j].value = (json_token_str(json, &toks[++i]));
 		fprintf(stdout, "sysctl %s:%s\n", c->sys[j].path, c->sys[j].value);
 	}
 	return i;
@@ -381,7 +407,7 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 		t = &toks[i];
 		fprintf(stdout, "%d name %s\n", i, json_token_str(json, t));
 		if (json_token_streq(json, t, "id") && t->size == 1) {
-			c->id = strdup(json_token_str(json, &toks[++i]));
+			c->id = (json_token_str(json, &toks[++i]));
 			c->exec.id = strdup(c->id);
 			fprintf(stdout, "container id %s\n", c->id);
 			i++;
@@ -391,7 +417,7 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 				goto fail;
 			i += next;
 		} else if (json_token_streq(json, t, "rootfs") && t->size == 1) {
-			c->rootfs = strdup(json_token_str(json, &toks[++i]));
+			c->rootfs = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "container rootfs %s\n", c->rootfs);
 			i++;
 		} else if (json_token_streq(json, t, "tty") && t->size == 1) {
@@ -403,19 +429,19 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 			fprintf(stdout, "container stderr seq %" PRIu64 "\n", c->exec.errseq);
 			i++;
 		} else if (json_token_streq(json, t, "workdir") && t->size == 1) {
-			c->workdir = strdup(json_token_str(json, &toks[++i]));
+			c->workdir = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "container workdir %s\n", c->workdir);
 			i++;
 		} else if (json_token_streq(json, t, "image") && t->size == 1) {
-			c->image = strdup(json_token_str(json, &toks[++i]));
+			c->image = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "container image %s\n", c->image);
 			i++;
 		} else if (json_token_streq(json, t, "addr") && t->size == 1) {
-			c->scsiaddr = strdup(json_token_str(json, &toks[++i]));
+			c->scsiaddr = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "container image scsi id %s\n", c->scsiaddr);
 			i++;
 		} else if (json_token_streq(json, t, "fstype") && t->size == 1) {
-			c->fstype = strdup(json_token_str(json, &toks[++i]));
+			c->fstype = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "container fstype %s\n", c->fstype);
 			i++;
 		} else if (json_token_streq(json, t, "volumes") && t->size == 1) {
@@ -521,13 +547,13 @@ static int hyper_parse_interfaces(struct hyper_pod *pod, char *json, jsmntok_t *
 		i++;
 		for (i_if = 0; i_if < next_if; i_if++, i++) {
 			if (json_token_streq(json, &toks[i], "device")) {
-				iface->device = strdup(json_token_str(json, &toks[++i]));
+				iface->device = (json_token_str(json, &toks[++i]));
 				fprintf(stdout, "net device is %s\n", iface->device);
 			} else if (json_token_streq(json, &toks[i], "ipAddress")) {
-				iface->ipaddr = strdup(json_token_str(json, &toks[++i]));
+				iface->ipaddr = (json_token_str(json, &toks[++i]));
 				fprintf(stdout, "net ipaddress is %s\n", iface->ipaddr);
 			} else if (json_token_streq(json, &toks[i], "netMask")) {
-				iface->mask = strdup(json_token_str(json, &toks[++i]));
+				iface->mask = (json_token_str(json, &toks[++i]));
 				fprintf(stdout, "net mask is %s\n", iface->mask);
 			} else {
 				fprintf(stderr, "get unknown section %s in interfaces\n",
@@ -573,13 +599,13 @@ static int hyper_parse_routes(struct hyper_pod *pod, char *json, jsmntok_t *toks
 		i++;
 		for (i_rt = 0; i_rt < next_rt; i_rt++, i++) {
 			if (json_token_streq(json, &toks[i], "dest")) {
-				rt->dst = strdup(json_token_str(json, &toks[++i]));
+				rt->dst = (json_token_str(json, &toks[++i]));
 				fprintf(stdout, "route %d dest is %s\n", j, rt->dst);
 			} else if (json_token_streq(json, &toks[i], "gateway")) {
-				rt->gw = strdup(json_token_str(json, &toks[++i]));
+				rt->gw = (json_token_str(json, &toks[++i]));
 				fprintf(stdout, "route %d gateway is %s\n", j, rt->gw);
 			} else if (json_token_streq(json, &toks[i], "device")) {
-				rt->device = strdup(json_token_str(json, &toks[++i]));
+				rt->device = (json_token_str(json, &toks[++i]));
 				fprintf(stdout, "route %d device is %s\n", j, rt->device);
 			} else {
 				fprintf(stderr, "get unknown section %s in routes\n",
@@ -612,7 +638,7 @@ static int hyper_parse_dns(struct hyper_pod *pod, char *json, jsmntok_t *toks)
 
 	i++;
 	for (j = 0; j < pod->d_num; j++, i++) {
-		pod->dns[j] = strdup(json_token_str(json, &toks[i]));
+		pod->dns[j] = (json_token_str(json, &toks[i]));
 		fprintf(stdout, "pod dns %d: %s\n", j, pod->dns[j]);
 	}
 
@@ -685,11 +711,11 @@ realloc:
 
 			i += next;
 		} else if (json_token_streq(json, t, "shareDir") && t->size == 1) {
-			pod->share_tag = strdup(json_token_str(json, &toks[++i]));
+			pod->share_tag = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "share tag is %s\n", pod->share_tag);
 			i++;
 		} else if (json_token_streq(json, t, "hostname") && t->size == 1) {
-			pod->hostname = strdup(json_token_str(json, &toks[++i]));
+			pod->hostname = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "hostname is %s\n", pod->hostname);
 			i++;
 		} else if (json_token_streq(json, t, "restartPolicy") && t->size == 1) {
@@ -791,7 +817,7 @@ realloc:
 		if (json_token_streq(json, t, "container")) {
 			if (toks[i].type != JSMN_STRING)
 				goto fail;
-			killer->id = strdup(json_token_str(json, &toks[i]));
+			killer->id = (json_token_str(json, &toks[i]));
 		} else if (json_token_streq(json, t, "signal")) {
 			if (toks[i].type != JSMN_PRIMITIVE)
 				goto fail;
@@ -853,7 +879,7 @@ realloc:
 		if (json_token_streq(json, t, "tty")) {
 			if (toks[i].type != JSMN_STRING)
 				goto fail;
-			ws->tty = strdup(json_token_str(json, &toks[i]));
+			ws->tty = (json_token_str(json, &toks[i]));
 		} else if (json_token_streq(json, t, "seq")) {
 			if (toks[i].type != JSMN_PRIMITIVE)
 				goto fail;
@@ -929,7 +955,7 @@ realloc:
 			continue;
 
 		if (json_token_streq(json, t, "container")) {
-			exec->id = strdup(json_token_str(json, &toks[++i]));
+			exec->id = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "get container %s\n", exec->id);
 		} else if (json_token_streq(json, t, "seq")) {
 			has_seq = 1;
@@ -949,7 +975,7 @@ realloc:
 			exec->argc = toks[i].size;
 			exec->argv[exec->argc] = NULL;
 		} else if (j < exec->argc) {
-			exec->argv[j++] = strdup(json_token_str(json, &toks[i]));
+			exec->argv[j++] = (json_token_str(json, &toks[i]));
 			fprintf(stdout, "argv %d, %s\n", j - 1, exec->argv[j - 1]);
 		} else {
 			fprintf(stderr, "get unknown section %s in exec cmd\n",
@@ -1023,10 +1049,10 @@ int hyper_parse_write_file(struct hyper_writter *writter, char *json, int length
 			goto fail;
 
 		if (json_token_streq(json, t, "container")) {
-			writter->id = strdup(json_token_str(json, &toks[i]));
+			writter->id = (json_token_str(json, &toks[i]));
 			fprintf(stdout, "writefile get container %s\n", writter->id);
 		} else if (json_token_streq(json, t, "file")) {
-			writter->file = strdup(json_token_str(json, &toks[i]));
+			writter->file = (json_token_str(json, &toks[i]));
 			fprintf(stdout, "writefile get file %s\n", writter->file);
 		} else {
 			fprintf(stderr, "get unknown section %s in writefile\n",
@@ -1086,10 +1112,10 @@ int hyper_parse_read_file(struct hyper_reader *reader, char *json, int length)
 			goto fail;
 
 		if (json_token_streq(json, t, "container")) {
-			reader->id = strdup(json_token_str(json, &toks[i]));
+			reader->id = (json_token_str(json, &toks[i]));
 			fprintf(stdout, "readfile get container %s\n", reader->id);
 		} else if (json_token_streq(json, t, "file")) {
-			reader->file = strdup(json_token_str(json, &toks[i]));
+			reader->file = (json_token_str(json, &toks[i]));
 			fprintf(stdout, "readfile get file %s\n", reader->file);
 		} else {
 			fprintf(stdout, "get unknown section %s in readfile\n",
