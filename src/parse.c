@@ -623,7 +623,7 @@ int hyper_parse_pod(struct hyper_pod *pod, char *json, int length)
 {
 	int i, n, next = -1;
 	jsmn_parser p;
-	int toks_num = 100;
+	int toks_num = 2048;
 	jsmntok_t *toks = NULL;
 
 realloc:
@@ -717,7 +717,7 @@ struct hyper_container *hyper_parse_new_container(struct hyper_pod *pod, char *j
 {
 	int n;
 	jsmn_parser p;
-	int toks_num = 100;
+	int toks_num = 2048;
 	jsmntok_t *toks = NULL;
 	struct hyper_container *c = NULL;
 
