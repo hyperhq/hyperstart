@@ -6,36 +6,112 @@
 #include "list.h"
 #include "parse.h"
 
+/* parse_utf_16() and process_string() are copied from https://github.com/kgabis/parson */
+#include <ctype.h>
+
+#define JSONFailure (-1)
+#define JSONSuccess (0)
+#define parson_malloc malloc
+#define parson_free free
+
+static int is_utf16_hex(const unsigned char *s) {
+    return isxdigit(s[0]) && isxdigit(s[1]) && isxdigit(s[2]) && isxdigit(s[3]);
+}
+
+static int parse_utf_16(const char **unprocessed, char **processed) {
+    unsigned int cp, lead, trail;
+    char *processed_ptr = *processed;
+    const char *unprocessed_ptr = *unprocessed;
+    unprocessed_ptr++; /* skips u */
+    if (!is_utf16_hex((const unsigned char*)unprocessed_ptr) || sscanf(unprocessed_ptr, "%4x", &cp) == EOF)
+        return JSONFailure;
+    if (cp < 0x80) {
+        *processed_ptr = cp; /* 0xxxxxxx */
+    } else if (cp < 0x800) {
+        *processed_ptr++ = ((cp >> 6) & 0x1F) | 0xC0; /* 110xxxxx */
+        *processed_ptr   = ((cp     ) & 0x3F) | 0x80; /* 10xxxxxx */
+    } else if (cp < 0xD800 || cp > 0xDFFF) {
+        *processed_ptr++ = ((cp >> 12) & 0x0F) | 0xE0; /* 1110xxxx */
+        *processed_ptr++ = ((cp >> 6)  & 0x3F) | 0x80; /* 10xxxxxx */
+        *processed_ptr   = ((cp     )  & 0x3F) | 0x80; /* 10xxxxxx */
+    } else if (cp >= 0xD800 && cp <= 0xDBFF) { /* lead surrogate (0xD800..0xDBFF) */
+        lead = cp;
+        unprocessed_ptr += 4; /* should always be within the buffer, otherwise previous sscanf would fail */
+        if (*unprocessed_ptr++ != '\\' || *unprocessed_ptr++ != 'u' || /* starts with \u? */
+            !is_utf16_hex((const unsigned char*)unprocessed_ptr)          ||
+            sscanf(unprocessed_ptr, "%4x", &trail) == EOF           ||
+            trail < 0xDC00 || trail > 0xDFFF) { /* valid trail surrogate? (0xDC00..0xDFFF) */
+            return JSONFailure;
+        }
+        cp = ((((lead-0xD800)&0x3FF)<<10)|((trail-0xDC00)&0x3FF))+0x010000;
+        *processed_ptr++ = (((cp >> 18) & 0x07) | 0xF0); /* 11110xxx */
+        *processed_ptr++ = (((cp >> 12) & 0x3F) | 0x80); /* 10xxxxxx */
+        *processed_ptr++ = (((cp >> 6)  & 0x3F) | 0x80); /* 10xxxxxx */
+        *processed_ptr   = (((cp     )  & 0x3F) | 0x80); /* 10xxxxxx */
+    } else { /* trail surrogate before lead surrogate */
+        return JSONFailure;
+    }
+    unprocessed_ptr += 3;
+    *processed = processed_ptr;
+    *unprocessed = unprocessed_ptr;
+    return JSONSuccess;
+}
+
+
+/* Copies and processes passed string up to supplied length.
+ Example: "\u006Corem ipsum" -> lorem ipsum */
+static char* process_string(const char *input, size_t len) {
+    const char *input_ptr = input;
+    size_t initial_size = (len + 1) * sizeof(char);
+    //size_t final_size = 0;
+    char *output = (char*)parson_malloc(initial_size);
+    char *output_ptr = output;
+    //char *resized_output = NULL;
+    while ((*input_ptr != '\0') && (size_t)(input_ptr - input) < len) {
+        if (*input_ptr == '\\') {
+            input_ptr++;
+            switch (*input_ptr) {
+                case '\"': *output_ptr = '\"'; break;
+                case '\\': *output_ptr = '\\'; break;
+                case '/':  *output_ptr = '/';  break;
+                case 'b':  *output_ptr = '\b'; break;
+                case 'f':  *output_ptr = '\f'; break;
+                case 'n':  *output_ptr = '\n'; break;
+                case 'r':  *output_ptr = '\r'; break;
+                case 't':  *output_ptr = '\t'; break;
+                case 'u':
+                    if (parse_utf_16(&input_ptr, &output_ptr) == JSONFailure)
+                        goto error;
+                    break;
+                default:
+                    goto error;
+            }
+        } else if ((unsigned char)*input_ptr < 0x20) {
+            goto error; /* 0x00-0x19 are invalid characters for json string (http://www.ietf.org/rfc/rfc4627.txt) */
+        } else {
+            *output_ptr = *input_ptr;
+        }
+        output_ptr++;
+        input_ptr++;
+    }
+    *output_ptr = '\0';
+    /* resize to new length */
+    //final_size = (size_t)(output_ptr-output) + 1;
+    //resized_output = (char*)parson_malloc(final_size);
+    //if (resized_output == NULL)
+    //    goto error;
+    //memcpy(resized_output, output, final_size);
+    //parson_free(output);
+    //return resized_output;
+    return output;
+error:
+    parson_free(output);
+    return NULL;
+}
+
 char *json_token_str(char *js, jsmntok_t *t)
 {
-	char *str;
-	int i, len = t->end - t->start + 1;
-
-	str = calloc(sizeof(char), len);
-	if (str == NULL)
-		return NULL;
-
-	memcpy(str, js + t->start, len - 1);
-
-	for (i = 0; str[i] != '\0'; i++) {
-		if (str[i] != '\\')
-			continue;
-
-		if ((str + i + 1) == strstr(str + i, "u003e")) {
-			str[i] = '>';
-			memmove(str + i + 1, str + i + 6, len - i - 6);
-		} else if ((str + i + 1) == strstr(str + i, "u003c")) {
-			str[i] = '<';
-			memmove(str + i + 1, str + i + 6, len - i - 6);
-		} else if ((str + i + 1) == strstr(str + i, "u0026")) {
-			str[i] = '&';
-			memmove(str + i + 1, str + i + 6, len - i - 6);
-		} else {
-			memmove(str + i, str + i + 1, len - i -1);
-		}
-	}
-
-	return str;
+    return process_string(js+t->start, t->end - t->start);
 }
 
 int json_token_int(char *js, jsmntok_t *t)
