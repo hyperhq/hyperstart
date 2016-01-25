@@ -18,6 +18,8 @@ char *read_cmdline(void);
 int hyper_setup_env(struct env *envs, int num);
 int hyper_find_sd(char *prefix, char *addr, char **dev);
 int hyper_list_dir(char *path);
+void online_cpu(void);
+void online_memory(void);
 int hyper_mkdir(char *path);
 int hyper_open_channel(char *channel, int mode);
 int hyper_open_serial_dev(char *tty);

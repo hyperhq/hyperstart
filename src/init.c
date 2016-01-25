@@ -1154,6 +1154,8 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	pod->type = type;
 	switch (type) {
 	case STARTPOD:
+		online_cpu();
+		online_memory();
 		ret = hyper_start_pod((char *)buf->data + 8, len - 8);
 		hyper_print_uptime();
 		break;
