@@ -140,6 +140,78 @@ int hyper_mkdir(char *hyper_path)
 	return 0;
 }
 
+void online_cpu(void)
+{
+	DIR *dir = opendir("/sys/devices/system/cpu");
+	if (dir == NULL) {
+		fprintf(stderr, "open dir /sys/devices/system/cpu failed\n");
+		return;
+	}
+	printf("online_cpu()\n");
+	for (;;) {
+		int num;
+		int ret;
+		char path[256];
+		int fd;
+
+		struct dirent *entry = readdir(dir);
+		if (entry == NULL)
+			break;
+		if (entry->d_type != DT_DIR)
+			continue;
+		ret = sscanf(entry->d_name, "cpu%d", &num);
+		if (ret < 1 || num == 0) /* skip none cpu%d and cpu0 */
+			continue;
+		sprintf(path, "/sys/devices/system/cpu/%s/online", entry->d_name);
+		fd = open(path, O_RDWR);
+		if (fd < 0) {
+			fprintf(stderr, "open %s failed\n", path);
+			continue;
+		}
+		printf("try to online %s\n", entry->d_name);
+		ret = write(fd, "1", sizeof("1"));
+		printf("online %s result: %s\n", entry->d_name, ret == 2 ? "success" : "failed");
+		close(fd);
+	}
+	closedir(dir);
+}
+
+void online_memory(void)
+{
+	DIR *dir = opendir("/sys/devices/system/memory");
+	if (dir == NULL) {
+		fprintf(stderr, "open dir /sys/devices/system/memory failed\n");
+		return;
+	}
+	printf("online_memory()\n");
+	for (;;) {
+		int num;
+		int ret;
+		char path[256];
+		int fd;
+
+		struct dirent *entry = readdir(dir);
+		if (entry == NULL)
+			break;
+		if (entry->d_type != DT_DIR)
+			continue;
+		ret = sscanf(entry->d_name, "memory%d", &num);
+		if (ret < 1 || num == 0) /* skip none memory%d and memory0 */
+			continue;
+		sprintf(path, "/sys/devices/system/memory/%s/online", entry->d_name);
+		fd = open(path, O_RDWR);
+		if (fd < 0) {
+			fprintf(stderr, "open %s failed\n", path);
+			continue;
+		}
+		printf("try to online %s\n", entry->d_name);
+		ret = write(fd, "1", sizeof("1"));
+		printf("online %s result: %s\n", entry->d_name, ret == 2 ? "success" : "failed");
+		close(fd);
+	}
+	closedir(dir);
+}
+
 #if WITH_VBOX
 
 #include <termios.h>
