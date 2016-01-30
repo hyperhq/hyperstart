@@ -36,7 +36,7 @@ if [ "$1"x = "cbfs"x ]; then
 
 	mkdir .cbfs
 	dd if=/dev/zero of=.cbfs/boot.bin bs=4096 count=1
-	cbfstool .cbfs/cbfs.rom create -s 4096k -B .cbfs/boot.bin -m x86  0x1000
+	cbfstool .cbfs/cbfs.rom create -s 8128k -B .cbfs/boot.bin -m x86  0x1000
 	cbfstool .cbfs/cbfs.rom add -f kernel -n vmlinuz -t raw
 	cbfstool .cbfs/cbfs.rom add -f hyper-initrd.img -n initrd -t raw
 	echo 'console=ttyS0 panic=1 no_timer_check' > .cbfs/cmdline
