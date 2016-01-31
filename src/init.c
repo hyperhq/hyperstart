@@ -402,13 +402,14 @@ static int hyper_container_stage0(void *data)
 
 	ret = hyper_start_container(c, utsns, ipcns, pod);
 out:
+	close(pidns);
+	close(utsns);
+	close(ipcns);
+
 	if (hyper_send_type(arg->ctl_pipe[1], ret ? ERROR : READY) < 0) {
 		fprintf(stderr, "container init send ready message failed\n");
 	}
 
-	close(pidns);
-	close(utsns);
-	close(ipcns);
 	/* hyper_container_stage0 shares fd table with init, let init closes pipe. */
 	//close(arg->ctl_pipe[0]);
 	//close(arg->ctl_pipe[1]);
@@ -440,7 +441,6 @@ int hyper_start_container_stage0(struct hyper_container *c, struct hyper_pod *po
 	}
 
 	pid = clone(hyper_container_stage0, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
-	free(stack);
 	if (pid < 0) {
 		perror("enter container pid ns failed");
 		goto out;
@@ -464,6 +464,8 @@ int hyper_start_container_stage0(struct hyper_container *c, struct hyper_pod *po
 out:
 	close(arg.ctl_pipe[0]);
 	close(arg.ctl_pipe[1]);
+
+	free(stack);
 	return ret;
 }
 
@@ -916,7 +918,7 @@ static int hyper_do_cmd_read_file(void *data)
 	ret = 0;
 err:
 	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
-	return ret;
+	_exit(ret);
 }
 
 static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_t **data)
@@ -967,7 +969,6 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 	}
 
 	pid = clone(hyper_do_cmd_read_file, stack + stacksize, CLONE_VM| SIGCHLD, &arg);
-	free(stack);
 	if (pid < 0) {
 		perror("fail to fork writter process");
 		goto out;
@@ -984,6 +985,7 @@ out:
 	close(arg.pipe[1]);
 	free(reader.id);
 	free(reader.file);
+	free(stack);
 
 	return ret;
 }

@@ -430,7 +430,6 @@ static int hyper_do_exec_cmd(void *data)
 
 		if (hyper_get_type(pipe[0], &type) < 0 || type != READY) {
 			fprintf(stderr, "hyper init doesn't get execcmd ready message\n");
-			hyper_send_type(arg->pipe[1], ERROR);
 			goto out;
 		}
 
@@ -461,13 +460,14 @@ static int hyper_do_exec_cmd(void *data)
 
 	ret = 0;
 exit:
-	hyper_send_type(pipe[1], ERROR);
-	_exit(ret);
-
-out:
-	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
 	close(pipe[0]);
 	close(pipe[1]);
+	hyper_send_type(pipe[1], ERROR);
+	_exit(ret);
+out:
+	close(pipe[0]);
+	close(pipe[1]);
+	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
 	_exit(ret);
 }
 
@@ -534,7 +534,6 @@ int hyper_exec_cmd(char *json, int length)
 
 	pid = clone(hyper_do_exec_cmd, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
 	fprintf(stdout, "do_exec_cmd pid %d\n", pid);
-	free(stack);
 	if (pid < 0) {
 		perror("clone hyper_do_exec_cmd failed");
 		goto close_tty;
@@ -550,6 +549,7 @@ int hyper_exec_cmd(char *json, int length)
 out:
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
+	free(stack);
 	return ret;
 close_tty:
 	close(exec->ptyfd);
