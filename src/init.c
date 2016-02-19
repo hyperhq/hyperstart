@@ -990,6 +990,17 @@ out:
 	return ret;
 }
 
+static void hyper_cmd_online_cpu_mem()
+{
+	int pid = fork();
+	if (pid < 0) {
+		perror("fail to fork online process");
+	} else if (pid == 0) {
+		online_cpu();
+		online_memory();
+	}
+}
+
 static void hyper_cleanup_hostname(struct hyper_pod *pod)
 {
 	free(pod->hostname);
@@ -1156,8 +1167,6 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	pod->type = type;
 	switch (type) {
 	case STARTPOD:
-		online_cpu();
-		online_memory();
 		ret = hyper_start_pod((char *)buf->data + 8, len - 8);
 		hyper_print_uptime();
 		break;
@@ -1192,6 +1201,9 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		break;
 	case KILLCONTAINER:
 		ret = hyper_kill_container((char *)buf->data + 8, len - 8);
+		break;
+	case ONLINECPUMEM:
+		hyper_cmd_online_cpu_mem();
 		break;
 	default:
 		ret = -1;
