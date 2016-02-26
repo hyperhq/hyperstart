@@ -426,7 +426,7 @@ int hyper_start_container_stage0(struct hyper_container *c, struct hyper_pod *po
 		.container	= c,
 		.ctl_pipe	= {-1, -1},
 	};
-	int ret = -1, pid;
+	int ret = -1, pid, status;
 	uint32_t type;
 
 	if (pipe2(arg.ctl_pipe, O_CLOEXEC) < 0) {
@@ -440,9 +440,14 @@ int hyper_start_container_stage0(struct hyper_container *c, struct hyper_pod *po
 		goto out;
 	}
 
-	pid = clone(hyper_container_stage0, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
+	pid = clone(hyper_container_stage0, stack + stacksize, CLONE_VM| CLONE_FILES| SIGQUIT, &arg);
 	if (pid < 0) {
 		perror("enter container pid ns failed");
+		goto out;
+	}
+
+	if (waitpid(pid, &status, __WCLONE) <= 0) {
+		perror("waiting hyper_container_stage0 finish failed");
 		goto out;
 	}
 
@@ -931,7 +936,7 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 	};
 	int stacksize = getpagesize() * 4;
 	void *stack = NULL;
-	int pid, ret = -1;
+	int pid, ret = -1, status;
 	uint32_t type;
 
 	fprintf(stdout, "%s\n", __func__);
@@ -968,9 +973,14 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 		goto out;
 	}
 
-	pid = clone(hyper_do_cmd_read_file, stack + stacksize, CLONE_VM| SIGCHLD, &arg);
+	pid = clone(hyper_do_cmd_read_file, stack + stacksize, CLONE_VM| SIGQUIT, &arg);
 	if (pid < 0) {
 		perror("fail to fork writter process");
+		goto out;
+	}
+
+	if (waitpid(pid, &status, __WCLONE) <= 0) {
+		perror("waiting hyper_do_cmd_read_file finish failed");
 		goto out;
 	}
 

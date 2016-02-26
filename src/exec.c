@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
+#include <sys/wait.h>
 #include <sched.h>
 #include <errno.h>
 #include <string.h>
@@ -497,7 +498,7 @@ int hyper_exec_cmd(char *json, int length)
 		.exec	= NULL,
 		.pipe	= {-1, -1},
 	};
-	int pid, ret = -1;
+	int pid, ret = -1, status;
 	uint32_t type;
 
 	fprintf(stdout, "call hyper_exec_cmd, json %s, len %d\n", json, length);
@@ -532,10 +533,15 @@ int hyper_exec_cmd(char *json, int length)
 		goto close_tty;
 	}
 
-	pid = clone(hyper_do_exec_cmd, stack + stacksize, CLONE_VM| CLONE_FILES| SIGCHLD, &arg);
+	pid = clone(hyper_do_exec_cmd, stack + stacksize, CLONE_VM| CLONE_FILES| SIGQUIT, &arg);
 	fprintf(stdout, "do_exec_cmd pid %d\n", pid);
 	if (pid < 0) {
 		perror("clone hyper_do_exec_cmd failed");
+		goto close_tty;
+	}
+
+	if (waitpid(pid, &status, __WCLONE) <= 0) {
+		perror("waiting hyper_do_exec_cmd finish failed");
 		goto close_tty;
 	}
 
