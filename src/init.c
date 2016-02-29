@@ -1008,6 +1008,7 @@ static void hyper_cmd_online_cpu_mem()
 	} else if (pid == 0) {
 		online_cpu();
 		online_memory();
+		exit(0);
 	}
 }
 
