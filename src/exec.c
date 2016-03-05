@@ -175,10 +175,11 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 
 	if (e->errseq > 0) {
 		int errpipe[2];
-		if (pipe2(errpipe, O_NONBLOCK|O_CLOEXEC) < 0) {
+		if (pipe2(errpipe, O_CLOEXEC) < 0) {
 			fprintf(stderr, "creating stderr pipe failed\n");
 			return -1;
 		}
+		hyper_setfd_nonblock(errpipe[0]);
 		e->errev.fd = errpipe[0];
 		e->errfd = errpipe[1];
 	}
