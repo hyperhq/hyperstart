@@ -7,6 +7,7 @@
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
 #include <sched.h>
 #include <errno.h>
 #include <string.h>
@@ -188,6 +189,18 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 		e->errfd = errpipe[1];
 	}
 
+	if (!e->tty) { // don't use tty for stdio
+		int iopair[2];
+		if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, iopair) < 0) {
+			fprintf(stderr, "creating stdio pair failed\n");
+			return -1;
+		}
+		hyper_setfd_nonblock(iopair[0]);
+		e->e.fd = iopair[0];
+		e->ptyfd = iopair[1];
+		goto done;
+	}
+
 	if (e->id) {
 		if (sprintf(path, "/tmp/hyper/%s/devpts/", e->id) < 0) {
 			fprintf(stderr, "get ptmx path failed\n");
@@ -229,6 +242,7 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	e->ptyfd = open(ptmx, O_RDWR | O_NOCTTY | O_CLOEXEC);
 	fprintf(stdout, "get pty device for exec %s\n", ptmx);
 
+done:
 	fprintf(stdout, "%s pts event %p, fd %d %d\n",
 		__func__, &e->e, e->e.fd, e->ptyfd);
 	return 0;
@@ -257,7 +271,7 @@ int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 		goto out;
 	}
 
-	if (e->seq && (ioctl(fd, TIOCSCTTY, NULL) < 0)) {
+	if (e->tty && (ioctl(fd, TIOCSCTTY, NULL) < 0)) {
 		perror("ioctl pty device for execcmd failed");
 		goto out;
 	}

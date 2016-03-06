@@ -11,6 +11,7 @@ struct hyper_exec {
 	char			*id;
 	char			**argv;
 	int			argc;
+	int			tty; // use tty or not
 	uint64_t		seq;
 	uint64_t		errseq;
 	int			pid;
