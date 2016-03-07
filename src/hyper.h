@@ -57,7 +57,6 @@ struct hyper_pod {
 	uint32_t		remains;
 	uint8_t			policy;
 	int			efd;
-	struct hyper_event	sig;
 };
 
 struct hyper_win_size {
@@ -86,7 +85,6 @@ struct hyper_writter {
 
 struct hyper_ctl {
 	int			efd;
-	struct hyper_event	sig;
 	struct hyper_event	tty;
 	struct hyper_event	chan;
 };

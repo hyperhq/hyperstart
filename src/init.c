@@ -15,7 +15,6 @@
 #include <limits.h>
 #include <mntent.h>
 #include <sys/epoll.h>
-#include <sys/signalfd.h>
 #include <inttypes.h>
 #include <ctype.h>
 
@@ -39,7 +38,6 @@ struct hyper_exec *global_exec;
 
 struct hyper_ctl ctl;
 
-static struct hyper_event_ops hyper_signal_ops;
 static int hyper_handle_exit(struct hyper_pod *pod);
 static int hyper_stop_pod(struct hyper_pod *pod);
 
@@ -212,38 +210,9 @@ static void pod_init_sigchld(int sig)
 	hyper_handle_exit(NULL);
 }
 
-static int hyper_signal_loop(struct hyper_event *de)
+static void hyper_init_sigchld(int sig)
 {
-	int size;
-	struct signalfd_siginfo sinfo;
-	struct hyper_pod *pod = de->ptr;
-
-	fprintf(stdout, "%s write to ctl tty fd\n", __func__);
-
-	while (1) {
-		size = read(de->fd, &sinfo, sizeof(struct signalfd_siginfo));
-		if (size <= 0) {
-			if (errno == EINTR)
-				continue;
-			if (errno == EAGAIN)
-				break;
-
-			perror("fail to read signal fd");
-			return -1;
-		} else if (size != sizeof(struct signalfd_siginfo)) {
-			perror("read signalfd siginfo failed");
-			return -1;
-		}
-
-		if (sinfo.ssi_signo != SIGCHLD) {
-			fprintf(stderr, "why give me signal %d?\n", sinfo.ssi_signo);
-			return 0;
-		}
-
-		hyper_handle_exit(pod);
-	}
-
-	return 0;
+	hyper_handle_exit(&global_pod);
 }
 
 struct hyper_pod_arg {
@@ -258,7 +227,6 @@ static int hyper_pod_init(void *data)
 	sigset_t mask;
 
 	close(arg->ctl_pipe[0]);
-	close(ctl.sig.fd);
 	close(ctl.efd);
 	close(ctl.chan.fd);
 	close(ctl.tty.fd);
@@ -302,7 +270,6 @@ out:
 fail:
 	hyper_send_type(arg->ctl_pipe[1], ERROR);
 	close(arg->ctl_pipe[1]);
-	close(pod->sig.fd);
 
 	goto out;
 }
@@ -1204,16 +1171,27 @@ static struct hyper_event_ops hyper_ttyfd_ops = {
 	.len_offset	= 8,
 };
 
-static struct hyper_event_ops hyper_signal_ops = {
-	.read		= hyper_signal_loop,
-	.hup		= hyper_event_hup,
-};
-
 static int hyper_loop(void)
 {
 	int i, n;
 	struct epoll_event *events;
 	struct hyper_pod *pod = &global_pod;
+	sigset_t mask, omask;
+
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGCHLD);
+
+	/*
+	 * block SIGCHLD in the loop except when in the syscall of
+	 * epoll_pwait(), it ensures that the SIGCHLD handling and
+	 * the events handling are exclusive.
+	 */
+	if (sigprocmask(SIG_BLOCK, &mask, &omask) < 0) {
+		perror("sigprocmask SIGCHLD failed");
+		return -1;
+	}
+	sigdelset(&omask, SIGCHLD);
+	signal(SIGCHLD, hyper_init_sigchld);
 
 	ctl.efd = epoll_create1(EPOLL_CLOEXEC);
 	if (ctl.efd < 0) {
@@ -1235,17 +1213,10 @@ static int hyper_loop(void)
 		return -1;
 	}
 
-	fprintf(stdout, "hyper_init_event hyper signal event %p, ops %p, fd %d\n",
-		&ctl.sig, &hyper_signal_ops, ctl.sig.fd);
-	if (hyper_init_event(&ctl.sig, &hyper_signal_ops, pod) < 0 ||
-	    hyper_add_event(ctl.efd, &ctl.sig, EPOLLIN) < 0) {
-		return -1;
-	}
-
 	events = calloc(MAXEVENTS, sizeof(*events));
 
 	while (1) {
-		n = epoll_wait(ctl.efd, events, MAXEVENTS, -1);
+		n = epoll_pwait(ctl.efd, events, MAXEVENTS, -1, &omask);
 		fprintf(stdout, "%s epoll_wait %d\n", __func__, n);
 
 		if (n < 0) {
@@ -1268,7 +1239,6 @@ static int hyper_loop(void)
 int main(int argc, char *argv[])
 {
 	char *cmdline, *ctl_serial, *tty_serial;
-	sigset_t mask;
 
 	if (hyper_mkdir("/dev") < 0 ||
 	    hyper_mkdir("/sys") < 0 ||
@@ -1326,20 +1296,6 @@ int main(int argc, char *argv[])
 
 	setenv("PATH", "/bin:/sbin/:/usr/bin/:/usr/sbin/", 1);
 
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGCHLD);
-
-	if (sigprocmask(SIG_BLOCK, &mask, NULL) < 0) {
-		perror("sigprocmask SIGCHLD failed");
-		return -1;
-	}
-
-	ctl.sig.fd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
-	if (ctl.sig.fd < 0) {
-		perror("create signalfd failed");
-		return -1;
-	}
-
 	ctl.chan.fd = hyper_setup_ctl_channel(ctl_serial);
 	if (ctl.chan.fd < 0) {
 		fprintf(stderr, "fail to setup hyper control serial port\n");
@@ -1358,8 +1314,6 @@ int main(int argc, char *argv[])
 out2:
 	close(ctl.chan.fd);
 out1:
-	close(ctl.sig.fd);
-
 	free(cmdline);
 
 	return 0;
