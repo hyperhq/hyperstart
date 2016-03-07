@@ -263,7 +263,7 @@ static int hyper_pod_init(void *data)
 	close(arg->ctl_pipe[1]);
 
 	for (;;)
-		; /* infinite loop and handle SIGCHLD */
+		pause(); /* infinite loop and handle SIGCHLD */
 out:
 	_exit(-1);
 
