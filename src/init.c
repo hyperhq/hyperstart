@@ -207,6 +207,11 @@ static int hyper_handle_exit(struct hyper_pod *pod)
 	return 0;
 }
 
+static void pod_init_sigchld(int sig)
+{
+	hyper_handle_exit(NULL);
+}
+
 static int hyper_signal_loop(struct hyper_event *de)
 {
 	int size;
@@ -241,47 +246,6 @@ static int hyper_signal_loop(struct hyper_event *de)
 	return 0;
 }
 
-static int pod_init_loop(struct hyper_pod *pod)
-{
-	int i, n;
-	struct epoll_event *events;
-
-	pod->efd = epoll_create1(EPOLL_CLOEXEC);
-	if (pod->efd < 0) {
-		perror("epoll_create failed");
-		return -1;
-	}
-
-	fprintf(stdout, "hyper_init_event pod signal event %p, ops %p, fd %d\n",
-		&pod->sig, &hyper_signal_ops, pod->sig.fd);
-	if (hyper_init_event(&pod->sig, &hyper_signal_ops, NULL) < 0 ||
-	    hyper_add_event(pod->efd, &pod->sig, EPOLLIN) < 0) {
-		return -1;
-	}
-
-	events = calloc(MAXEVENTS, sizeof(*events));
-
-	while (1) {
-		n = epoll_wait(pod->efd, events, MAXEVENTS, -1);
-		fprintf(stdout, "%s epoll_wait %d\n", __func__, n);
-
-		if (n < 0) {
-			if (errno == EINTR)
-				continue;
-			perror("pod wait event failed");
-			return -1;
-		}
-
-		for (i = 0; i < n; i++) {
-			if (hyper_handle_event(pod->efd, &events[i]) < 0)
-				return -1;
-		}
-	}
-
-	close(pod->efd);
-	return 0;
-}
-
 struct hyper_pod_arg {
 	struct hyper_pod	*pod;
 	int		ctl_pipe[2];
@@ -299,21 +263,13 @@ static int hyper_pod_init(void *data)
 	close(ctl.chan.fd);
 	close(ctl.tty.fd);
 
-	pod->sig.fd = -1;
-
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGCHLD);
-
-	if (sigprocmask(SIG_BLOCK, &mask, NULL) < 0) {
+	if (sigprocmask(SIG_UNBLOCK, &mask, NULL) < 0) {
 		perror("sigprocmask SIGCHLD failed");
-		goto fail;
+		return -1;
 	}
-
-	pod->sig.fd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
-	if (pod->sig.fd < 0) {
-		perror("create pod signalfd failed");
-		goto fail;
-	}
+	signal(SIGCHLD, pod_init_sigchld);
 
 	/* mount new proc directory */
 	if (umount("/proc") < 0) {
@@ -338,8 +294,8 @@ static int hyper_pod_init(void *data)
 
 	close(arg->ctl_pipe[1]);
 
-	pod_init_loop(pod);
-	fprintf(stdout, "pod init exit\n");
+	for (;;)
+		; /* infinite loop and handle SIGCHLD */
 out:
 	_exit(-1);
 
