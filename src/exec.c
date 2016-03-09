@@ -245,6 +245,8 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	fprintf(stdout, "get pty device for exec %s\n", ptmx);
 
 done:
+	if (e->errseq == 0)
+		e->errfd = e->ptyfd;
 	fprintf(stdout, "%s pts event %p, fd %d %d\n",
 		__func__, &e->e, e->e.fd, e->ptyfd);
 	return 0;
@@ -571,7 +573,8 @@ out:
 	return ret;
 close_tty:
 	close(exec->ptyfd);
-	close(exec->errfd);
+	if (exec->errfd != exec->ptyfd)
+		close(exec->errfd);
 	close(exec->e.fd);
 free_exec:
 	hyper_free_exec(exec);
@@ -697,7 +700,8 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 
 	close(exec->ptyfd);
 	exec->ptyfd = -1;
-	close(exec->errfd);
+	if (exec->errfd != exec->ptyfd)
+		close(exec->errfd);
 	exec->errfd = -1;
 
 	hyper_release_exec(exec, pod);
