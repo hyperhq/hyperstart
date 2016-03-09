@@ -497,6 +497,14 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 			fprintf(stdout, "container rootfs %s\n", c->rootfs);
 			i++;
 		} else if (json_token_streq(json, t, "tty") && t->size == 1) {
+			if (!json_token_streq(json, &toks[++i], "false")) {
+				c->exec.tty = 1;
+				fprintf(stdout, "container uses terminal\n");
+			} else {
+				fprintf(stdout, "container doesn't use terminal\n");
+			}
+			i++;
+		} else if (json_token_streq(json, t, "stdio") && t->size == 1) {
 			c->exec.seq = json_token_ll(json, &toks[++i]);
 			fprintf(stdout, "container seq %" PRIu64 "\n", c->exec.seq);
 			i++;

@@ -107,7 +107,7 @@ static int hyper_getmsg_len(struct hyper_event *de, uint32_t *len)
 	return 0;
 }
 
-int hyper_event_read(struct hyper_event *de)
+int hyper_event_read(struct hyper_event *de, int efd)
 {
 	struct hyper_buf *buf = &de->rbuf;
 	uint32_t len = 4;
@@ -233,7 +233,7 @@ int hyper_handle_event(int efd, struct epoll_event *event)
 	if (event->events & EPOLLIN) {
 		fprintf(stdout, "%s event EPOLLIN, de %p, fd %d, %p\n",
 			__func__, de, de->fd, de->ops);
-		if (de->ops->read(de) < 0)
+		if (de->ops->read(de, efd) < 0)
 			return -1;
 	} else if (event->events & EPOLLHUP) {
 		fprintf(stdout, "%s event EPOLLHUP, de %p, fd %d, %p\n",

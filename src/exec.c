@@ -7,6 +7,7 @@
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
 #include <sched.h>
 #include <errno.h>
 #include <string.h>
@@ -101,7 +102,7 @@ static void stderr_hup(struct hyper_event *de, int efd)
 	return pts_hup(de, efd, 0);
 }
 
-static int pts_loop(struct hyper_event *de, uint64_t seq)
+static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, int out)
 {
 	int size = -1;
 	struct hyper_buf *buf = &ctl.tty.wbuf;
@@ -109,7 +110,7 @@ static int pts_loop(struct hyper_event *de, uint64_t seq)
 	while ((buf->get + 12 < buf->size) && size) {
 		size = read(de->fd, buf->data + buf->get + 12, buf->size - buf->get - 12);
 		fprintf(stdout, "%s: read %d data\n", __func__, size);
-		if (size <= 0) {
+		if (size < 0) {
 			if (errno == EINTR)
 				continue;
 
@@ -118,6 +119,10 @@ static int pts_loop(struct hyper_event *de, uint64_t seq)
 				return -1;
 			}
 
+			break;
+		}
+		if (size == 0) { // eof
+			pts_hup(de, efd, out);
 			break;
 		}
 
@@ -134,12 +139,12 @@ static int pts_loop(struct hyper_event *de, uint64_t seq)
 	return 0;
 }
 
-static int stdout_loop(struct hyper_event *de)
+static int stdout_loop(struct hyper_event *de, int efd)
 {
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
 
-	return pts_loop(de, exec->seq);
+	return pts_loop(de, exec->seq, efd, 1);
 }
 
 struct hyper_event_ops pts_ops = {
@@ -150,12 +155,12 @@ struct hyper_event_ops pts_ops = {
 	/* don't need read buff, the pts data will store in tty buffer */
 };
 
-static int stderr_loop(struct hyper_event *de)
+static int stderr_loop(struct hyper_event *de, int efd)
 {
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, errev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->errseq);
 
-	return pts_loop(de, exec->errseq);
+	return pts_loop(de, exec->errseq, efd, 0);
 }
 
 struct hyper_event_ops err_ops = {
@@ -182,6 +187,18 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 		hyper_setfd_nonblock(errpipe[0]);
 		e->errev.fd = errpipe[0];
 		e->errfd = errpipe[1];
+	}
+
+	if (!e->tty) { // don't use tty for stdio
+		int iopair[2];
+		if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, iopair) < 0) {
+			fprintf(stderr, "creating stdio pair failed\n");
+			return -1;
+		}
+		hyper_setfd_nonblock(iopair[0]);
+		e->e.fd = iopair[0];
+		e->ptyfd = iopair[1];
+		goto done;
 	}
 
 	if (e->id) {
@@ -225,6 +242,7 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	e->ptyfd = open(ptmx, O_RDWR | O_NOCTTY | O_CLOEXEC);
 	fprintf(stdout, "get pty device for exec %s\n", ptmx);
 
+done:
 	fprintf(stdout, "%s pts event %p, fd %d %d\n",
 		__func__, &e->e, e->e.fd, e->ptyfd);
 	return 0;
@@ -253,7 +271,7 @@ int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 		goto out;
 	}
 
-	if (e->seq && (ioctl(fd, TIOCSCTTY, NULL) < 0)) {
+	if (e->tty && (ioctl(fd, TIOCSCTTY, NULL) < 0)) {
 		perror("ioctl pty device for execcmd failed");
 		goto out;
 	}
