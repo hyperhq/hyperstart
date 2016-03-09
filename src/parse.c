@@ -469,8 +469,9 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 
 	c->exec.init = 1;
 	c->exec.code = -1;
-	c->exec.e.fd = -1;
-	c->exec.errev.fd = -1;
+	c->exec.stdinev.fd = -1;
+	c->exec.stdoutev.fd = -1;
+	c->exec.stderrev.fd = -1;
 	c->exec.ptyfd = -1;
 	c->exec.stdinfd = -1;
 	c->exec.stdoutfd = -1;
@@ -1032,8 +1033,9 @@ realloc:
 	exec->stdinfd = -1;
 	exec->stdoutfd = -1;
 	exec->stderrfd = -1;
-	exec->e.fd = -1;
-	exec->errev.fd = -1;
+	exec->stdinev.fd = -1;
+	exec->stdoutev.fd = -1;
+	exec->stderrev.fd = -1;
 	INIT_LIST_HEAD(&exec->list);
 
 	for (i = 0, j = 0; i < n; i++) {

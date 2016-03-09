@@ -6,8 +6,9 @@
 
 struct hyper_exec {
 	struct list_head	list;
-	struct hyper_event	e;
-	struct hyper_event	errev;
+	struct hyper_event	stdinev;
+	struct hyper_event	stdoutev;
+	struct hyper_event	stderrev;
 	char			*id;
 	char			**argv;
 	int			argc;

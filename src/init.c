@@ -1059,7 +1059,7 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 		return 0;
 	}
 
-	wbuf = &exec->e.wbuf;
+	wbuf = &exec->stdinev.wbuf;
 
 	size = wbuf->size - wbuf->get;
 	if (size == 0)
@@ -1073,7 +1073,7 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 	if (size > 0) {
 		memcpy(wbuf->data + wbuf->get, rbuf->data + 12, size);
 		wbuf->get += size;
-		if (hyper_modify_event(ctl.efd, &exec->e, EPOLLIN | EPOLLOUT) < 0) {
+		if (hyper_modify_event(ctl.efd, &exec->stdinev, EPOLLOUT) < 0) {
 			fprintf(stderr, "modify exec pts event to in & out failed\n");
 			return -1;
 		}

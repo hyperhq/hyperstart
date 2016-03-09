@@ -80,16 +80,23 @@ static void pts_hup(struct hyper_event *de, int efd, struct hyper_exec *exec)
 	hyper_release_exec(exec, pod);
 }
 
+static void stdin_hup(struct hyper_event *de, int efd)
+{
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdinev);
+	fprintf(stdout, "%s\n", __func__);
+	return pts_hup(de, efd, exec);
+}
+
 static void stdout_hup(struct hyper_event *de, int efd)
 {
-	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdoutev);
 	fprintf(stdout, "%s\n", __func__);
 	return pts_hup(de, efd, exec);
 }
 
 static void stderr_hup(struct hyper_event *de, int efd)
 {
-	struct hyper_exec *exec = container_of(de, struct hyper_exec, errev);
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, stderrev);
 	fprintf(stdout, "%s\n", __func__);
 	return pts_hup(de, efd, exec);
 }
@@ -131,28 +138,33 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_
 	return 0;
 }
 
+struct hyper_event_ops in_ops = {
+	.hup		= stdin_hup,
+	.write		= hyper_event_write,
+	.wbuf_size	= 512,
+};
+
 static int stdout_loop(struct hyper_event *de, int efd)
 {
-	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdoutev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
 
 	return pts_loop(de, exec->seq, efd, exec);
 }
 
-struct hyper_event_ops pts_ops = {
+struct hyper_event_ops out_ops = {
 	.read		= stdout_loop,
 	.hup		= stdout_hup,
-	.write		= hyper_event_write,
-	.wbuf_size	= 512,
 	/* don't need read buff, the pts data will store in tty buffer */
+	/* don't need write buff, the stdout data is one way */
 };
 
 static int stderr_loop(struct hyper_event *de, int efd)
 {
-	struct hyper_exec *exec = container_of(de, struct hyper_exec, errev);
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, stderrev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->errseq);
 
-	return pts_loop(de, exec->errseq, efd, exec);
+	return pts_loop(de, exec->errseq ? exec->errseq : exec->seq, efd, exec);
 }
 
 struct hyper_event_ops err_ops = {
@@ -165,6 +177,7 @@ struct hyper_event_ops err_ops = {
 int hyper_setup_exec_tty(struct hyper_exec *e)
 {
 	int unlock = 0;
+	int ptymaster;
 	char ptmx[512], path[512];
 
 	if (e->seq == 0) {
@@ -179,7 +192,7 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 			return -1;
 		}
 		hyper_setfd_nonblock(errpipe[0]);
-		e->errev.fd = errpipe[0];
+		e->stderrev.fd = errpipe[0];
 		e->stderrfd = errpipe[1];
 	}
 
@@ -190,7 +203,8 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 			return -1;
 		}
 		hyper_setfd_nonblock(iopair[0]);
-		e->e.fd = iopair[0];
+		e->stdinev.fd = iopair[0];
+		e->stdoutev.fd = dup(iopair[0]);
 		e->ptyfd = iopair[1];
 		goto done;
 	}
@@ -212,18 +226,18 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 		return -1;
 	}
 
-	e->e.fd = open(ptmx, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
-	if (e->e.fd < 0) {
+	ptymaster = open(ptmx, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
+	if (ptymaster < 0) {
 		perror("open ptmx device for execcmd failed");
 		return -1;
 	}
 
-	if (ioctl(e->e.fd, TIOCSPTLCK, &unlock) < 0) {
+	if (ioctl(ptymaster, TIOCSPTLCK, &unlock) < 0) {
 		perror("ioctl unlock ptmx device failed");
 		return -1;
 	}
 
-	if (ioctl(e->e.fd, TIOCGPTN, &e->ptyno) < 0) {
+	if (ioctl(ptymaster, TIOCGPTN, &e->ptyno) < 0) {
 		perror("ioctl get execcmd pty device failed");
 		return -1;
 	}
@@ -236,13 +250,18 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	e->ptyfd = open(ptmx, O_RDWR | O_NOCTTY | O_CLOEXEC);
 	fprintf(stdout, "get pty device for exec %s\n", ptmx);
 
+	e->stdinev.fd = ptymaster;
+	e->stdoutev.fd = dup(ptymaster);
 done:
+
 	e->stdinfd = e->ptyfd;
 	e->stdoutfd = e->ptyfd;
-	if (e->errseq == 0)
+	if (e->errseq == 0) {
+		e->stderrev.fd = dup(e->stdoutev.fd);
 		e->stderrfd = e->ptyfd;
+	}
 	fprintf(stdout, "%s pts event %p, fd %d %d\n",
-		__func__, &e->e, e->e.fd, e->ptyfd);
+		__func__, &e->stdinev, ptymaster, e->ptyfd);
 	return 0;
 }
 
@@ -284,23 +303,27 @@ out:
 int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 {
 	fprintf(stdout, "hyper_init_event container pts event %p, ops %p, fd %d\n",
-		&exec->e, &pts_ops, exec->e.fd);
+		&exec->stdinev, &in_ops, exec->stdinev.fd);
 
 	if (exec->seq == 0)
 		return 0;
 
-	if (hyper_init_event(&exec->e, &pts_ops, pod) < 0 ||
-	    hyper_add_event(ctl.efd, &exec->e, EPOLLIN) < 0) {
-		fprintf(stderr, "add container pts master event failed\n");
+	if (hyper_init_event(&exec->stdinev, &in_ops, pod) < 0 ||
+	    hyper_add_event(ctl.efd, &exec->stdinev, EPOLLOUT) < 0) {
+		fprintf(stderr, "add container stdin event failed\n");
 		return -1;
 	}
 	exec->ref++;
 
-	if (exec->errseq == 0)
-		return 0;
+	if (hyper_init_event(&exec->stdoutev, &out_ops, pod) < 0 ||
+	    hyper_add_event(ctl.efd, &exec->stdoutev, EPOLLIN) < 0) {
+		fprintf(stderr, "add container stdout event failed\n");
+		return -1;
+	}
+	exec->ref++;
 
-	if (hyper_init_event(&exec->errev, &err_ops, pod) < 0 ||
-	    hyper_add_event(ctl.efd, &exec->errev, EPOLLIN) < 0) {
+	if (hyper_init_event(&exec->stderrev, &err_ops, pod) < 0 ||
+	    hyper_add_event(ctl.efd, &exec->stderrev, EPOLLIN) < 0) {
 		fprintf(stderr, "add container stderr event failed\n");
 		return -1;
 	}
@@ -557,7 +580,9 @@ close_tty:
 		close(exec->stdoutfd);
 	if (exec->stderrfd != exec->ptyfd)
 		close(exec->stderrfd);
-	close(exec->e.fd);
+	close(exec->stdinev.fd);
+	close(exec->stdoutev.fd);
+	close(exec->stderrev.fd);
 free_exec:
 	hyper_free_exec(exec);
 	goto out;
@@ -597,8 +622,9 @@ int hyper_release_exec(struct hyper_exec *exec,
 	/* exec has no pty or the pty user already exited */
 	fprintf(stdout, "last user of exec exit, release\n");
 
-	hyper_reset_event(&exec->e);
-	hyper_reset_event(&exec->errev);
+	hyper_reset_event(&exec->stdinev);
+	hyper_reset_event(&exec->stdoutev);
+	hyper_reset_event(&exec->stderrev);
 
 	list_del_init(&exec->list);
 
