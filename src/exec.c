@@ -174,6 +174,41 @@ struct hyper_event_ops err_ops = {
 	/* don't need write buff, the stderr data is one way */
 };
 
+static int hyper_setup_exec_notty(struct hyper_exec *e)
+{
+	if (e->errseq == 0)
+		return -1;
+
+	int inpipe[2];
+	if (pipe2(inpipe, O_CLOEXEC) < 0) {
+		fprintf(stderr, "creating stderr pipe failed\n");
+		return -1;
+	}
+	hyper_setfd_nonblock(inpipe[1]);
+	e->stdinev.fd = inpipe[1];
+	e->stdinfd = inpipe[0];
+
+	int outpipe[2];
+	if (pipe2(outpipe, O_CLOEXEC) < 0) {
+		fprintf(stderr, "creating stderr pipe failed\n");
+		return -1;
+	}
+	hyper_setfd_nonblock(outpipe[0]);
+	e->stdoutev.fd = outpipe[0];
+	e->stdoutfd = outpipe[1];
+
+	int errpipe[2];
+	if (pipe2(errpipe, O_CLOEXEC) < 0) {
+		fprintf(stderr, "creating stderr pipe failed\n");
+		return -1;
+	}
+	hyper_setfd_nonblock(errpipe[0]);
+	e->stderrev.fd = errpipe[0];
+	e->stderrfd = errpipe[1];
+
+	return 0;
+}
+
 int hyper_setup_exec_tty(struct hyper_exec *e)
 {
 	int unlock = 0;
@@ -185,6 +220,10 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 		goto done;
 	}
 
+	if (!e->tty) { // don't use tty for stdio
+		return hyper_setup_exec_notty(e);
+	}
+
 	if (e->errseq > 0) {
 		int errpipe[2];
 		if (pipe2(errpipe, O_CLOEXEC) < 0) {
@@ -194,19 +233,6 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 		hyper_setfd_nonblock(errpipe[0]);
 		e->stderrev.fd = errpipe[0];
 		e->stderrfd = errpipe[1];
-	}
-
-	if (!e->tty) { // don't use tty for stdio
-		int iopair[2];
-		if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, iopair) < 0) {
-			fprintf(stderr, "creating stdio pair failed\n");
-			return -1;
-		}
-		hyper_setfd_nonblock(iopair[0]);
-		e->stdinev.fd = iopair[0];
-		e->stdoutev.fd = dup(iopair[0]);
-		e->ptyfd = iopair[1];
-		goto done;
 	}
 
 	if (e->id) {
