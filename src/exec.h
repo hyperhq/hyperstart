@@ -18,7 +18,9 @@ struct hyper_exec {
 	int			ptyno;
 	int			init;
 	int			ptyfd;
-	int			errfd;
+	int			stdinfd;
+	int			stdoutfd;
+	int			stderrfd;
 	uint8_t			code;
 	uint8_t			exit;
 	uint8_t			ref;

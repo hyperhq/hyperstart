@@ -188,7 +188,7 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 		}
 		hyper_setfd_nonblock(errpipe[0]);
 		e->errev.fd = errpipe[0];
-		e->errfd = errpipe[1];
+		e->stderrfd = errpipe[1];
 	}
 
 	if (!e->tty) { // don't use tty for stdio
@@ -245,8 +245,10 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	fprintf(stdout, "get pty device for exec %s\n", ptmx);
 
 done:
+	e->stdinfd = e->ptyfd;
+	e->stdoutfd = e->ptyfd;
 	if (e->errseq == 0)
-		e->errfd = e->ptyfd;
+		e->stderrfd = e->ptyfd;
 	fprintf(stdout, "%s pts event %p, fd %d %d\n",
 		__func__, &e->e, e->e.fd, e->ptyfd);
 	return 0;
@@ -254,14 +256,12 @@ done:
 
 int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 {
-	int fd = -1, ret = -1;
+	int ret = -1;
 
 	fprintf(stdout, "%s\n", __func__);
 	setsid();
 
-	fd = e->ptyfd;
-
-	if (e->tty && (ioctl(fd, TIOCSCTTY, NULL) < 0)) {
+	if (e->tty && (ioctl(e->ptyfd, TIOCSCTTY, NULL) < 0)) {
 		perror("ioctl pty device for execcmd failed");
 		goto out;
 	}
@@ -269,25 +269,23 @@ int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 	fflush(stdout);
 	hyper_send_type(to, READY);
 
-	if (dup2(fd, STDIN_FILENO) < 0) {
+	if (dup2(e->stdinfd, STDIN_FILENO) < 0) {
 		perror("dup tty device to stdin failed");
 		goto out;
 	}
 
-	if (dup2(fd, STDOUT_FILENO) < 0) {
+	if (dup2(e->stdoutfd, STDOUT_FILENO) < 0) {
 		perror("dup tty device to stdout failed");
 		goto out;
 	}
 
-	if (dup2(e->errfd, STDERR_FILENO) < 0) {
+	if (dup2(e->stderrfd, STDERR_FILENO) < 0) {
 		perror("dup err pipe to stderr failed");
 		goto out;
 	}
 
 	ret = 0;
 out:
-	close(fd);
-
 	return ret;
 }
 
@@ -561,8 +559,12 @@ out:
 	return ret;
 close_tty:
 	close(exec->ptyfd);
-	if (exec->errfd != exec->ptyfd)
-		close(exec->errfd);
+	if (exec->stdinfd != exec->ptyfd)
+		close(exec->stdinfd);
+	if (exec->stdoutfd != exec->ptyfd)
+		close(exec->stdoutfd);
+	if (exec->stderrfd != exec->ptyfd)
+		close(exec->stderrfd);
 	close(exec->e.fd);
 free_exec:
 	hyper_free_exec(exec);
@@ -688,9 +690,15 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 
 	close(exec->ptyfd);
 	exec->ptyfd = -1;
-	if (exec->errfd != exec->ptyfd)
-		close(exec->errfd);
-	exec->errfd = -1;
+	if (exec->stdinfd != exec->ptyfd)
+		close(exec->stdinfd);
+	exec->stdinfd = -1;
+	if (exec->stdoutfd != exec->ptyfd)
+		close(exec->stdoutfd);
+	exec->stdoutfd = -1;
+	if (exec->stderrfd != exec->ptyfd)
+		close(exec->stderrfd);
+	exec->stderrfd = -1;
 
 	hyper_release_exec(exec, pod);
 
