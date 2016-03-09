@@ -67,21 +67,11 @@ static int hyper_send_exec_code(struct hyper_exec *exec, int block) {
 	return send_exec_finishing(exec->seq, 13, exec->code, block);
 }
 
-static void pts_hup(struct hyper_event *de, int efd, int out)
+static void pts_hup(struct hyper_event *de, int efd, struct hyper_exec *exec)
 {
-	struct hyper_exec *exec;
 	struct hyper_pod *pod = de->ptr;
-	uint64_t seq;
 
-	if (out) {
-		exec = container_of(de, struct hyper_exec, e);
-		seq = exec->seq;
-	} else {
-		exec = container_of(de, struct hyper_exec, errev);
-		seq = exec->errseq;
-	}
-
-	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, seq);
+	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
 
 	hyper_event_hup(de, efd);
 
@@ -92,17 +82,19 @@ static void pts_hup(struct hyper_event *de, int efd, int out)
 
 static void stdout_hup(struct hyper_event *de, int efd)
 {
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
 	fprintf(stdout, "%s\n", __func__);
-	return pts_hup(de, efd, 1);
+	return pts_hup(de, efd, exec);
 }
 
 static void stderr_hup(struct hyper_event *de, int efd)
 {
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, errev);
 	fprintf(stdout, "%s\n", __func__);
-	return pts_hup(de, efd, 0);
+	return pts_hup(de, efd, exec);
 }
 
-static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, int out)
+static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_exec *exec)
 {
 	int size = -1;
 	struct hyper_buf *buf = &ctl.tty.wbuf;
@@ -122,7 +114,7 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, int out)
 			break;
 		}
 		if (size == 0) { // eof
-			pts_hup(de, efd, out);
+			pts_hup(de, efd, exec);
 			break;
 		}
 
@@ -144,7 +136,7 @@ static int stdout_loop(struct hyper_event *de, int efd)
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
 
-	return pts_loop(de, exec->seq, efd, 1);
+	return pts_loop(de, exec->seq, efd, exec);
 }
 
 struct hyper_event_ops pts_ops = {
@@ -160,7 +152,7 @@ static int stderr_loop(struct hyper_event *de, int efd)
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, errev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->errseq);
 
-	return pts_loop(de, exec->errseq, efd, 0);
+	return pts_loop(de, exec->errseq, efd, exec);
 }
 
 struct hyper_event_ops err_ops = {
