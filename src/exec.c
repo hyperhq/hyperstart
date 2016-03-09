@@ -175,8 +175,10 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	int unlock = 0;
 	char ptmx[512], path[512];
 
-	if (e->seq == 0)
-		return 0;
+	if (e->seq == 0) {
+		e->ptyfd = open("/dev/null", O_RDWR | O_NOCTTY | O_CLOEXEC);
+		goto done;
+	}
 
 	if (e->errseq > 0) {
 		int errpipe[2];
@@ -251,20 +253,11 @@ done:
 int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 {
 	int fd = -1, ret = -1;
-	char pty[128];
 
 	fprintf(stdout, "%s\n", __func__);
 	setsid();
 
-	if (e->seq) {
-		fd = e->ptyfd;
-	} else {
-		if (sprintf(pty, "/dev/null") < 0) {
-			perror("get pts device name failed");
-			goto out;
-		}
-		fd = open(pty, O_RDWR | O_NOCTTY);
-	}
+	fd = e->ptyfd;
 
 	if (fd < 0) {
 		perror("open pty device for execcmd failed");
