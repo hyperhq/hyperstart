@@ -261,11 +261,6 @@ int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 
 	fd = e->ptyfd;
 
-	if (fd < 0) {
-		perror("open pty device for execcmd failed");
-		goto out;
-	}
-
 	if (e->tty && (ioctl(fd, TIOCSCTTY, NULL) < 0)) {
 		perror("ioctl pty device for execcmd failed");
 		goto out;
@@ -284,16 +279,9 @@ int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 		goto out;
 	}
 
-	if (e->errseq > 0) {
-		if (dup2(e->errfd, STDERR_FILENO) < 0) {
-			perror("dup err pipe to stderr failed");
-			goto out;
-		}
-	} else {
-		if (dup2(fd, STDERR_FILENO) < 0) {
-			perror("dup tty device to stderr failed");
-			goto out;
-		}
+	if (dup2(e->errfd, STDERR_FILENO) < 0) {
+		perror("dup err pipe to stderr failed");
+		goto out;
 	}
 
 	ret = 0;
