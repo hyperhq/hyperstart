@@ -67,21 +67,11 @@ static int hyper_send_exec_code(struct hyper_exec *exec, int block) {
 	return send_exec_finishing(exec->seq, 13, exec->code, block);
 }
 
-static void pts_hup(struct hyper_event *de, int efd, int out)
+static void pts_hup(struct hyper_event *de, int efd, struct hyper_exec *exec)
 {
-	struct hyper_exec *exec;
 	struct hyper_pod *pod = de->ptr;
-	uint64_t seq;
 
-	if (out) {
-		exec = container_of(de, struct hyper_exec, e);
-		seq = exec->seq;
-	} else {
-		exec = container_of(de, struct hyper_exec, errev);
-		seq = exec->errseq;
-	}
-
-	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, seq);
+	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
 
 	hyper_event_hup(de, efd);
 
@@ -90,19 +80,28 @@ static void pts_hup(struct hyper_event *de, int efd, int out)
 	hyper_release_exec(exec, pod);
 }
 
+static void stdin_hup(struct hyper_event *de, int efd)
+{
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdinev);
+	fprintf(stdout, "%s\n", __func__);
+	return pts_hup(de, efd, exec);
+}
+
 static void stdout_hup(struct hyper_event *de, int efd)
 {
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdoutev);
 	fprintf(stdout, "%s\n", __func__);
-	return pts_hup(de, efd, 1);
+	return pts_hup(de, efd, exec);
 }
 
 static void stderr_hup(struct hyper_event *de, int efd)
 {
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, stderrev);
 	fprintf(stdout, "%s\n", __func__);
-	return pts_hup(de, efd, 0);
+	return pts_hup(de, efd, exec);
 }
 
-static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, int out)
+static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_exec *exec)
 {
 	int size = -1;
 	struct hyper_buf *buf = &ctl.tty.wbuf;
@@ -122,7 +121,7 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, int out)
 			break;
 		}
 		if (size == 0) { // eof
-			pts_hup(de, efd, out);
+			pts_hup(de, efd, exec);
 			break;
 		}
 
@@ -139,28 +138,33 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, int out)
 	return 0;
 }
 
-static int stdout_loop(struct hyper_event *de, int efd)
-{
-	struct hyper_exec *exec = container_of(de, struct hyper_exec, e);
-	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
-
-	return pts_loop(de, exec->seq, efd, 1);
-}
-
-struct hyper_event_ops pts_ops = {
-	.read		= stdout_loop,
-	.hup		= stdout_hup,
+struct hyper_event_ops in_ops = {
+	.hup		= stdin_hup,
 	.write		= hyper_event_write,
 	.wbuf_size	= 512,
+};
+
+static int stdout_loop(struct hyper_event *de, int efd)
+{
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdoutev);
+	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
+
+	return pts_loop(de, exec->seq, efd, exec);
+}
+
+struct hyper_event_ops out_ops = {
+	.read		= stdout_loop,
+	.hup		= stdout_hup,
 	/* don't need read buff, the pts data will store in tty buffer */
+	/* don't need write buff, the stdout data is one way */
 };
 
 static int stderr_loop(struct hyper_event *de, int efd)
 {
-	struct hyper_exec *exec = container_of(de, struct hyper_exec, errev);
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, stderrev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->errseq);
 
-	return pts_loop(de, exec->errseq, efd, 0);
+	return pts_loop(de, exec->errseq ? exec->errseq : exec->seq, efd, exec);
 }
 
 struct hyper_event_ops err_ops = {
@@ -170,13 +174,55 @@ struct hyper_event_ops err_ops = {
 	/* don't need write buff, the stderr data is one way */
 };
 
+static int hyper_setup_exec_notty(struct hyper_exec *e)
+{
+	if (e->errseq == 0)
+		return -1;
+
+	int inpipe[2];
+	if (pipe2(inpipe, O_CLOEXEC) < 0) {
+		fprintf(stderr, "creating stderr pipe failed\n");
+		return -1;
+	}
+	hyper_setfd_nonblock(inpipe[1]);
+	e->stdinev.fd = inpipe[1];
+	e->stdinfd = inpipe[0];
+
+	int outpipe[2];
+	if (pipe2(outpipe, O_CLOEXEC) < 0) {
+		fprintf(stderr, "creating stderr pipe failed\n");
+		return -1;
+	}
+	hyper_setfd_nonblock(outpipe[0]);
+	e->stdoutev.fd = outpipe[0];
+	e->stdoutfd = outpipe[1];
+
+	int errpipe[2];
+	if (pipe2(errpipe, O_CLOEXEC) < 0) {
+		fprintf(stderr, "creating stderr pipe failed\n");
+		return -1;
+	}
+	hyper_setfd_nonblock(errpipe[0]);
+	e->stderrev.fd = errpipe[0];
+	e->stderrfd = errpipe[1];
+
+	return 0;
+}
+
 int hyper_setup_exec_tty(struct hyper_exec *e)
 {
 	int unlock = 0;
+	int ptymaster;
 	char ptmx[512], path[512];
 
-	if (e->seq == 0)
-		return 0;
+	if (e->seq == 0) {
+		e->ptyfd = open("/dev/null", O_RDWR | O_NOCTTY | O_CLOEXEC);
+		goto done;
+	}
+
+	if (!e->tty) { // don't use tty for stdio
+		return hyper_setup_exec_notty(e);
+	}
 
 	if (e->errseq > 0) {
 		int errpipe[2];
@@ -185,20 +231,8 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 			return -1;
 		}
 		hyper_setfd_nonblock(errpipe[0]);
-		e->errev.fd = errpipe[0];
-		e->errfd = errpipe[1];
-	}
-
-	if (!e->tty) { // don't use tty for stdio
-		int iopair[2];
-		if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, iopair) < 0) {
-			fprintf(stderr, "creating stdio pair failed\n");
-			return -1;
-		}
-		hyper_setfd_nonblock(iopair[0]);
-		e->e.fd = iopair[0];
-		e->ptyfd = iopair[1];
-		goto done;
+		e->stderrev.fd = errpipe[0];
+		e->stderrfd = errpipe[1];
 	}
 
 	if (e->id) {
@@ -218,18 +252,18 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 		return -1;
 	}
 
-	e->e.fd = open(ptmx, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
-	if (e->e.fd < 0) {
+	ptymaster = open(ptmx, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
+	if (ptymaster < 0) {
 		perror("open ptmx device for execcmd failed");
 		return -1;
 	}
 
-	if (ioctl(e->e.fd, TIOCSPTLCK, &unlock) < 0) {
+	if (ioctl(ptymaster, TIOCSPTLCK, &unlock) < 0) {
 		perror("ioctl unlock ptmx device failed");
 		return -1;
 	}
 
-	if (ioctl(e->e.fd, TIOCGPTN, &e->ptyno) < 0) {
+	if (ioctl(ptymaster, TIOCGPTN, &e->ptyno) < 0) {
 		perror("ioctl get execcmd pty device failed");
 		return -1;
 	}
@@ -242,36 +276,29 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	e->ptyfd = open(ptmx, O_RDWR | O_NOCTTY | O_CLOEXEC);
 	fprintf(stdout, "get pty device for exec %s\n", ptmx);
 
+	e->stdinev.fd = ptymaster;
+	e->stdoutev.fd = dup(ptymaster);
 done:
+
+	e->stdinfd = e->ptyfd;
+	e->stdoutfd = e->ptyfd;
+	if (e->errseq == 0) {
+		e->stderrev.fd = dup(e->stdoutev.fd);
+		e->stderrfd = e->ptyfd;
+	}
 	fprintf(stdout, "%s pts event %p, fd %d %d\n",
-		__func__, &e->e, e->e.fd, e->ptyfd);
+		__func__, &e->stdinev, ptymaster, e->ptyfd);
 	return 0;
 }
 
 int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 {
-	int fd = -1, ret = -1;
-	char pty[128];
+	int ret = -1;
 
 	fprintf(stdout, "%s\n", __func__);
 	setsid();
 
-	if (e->seq) {
-		fd = e->ptyfd;
-	} else {
-		if (sprintf(pty, "/dev/null") < 0) {
-			perror("get pts device name failed");
-			goto out;
-		}
-		fd = open(pty, O_RDWR | O_NOCTTY);
-	}
-
-	if (fd < 0) {
-		perror("open pty device for execcmd failed");
-		goto out;
-	}
-
-	if (e->tty && (ioctl(fd, TIOCSCTTY, NULL) < 0)) {
+	if (e->tty && (ioctl(e->ptyfd, TIOCSCTTY, NULL) < 0)) {
 		perror("ioctl pty device for execcmd failed");
 		goto out;
 	}
@@ -279,55 +306,50 @@ int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 	fflush(stdout);
 	hyper_send_type(to, READY);
 
-	if (dup2(fd, STDIN_FILENO) < 0) {
+	if (dup2(e->stdinfd, STDIN_FILENO) < 0) {
 		perror("dup tty device to stdin failed");
 		goto out;
 	}
 
-	if (dup2(fd, STDOUT_FILENO) < 0) {
+	if (dup2(e->stdoutfd, STDOUT_FILENO) < 0) {
 		perror("dup tty device to stdout failed");
 		goto out;
 	}
 
-	if (e->errseq > 0) {
-		if (dup2(e->errfd, STDERR_FILENO) < 0) {
-			perror("dup err pipe to stderr failed");
-			goto out;
-		}
-	} else {
-		if (dup2(fd, STDERR_FILENO) < 0) {
-			perror("dup tty device to stderr failed");
-			goto out;
-		}
+	if (dup2(e->stderrfd, STDERR_FILENO) < 0) {
+		perror("dup err pipe to stderr failed");
+		goto out;
 	}
 
 	ret = 0;
 out:
-	close(fd);
-
 	return ret;
 }
 
 int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 {
 	fprintf(stdout, "hyper_init_event container pts event %p, ops %p, fd %d\n",
-		&exec->e, &pts_ops, exec->e.fd);
+		&exec->stdinev, &in_ops, exec->stdinev.fd);
 
 	if (exec->seq == 0)
 		return 0;
 
-	if (hyper_init_event(&exec->e, &pts_ops, pod) < 0 ||
-	    hyper_add_event(ctl.efd, &exec->e, EPOLLIN) < 0) {
-		fprintf(stderr, "add container pts master event failed\n");
+	if (hyper_init_event(&exec->stdinev, &in_ops, pod) < 0 ||
+	    hyper_add_event(ctl.efd, &exec->stdinev, EPOLLOUT) < 0) {
+		fprintf(stderr, "add container stdin event failed\n");
 		return -1;
 	}
 	exec->ref++;
 
-	if (exec->errseq == 0)
-		return 0;
+	if (hyper_init_event(&exec->stdoutev, &out_ops, pod) < 0 ||
+	    hyper_add_event(ctl.efd, &exec->stdoutev, EPOLLIN) < 0) {
+		fprintf(stderr, "add container stdout event failed\n");
+		return -1;
+	}
+	exec->ref++;
 
-	if (hyper_init_event(&exec->errev, &err_ops, pod) < 0 ||
-	    hyper_add_event(ctl.efd, &exec->errev, EPOLLIN) < 0) {
+	if (hyper_init_event(&exec->stderrev, &err_ops, pod) < 0 ||
+	    hyper_add_event(ctl.efd, &exec->stderrev, EPOLLIN) < 0) {
 		fprintf(stderr, "add container stderr event failed\n");
 		return -1;
 	}
@@ -578,8 +600,15 @@ out:
 	return ret;
 close_tty:
 	close(exec->ptyfd);
-	close(exec->errfd);
-	close(exec->e.fd);
+	if (exec->stdinfd != exec->ptyfd)
+		close(exec->stdinfd);
+	if (exec->stdoutfd != exec->ptyfd)
+		close(exec->stdoutfd);
+	if (exec->stderrfd != exec->ptyfd)
+		close(exec->stderrfd);
+	close(exec->stdinev.fd);
+	close(exec->stdoutev.fd);
+	close(exec->stderrev.fd);
 free_exec:
 	hyper_free_exec(exec);
 	goto out;
@@ -619,8 +648,9 @@ int hyper_release_exec(struct hyper_exec *exec,
 	/* exec has no pty or the pty user already exited */
 	fprintf(stdout, "last user of exec exit, release\n");
 
-	hyper_reset_event(&exec->e);
-	hyper_reset_event(&exec->errev);
+	hyper_reset_event(&exec->stdinev);
+	hyper_reset_event(&exec->stdoutev);
+	hyper_reset_event(&exec->stderrev);
 
 	list_del_init(&exec->list);
 
@@ -704,8 +734,15 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 
 	close(exec->ptyfd);
 	exec->ptyfd = -1;
-	close(exec->errfd);
-	exec->errfd = -1;
+	if (exec->stdinfd != exec->ptyfd)
+		close(exec->stdinfd);
+	exec->stdinfd = -1;
+	if (exec->stdoutfd != exec->ptyfd)
+		close(exec->stdoutfd);
+	exec->stdoutfd = -1;
+	if (exec->stderrfd != exec->ptyfd)
+		close(exec->stderrfd);
+	exec->stderrfd = -1;
 
 	hyper_release_exec(exec, pod);
 

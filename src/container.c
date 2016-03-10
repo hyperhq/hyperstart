@@ -567,8 +567,9 @@ fail:
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
 	close(container->ns);
-	hyper_reset_event(&container->exec.e);
-	hyper_reset_event(&container->exec.errev);
+	hyper_reset_event(&container->exec.stdinev);
+	hyper_reset_event(&container->exec.stdoutev);
+	hyper_reset_event(&container->exec.stderrev);
 	container->ns = -1;
 	fprintf(stdout, "container %s init exit code %d\n", container->id, -1);
 	container->exec.code = -1;
