@@ -1029,6 +1029,7 @@ realloc:
 		goto out;
 	}
 
+	exec->tty = 1;
 	exec->ptyfd = -1;
 	exec->stdinfd = -1;
 	exec->stdoutfd = -1;
