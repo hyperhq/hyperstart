@@ -75,8 +75,6 @@ static void pts_hup(struct hyper_event *de, int efd, struct hyper_exec *exec)
 
 	hyper_event_hup(de, efd);
 
-	hyper_send_exec_eof(exec, 0);
-
 	hyper_release_exec(exec, pod);
 }
 
@@ -138,9 +136,22 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_
 	return 0;
 }
 
+static int write_to_stdin(struct hyper_event *de, int efd)
+{
+	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdinev);
+	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
+
+	int ret = hyper_event_write(de, efd);
+
+	if (ret >= 0 && de->wbuf.get == 0 && exec->close_stdin_request)
+		pts_hup(de, efd, exec);
+
+	return ret;
+}
+
 struct hyper_event_ops in_ops = {
 	.hup		= stdin_hup,
-	.write		= hyper_event_write,
+	.write		= write_to_stdin,
 	.wbuf_size	= 512,
 };
 
@@ -653,6 +664,8 @@ int hyper_release_exec(struct hyper_exec *exec,
 	hyper_reset_event(&exec->stderrev);
 
 	list_del_init(&exec->list);
+
+	hyper_send_exec_eof(exec, 0);
 
 	hyper_send_exec_code(exec, 0);
 

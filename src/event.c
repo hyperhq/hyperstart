@@ -188,7 +188,7 @@ int hyper_event_read(struct hyper_event *de, int efd)
 	return 0;
 }
 
-int hyper_event_write(struct hyper_event *de)
+int hyper_event_write(struct hyper_event *de, int efd)
 {
 	struct hyper_buf *buf = &de->wbuf;
 	uint32_t len = 0;
@@ -246,7 +246,7 @@ int hyper_handle_event(int efd, struct epoll_event *event)
 	if (event->events & EPOLLOUT) {
 		fprintf(stdout, "%s event EPOLLOUT, de %p, fd %d, %p\n",
 			__func__, de, de->fd, de->ops);
-		if (de->ops->write && de->ops->write(de) < 0)
+		if (de->ops->write && de->ops->write(de, efd) < 0)
 			return -1;
 	}
 
