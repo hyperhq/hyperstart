@@ -75,8 +75,6 @@ static void pts_hup(struct hyper_event *de, int efd, struct hyper_exec *exec)
 
 	hyper_event_hup(de, efd);
 
-	hyper_send_exec_eof(exec, 0);
-
 	hyper_release_exec(exec, pod);
 }
 
@@ -653,6 +651,8 @@ int hyper_release_exec(struct hyper_exec *exec,
 	hyper_reset_event(&exec->stderrev);
 
 	list_del_init(&exec->list);
+
+	hyper_send_exec_eof(exec, 0);
 
 	hyper_send_exec_code(exec, 0);
 
