@@ -1054,7 +1054,7 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 	dprintf(stdout, "find exec %s pid %d, seq is %" PRIu64 "\n",
 		exec->id ? exec->id : "pod", exec->pid, exec->seq);
 	// if exec is exited, the event fd of exec is invalid. don't accept any input.
-	if (exec->exit) {
+	if (exec->exit || exec->close_stdin_request) {
 		fprintf(stdout, "exec seq %" PRIu64 " exited, don't accept any input\n", exec->seq);
 		return 0;
 	}
@@ -1069,6 +1069,16 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 	 * of the tty buff. */
 	if (size > (len - 12))
 		size = (len - 12);
+
+	/* size == 0 means we had received eof */
+	if (size == 0 && !exec->tty) {
+		exec->close_stdin_request = 1;
+		/* we can't hup the stdinev here, force hup on next write */
+		if (hyper_modify_event(ctl.efd, &exec->stdinev, EPOLLOUT) < 0) {
+			fprintf(stderr, "modify exec pts event to in & out failed\n");
+			return -1;
+		}
+	}
 
 	if (size > 0) {
 		memcpy(wbuf->data + wbuf->get, rbuf->data + 12, size);

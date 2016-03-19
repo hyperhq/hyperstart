@@ -22,6 +22,7 @@ struct hyper_exec {
 	int			stdinfd;
 	int			stdoutfd;
 	int			stderrfd;
+	uint8_t			close_stdin_request;
 	uint8_t			code;
 	uint8_t			exit;
 	uint8_t			ref;
