@@ -9,7 +9,7 @@ struct env;
 
 #ifdef WITH_DEBUG
 #define dprintf(fmt, ...) \
-	fprintf(stdout, fmt, ##_VA_ARGS__)
+	fprintf(stdout, fmt, ##__VA_ARGS__)
 #else
 #define dprintf(fmr, ...)
 #endif
