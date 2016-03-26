@@ -350,6 +350,10 @@ static int hyper_container_init(void *data)
 
 	// set additinal env before config so that the config can overwrite it
 	setenv("HOME", "/root", 1);
+	if (container->exec.tty)
+		setenv("TERM", "xterm", 1);
+	else
+		unsetenv("TERM");
 
 	if (hyper_setup_env(container->envs, container->envs_num) < 0) {
 		fprintf(stdout, "setup env failed\n");
