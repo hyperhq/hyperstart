@@ -430,21 +430,6 @@ int hyper_setfd_nonblock(int fd)
 	return flags;
 }
 
-int hyper_socketpair(int domain, int type, int protocol, int sv[2])
-{
-	if (socketpair(domain, type, protocol, sv) < 0) {
-		perror("socketpair failed");
-		return -1;
-	}
-
-	if (hyper_setfd_cloexec(sv[0]) < 0 ||
-	    hyper_setfd_cloexec(sv[1]) < 0) {
-		return -1;
-	}
-
-	return 0;
-}
-
 static void hyper_unmount_all(void)
 {
 	FILE *mtab;
