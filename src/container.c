@@ -316,6 +316,7 @@ static int hyper_rescan_scsi(void)
 
 struct hyper_container_arg {
 	struct hyper_container	*c;
+	struct hyper_pod	*pod;
 	int			ipcns;
 	int			utsns;
 	int			pipe[2];
@@ -347,6 +348,14 @@ static int hyper_container_init(void *data)
 		fprintf(stdout, "rescan scsi failed\n");
 		goto fail;
 	}
+
+	// set additinal env before config so that the config can overwrite it
+	setenv("HOME", "/root", 1);
+	setenv("HOSTNAME", arg->pod->hostname, 1);
+	if (container->exec.tty)
+		setenv("TERM", "xterm", 1);
+	else
+		unsetenv("TERM");
 
 	if (hyper_setup_env(container->envs, container->envs_num) < 0) {
 		fprintf(stdout, "setup env failed\n");
@@ -497,6 +506,7 @@ int hyper_start_container(struct hyper_container *container,
 	int stacksize = getpagesize() * 4;
 	struct hyper_container_arg arg = {
 		.c	= container,
+		.pod	= pod,
 		.utsns	= utsns,
 		.ipcns	= ipcns,
 		.pipe	= {-1, -1},
