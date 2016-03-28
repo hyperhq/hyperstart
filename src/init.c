@@ -424,7 +424,7 @@ static int hyper_setup_container(struct hyper_pod *pod)
 	void *stack;
 	int ret = -1;
 
-	if (hyper_socketpair(PF_UNIX, SOCK_STREAM, 0, arg.ctl_pipe) < 0) {
+	if (pipe2(arg.ctl_pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between hyper init and pod init failed");
 		goto out;
 	}
