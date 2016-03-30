@@ -233,6 +233,10 @@ static int container_parse_volumes(struct hyper_container *c, char *json, jsmnto
 				if (!json_token_streq(json, &toks[++i], "false"))
 					c->vols[j].readonly = 1;
 				fprintf(stdout, "volume %d readonly %d\n", j, c->vols[j].readonly);
+			} else if (json_token_streq(json, &toks[i], "dockerVolume")) {
+				if (!json_token_streq(json, &toks[++i], "false"))
+					c->vols[j].docker = 1;
+				fprintf(stdout, "volume %d docker volume %d\n", j, c->vols[j].docker);
 			} else {
 				fprintf(stdout, "get unknown section %s in voulmes\n",
 					json_token_str(json, &toks[i]));
@@ -298,6 +302,10 @@ static int container_parse_fsmap(struct hyper_container *c, char *json, jsmntok_
 				if (!json_token_streq(json, &toks[++i], "false"))
 					c->maps[j].readonly = 1;
 				fprintf(stdout, "maps %d readonly %d\n", j, c->maps[j].readonly);
+			} else if (json_token_streq(json, &toks[i], "dockerVolume")) {
+				if (!json_token_streq(json, &toks[++i], "false"))
+					c->maps[j].docker = 1;
+				fprintf(stdout, "maps %d docker volume %d\n", j, c->maps[j].docker);
 			} else {
 				fprintf(stdout, "in maps incorrect %s\n",
 					json_token_str(json, &toks[i]));
@@ -553,6 +561,12 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 			i += next;
 		} else if (json_token_streq(json, t, "restartPolicy") && t->size == 1) {
 			fprintf(stdout, "restart policy %s\n", json_token_str(json, &toks[++i]));
+			i++;
+		} else if (json_token_streq(json, t, "initialize") && t->size == 1) {
+			if (!json_token_streq(json, &toks[++i], "false")) {
+				c->initialize = 1;
+				fprintf(stdout, "need to initialize container\n");
+			}
 			i++;
 		} else {
 			fprintf(stdout, "get unknown section %s in container\n",

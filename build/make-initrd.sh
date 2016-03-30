@@ -4,6 +4,7 @@ rm -rf root
 mkdir root
 
 cp ../src/init ./root
+cp busybox ./root
 
 ldd ./root/init | while read line
 do

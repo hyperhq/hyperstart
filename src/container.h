@@ -14,12 +14,14 @@ struct volume {
 	char	*mountpoint;
 	char	*fstype;
 	int	readonly;
+	int	docker;
 };
 
 struct fsmap {
 	char	*source;
 	char	*path;
 	int	readonly;
+	int	docker;
 };
 
 struct sysctl {
@@ -43,6 +45,7 @@ struct hyper_container {
 	int			maps_num;
 	int			sys_num;
 	int			ns;
+	int			initialize;
 	uint32_t		code;
 	struct list_head	list;
 	struct hyper_exec	exec;

@@ -9,7 +9,9 @@
 #include <errno.h>
 #include <signal.h>
 #include <ctype.h>
+#include <unistd.h>
 #include <mntent.h>
+#include <sys/wait.h>
 #include <sys/mount.h>
 #include <sys/socket.h>
 #include <sys/reboot.h>
@@ -61,6 +63,39 @@ int hyper_list_dir(char *path)
 	}
 
 	free(list);
+	return 0;
+}
+
+int hyper_copy_dir(char *src, char *dest) {
+	int pid, status;
+
+	pid = fork();
+	if (pid < 0) {
+		perror("fail to fork to copy directory");
+		return -1;
+	} else if (pid > 0) {
+		if (waitpid(pid, &status, 0) <= 0) {
+			perror("waiting copy directroy finish failed");
+			return -1;
+		}
+		if (WIFEXITED(status)) {
+			int ret = WEXITSTATUS(status);
+			fprintf(stdout, "copy directroy exit normally, status %" PRIu8 "\n", ret);
+			if (ret == 0)
+				return 0;
+		}
+
+		fprintf(stderr, "copy directroy exit unexpectedly, status %" PRIu8 "\n", status);
+		return -1;
+	} else {
+		char cmd[512];
+		snprintf(cmd, sizeof(cmd), "tar zcf - -C %s . | tar zfx - -C %s", src, dest);
+		fprintf(stdout, "command for copy is %s\n", cmd);
+
+		execlp("/.oldroot/busybox", "sh", "-c", cmd, NULL);
+		perror("exec copy directroy command failed");
+	}
+
 	return 0;
 }
 
