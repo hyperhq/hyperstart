@@ -420,6 +420,10 @@ static int hyper_container_init(void *data)
 	}
 	/* reuse oldroot array */
 	sprintf(oldroot, "%s/%s/", root, container->rootfs);
+	if (mount(oldroot, oldroot, NULL, MS_BIND|MS_REC, NULL) < 0) {
+		perror("failed to bind rootfs");
+		goto fail;
+	}
 	/* pivot_root won't work, see
 	 * Documention/filesystem/ramfs-rootfs-initramfs.txt */
 	chroot(oldroot);
