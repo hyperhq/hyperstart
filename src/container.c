@@ -458,13 +458,13 @@ static int hyper_container_init(void *data)
 
 	chdir("/");
 
-	if (container_setup_volume(container) < 0) {
-		fprintf(stderr, "container sets up voulme failed\n");
+	if (container_setup_mount(container) < 0) {
+		fprintf(stderr, "container sets up mount failed\n");
 		goto fail;
 	}
 
-	if (container_setup_mount(container) < 0) {
-		fprintf(stderr, "container sets up mount failed\n");
+	if (container_setup_volume(container) < 0) {
+		fprintf(stderr, "container sets up voulme failed\n");
 		goto fail;
 	}
 
