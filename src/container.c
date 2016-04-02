@@ -39,7 +39,7 @@ static int container_setup_volume(struct hyper_container *container)
 		if (vol->scsiaddr)
 			hyper_find_sd("/.oldroot", vol->scsiaddr, &vol->device);
 
-		sprintf(dev, "/.oldroot/dev/%s", vol->device);
+		sprintf(dev, "/dev/%s", vol->device);
 		sprintf(path, "/tmp/%s", vol->mountpoint);
 		fprintf(stdout, "mount %s to %s, tmp path %s\n",
 			dev, vol->mountpoint, path);
