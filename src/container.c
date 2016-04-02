@@ -21,8 +21,29 @@
 
 static int container_populate_volume(char *src, char *dest)
 {
+	struct stat st;
+
 	fprintf(stdout, "populate volumes from %s to %s\n", src, dest);
 	/* FIXME: check if has data in volume, (except lost+found) */
+
+	if (stat(dest, &st) == 0) {
+		if (!S_ISDIR(st.st_mode)) {
+			fprintf(stderr, "the _data in volume %s is not directroy\n", dest);
+			return -1;
+		}
+
+		return 0;
+	}
+
+	if (errno != ENOENT) {
+		perror("access to volume failed\n");
+		return -1;
+	}
+
+	if (hyper_mkdir(dest) < 0) {
+		fprintf(stderr, "fail to create directroy %s\n", dest);
+		return -1;
+	}
 
 	return hyper_copy_dir(src, dest);
 }
@@ -34,6 +55,7 @@ static int container_setup_volume(struct hyper_container *container)
 	struct volume *vol;
 
 	for (i = 0; i < container->vols_num; i++) {
+		char volume[512];
 		vol = &container->vols[i];
 
 		if (vol->scsiaddr)
@@ -41,6 +63,8 @@ static int container_setup_volume(struct hyper_container *container)
 
 		sprintf(dev, "/dev/%s", vol->device);
 		sprintf(path, "/tmp/%s", vol->mountpoint);
+		sprintf(volume, "/%s/_data", path);
+
 		fprintf(stdout, "mount %s to %s, tmp path %s\n",
 			dev, vol->mountpoint, path);
 
@@ -55,18 +79,18 @@ static int container_setup_volume(struct hyper_container *container)
 		}
 
 		if (vol->docker && container->initialize &&
-		    (container_populate_volume(vol->mountpoint, path) < 0)) {
+		    (container_populate_volume(vol->mountpoint, volume) < 0)) {
 			fprintf(stderr, "fail to populate volume %s\n", vol->mountpoint);
 			return -1;
 		}
 
-		if (mount(path, vol->mountpoint, NULL, MS_BIND, NULL) < 0) {
+		if (mount(volume, vol->mountpoint, NULL, MS_BIND, NULL) < 0) {
 			perror("mount volume device faled");
 			return -1;
 		}
 
 		if (vol->readonly &&
-		    mount(path, vol->mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
+		    mount(volume, vol->mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
 			perror("mount fsmap faled");
 			return -1;
 		}
