@@ -143,7 +143,6 @@ int hyper_mkdir(char *hyper_path)
 		return -1;
 	}
 
-	fprintf(stdout, "create directory %s\n", path);
 	if (stat(path, &st) >= 0) {
 		if (S_ISDIR(st.st_mode))
 			return 0;
@@ -169,6 +168,7 @@ int hyper_mkdir(char *hyper_path)
 		*p = '/';
 	}
 
+	fprintf(stdout, "create directory %s\n", path);
 	if (mkdir(path, 0755) < 0 && errno != EEXIST)
 		return -1;
 
