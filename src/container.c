@@ -39,7 +39,7 @@ static int container_setup_volume(struct hyper_container *container)
 		if (vol->scsiaddr)
 			hyper_find_sd("/.oldroot", vol->scsiaddr, &vol->device);
 
-		sprintf(dev, "/.oldroot/dev/%s", vol->device);
+		sprintf(dev, "/dev/%s", vol->device);
 		sprintf(path, "/tmp/%s", vol->mountpoint);
 		fprintf(stdout, "mount %s to %s, tmp path %s\n",
 			dev, vol->mountpoint, path);
@@ -72,6 +72,47 @@ static int container_setup_volume(struct hyper_container *container)
 		}
 
 		umount(path);
+	}
+
+	for (i = 0; i < container->maps_num; i++) {
+		struct stat st;
+		char src[512];
+		struct fsmap *map = &container->maps[i];
+
+		sprintf(src, "/.oldroot/tmp/hyper/shared/%s", map->source);
+		fprintf(stdout, "mount %s to %s\n", src, map->path);
+
+		stat(src, &st);
+		if (st.st_mode & S_IFDIR) {
+			if (hyper_mkdir(map->path) < 0) {
+				perror("create map dir failed");
+				continue;
+			}
+
+			if (map->docker && container->initialize &&
+			    (container_populate_volume(map->path, src) < 0)) {
+				fprintf(stderr, "fail to populate volume %s\n", map->path);
+				continue;
+			}
+		} else {
+			int fd = open(map->path, O_CREAT|O_WRONLY, 0755);
+			if (fd < 0) {
+				perror("create map file failed");
+				continue;
+			}
+			close(fd);
+		}
+
+		if (mount(src, map->path, NULL, MS_BIND, NULL) < 0) {
+			perror("mount fsmap faled");
+			continue;
+		}
+
+		if (map->readonly == 0)
+			continue;
+
+		if (mount(src, map->path, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0)
+			perror("mount fsmap faled");
 	}
 
 	return 0;
@@ -113,9 +154,7 @@ static void container_unmount_oldroot(char *path)
 
 static int container_setup_mount(struct hyper_container *container)
 {
-	int i, fd;
 	char src[512];
-	struct fsmap *map;
 
 	hyper_mkdir("/proc");
 	hyper_mkdir("/sys");
@@ -157,47 +196,6 @@ static int container_setup_mount(struct hyper_container *container)
 		perror("remove /dev/ptmx failed");
 	if (symlink("/dev/pts/ptmx", "/dev/ptmx") < 0)
 		perror("link /dev/pts/ptmx to /dev/ptmx failed");
-
-	for (i = 0; i < container->maps_num; i++) {
-		struct stat st;
-
-		map = &container->maps[i];
-
-		sprintf(src, "/.oldroot/tmp/hyper/shared/%s", map->source);
-		fprintf(stdout, "mount %s to %s\n", src, map->path);
-
-		stat(src, &st);
-		if (st.st_mode & S_IFDIR) {
-			if (hyper_mkdir(map->path) < 0) {
-				perror("create map dir failed");
-				continue;
-			}
-
-			if (map->docker && container->initialize &&
-			    (container_populate_volume(map->path, src) < 0)) {
-				fprintf(stderr, "fail to populate volume %s\n", map->path);
-				continue;
-			}
-		} else {
-			fd = open(map->path, O_CREAT|O_WRONLY, 0755);
-			if (fd < 0) {
-				perror("create map file failed");
-				continue;
-			}
-			close(fd);
-		}
-
-		if (mount(src, map->path, NULL, MS_BIND, NULL) < 0) {
-			perror("mount fsmap faled");
-			continue;
-		}
-
-		if (map->readonly == 0)
-			continue;
-
-		if (mount(src, map->path, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0)
-			perror("mount fsmap faled");
-	}
 
 	return 0;
 }
@@ -460,13 +458,13 @@ static int hyper_container_init(void *data)
 
 	chdir("/");
 
-	if (container_setup_volume(container) < 0) {
-		fprintf(stderr, "container sets up voulme failed\n");
+	if (container_setup_mount(container) < 0) {
+		fprintf(stderr, "container sets up mount failed\n");
 		goto fail;
 	}
 
-	if (container_setup_mount(container) < 0) {
-		fprintf(stderr, "container sets up mount failed\n");
+	if (container_setup_volume(container) < 0) {
+		fprintf(stderr, "container sets up voulme failed\n");
 		goto fail;
 	}
 
