@@ -290,12 +290,8 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	e->stdinev.fd = ptymaster;
 	e->stdoutev.fd = dup(ptymaster);
 done:
-
-	e->stdinfd = e->ptyfd;
-	e->stdoutfd = e->ptyfd;
 	if (e->errseq == 0) {
 		e->stderrev.fd = dup(e->stdoutev.fd);
-		e->stderrfd = e->ptyfd;
 	}
 	fprintf(stdout, "%s pts event %p, fd %d %d\n",
 		__func__, &e->stdinev, ptymaster, e->ptyfd);
@@ -309,9 +305,19 @@ int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 	fprintf(stdout, "%s\n", __func__);
 	setsid();
 
-	if (e->tty && (ioctl(e->ptyfd, TIOCSCTTY, NULL) < 0)) {
-		perror("ioctl pty device for execcmd failed");
-		goto out;
+	if (e->tty) {
+		char ptmx[512];
+		sprintf(ptmx, "/dev/pts/%d", e->ptyno);
+		// reopen slave ptyfd for correcting the symlink path of the /dev/fd/1
+		e->ptyfd = open(ptmx, O_RDWR | O_CLOEXEC);
+		if (e->ptyfd < 0 || ioctl(e->ptyfd, TIOCSCTTY, NULL) < 0) {
+			perror("ioctl pty device for execcmd failed");
+			goto out;
+		}
+		e->stdinfd = e->ptyfd;
+		e->stdoutfd = e->ptyfd;
+		if (e->errseq == 0)
+			e->stderrfd = e->ptyfd;
 	}
 
 	fflush(stdout);
@@ -611,12 +617,9 @@ out:
 	return ret;
 close_tty:
 	close(exec->ptyfd);
-	if (exec->stdinfd != exec->ptyfd)
-		close(exec->stdinfd);
-	if (exec->stdoutfd != exec->ptyfd)
-		close(exec->stdoutfd);
-	if (exec->stderrfd != exec->ptyfd)
-		close(exec->stderrfd);
+	close(exec->stdinfd);
+	close(exec->stdoutfd);
+	close(exec->stderrfd);
 	close(exec->stdinev.fd);
 	close(exec->stdoutev.fd);
 	close(exec->stderrev.fd);
@@ -747,14 +750,11 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 
 	close(exec->ptyfd);
 	exec->ptyfd = -1;
-	if (exec->stdinfd != exec->ptyfd)
-		close(exec->stdinfd);
+	close(exec->stdinfd);
 	exec->stdinfd = -1;
-	if (exec->stdoutfd != exec->ptyfd)
-		close(exec->stdoutfd);
+	close(exec->stdoutfd);
 	exec->stdoutfd = -1;
-	if (exec->stderrfd != exec->ptyfd)
-		close(exec->stderrfd);
+	close(exec->stderrfd);
 	exec->stderrfd = -1;
 
 	hyper_release_exec(exec, pod);
