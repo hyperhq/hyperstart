@@ -318,6 +318,9 @@ int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 		e->stdoutfd = e->ptyfd;
 		if (e->errseq == 0)
 			e->stderrfd = e->ptyfd;
+		close(e->stdinev.fd);
+		close(e->stdoutev.fd);
+		close(e->stderrev.fd);
 	}
 
 	fflush(stdout);
