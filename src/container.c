@@ -19,6 +19,14 @@
 #include "parse.h"
 #include "syscall.h"
 
+static int container_populate_volume(char *src, char *dest)
+{
+	fprintf(stdout, "populate volumes from %s to %s\n", src, dest);
+	/* FIXME: check if has data in volume, (except lost+found) */
+
+	return hyper_copy_dir(src, dest);
+}
+
 static int container_setup_volume(struct hyper_container *container)
 {
 	int i;
@@ -43,6 +51,12 @@ static int container_setup_volume(struct hyper_container *container)
 
 		if (mount(dev, path, vol->fstype, 0, NULL) < 0) {
 			perror("mount volume device faled");
+			return -1;
+		}
+
+		if (vol->docker && container->initialize &&
+		    (container_populate_volume(vol->mountpoint, path) < 0)) {
+			fprintf(stderr, "fail to populate volume %s\n", vol->mountpoint);
 			return -1;
 		}
 
@@ -158,6 +172,12 @@ static int container_setup_mount(struct hyper_container *container)
 				perror("create map dir failed");
 				continue;
 			}
+
+			if (map->docker && container->initialize &&
+			    (container_populate_volume(map->path, src) < 0)) {
+				fprintf(stderr, "fail to populate volume %s\n", map->path);
+				continue;
+			}
 		} else {
 			fd = open(map->path, O_CREAT|O_WRONLY, 0755);
 			if (fd < 0) {
@@ -256,6 +276,11 @@ static int container_setup_dns(struct hyper_container *container)
 
 static int container_setup_workdir(struct hyper_container *container)
 {
+	if (container->initialize) {
+		// create workdir
+		hyper_mkdir(container->workdir);
+	}
+
 	if (container->workdir && chdir(container->workdir) < 0) {
 		perror("change work directory failed");
 		return -1;
