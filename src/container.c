@@ -351,7 +351,7 @@ static int hyper_container_init(void *data)
 {
 	struct hyper_container_arg *arg = data;
 	struct hyper_container *container = arg->c;
-	char root[512], oldroot[512];
+	char root[512], oldroot[512], rootfs[512];
 
 	fprintf(stdout, "%s in\n", __func__);
 	if (container->exec.argv == NULL) {
@@ -443,15 +443,20 @@ static int hyper_container_init(void *data)
 		perror("bind oldroot failed");
 		goto fail;
 	}
-	/* reuse oldroot array */
-	sprintf(oldroot, "%s/%s/", root, container->rootfs);
-	if (mount(oldroot, oldroot, NULL, MS_BIND|MS_REC, NULL) < 0) {
+
+	sprintf(rootfs, "%s/%s/", root, container->rootfs);
+	if (mount(rootfs, rootfs, NULL, MS_BIND|MS_REC, NULL) < 0) {
 		perror("failed to bind rootfs");
+		goto fail;
+	}
+	chdir(rootfs);
+	if (mount(rootfs, "/", NULL, MS_MOVE, NULL) < 0) {
+		perror("failed to move rootfs");
 		goto fail;
 	}
 	/* pivot_root won't work, see
 	 * Documention/filesystem/ramfs-rootfs-initramfs.txt */
-	chroot(oldroot);
+	chroot(".");
 
 	chdir("/");
 

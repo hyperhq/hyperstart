@@ -410,16 +410,7 @@ int hyper_enter_container(struct hyper_pod *pod,
 		goto out;
 	}
 
-	sprintf(path, "/tmp/hyper/%s/root/%s/", c->id, c->rootfs);
-	fprintf(stdout, "root directory for container is %s, exec %s\n",
-		path, exec->argv[0]);
-
 	/* TODO: wait for container finishing setup root */
-	if (chroot(path) < 0) {
-		perror("chroot for exec command failed");
-		goto out;
-	}
-
 	chdir("/");
 
 	ret = hyper_setup_env(c->envs, c->envs_num);

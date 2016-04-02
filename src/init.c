@@ -734,19 +734,13 @@ static int hyper_cmd_write_file(char *json, int length)
 		goto out;
 	}
 
+	/* TODO: wait for container finishing setup root */
 	if (setns(mntns, CLONE_NEWNS) < 0) {
 		perror("fail to enter container ns");
 		goto exit;
 	}
 
-	sprintf(path, "/tmp/hyper/%s/root/%s/", c->id, c->rootfs);
 	fprintf(stdout, "write file %s, data len %d\n", writter.file, writter.len);
-
-	/* TODO: wait for container finishing setup root */
-	if (chroot(path) < 0) {
-		perror("chroot for exec command failed");
-		goto exit;
-	}
 
 	fd = open(writter.file, O_CREAT| O_TRUNC| O_WRONLY, 0644);
 	if (fd < 0) {
@@ -796,18 +790,13 @@ static int hyper_do_cmd_read_file(void *data)
 	int len = 0, size, fd, ret = -1;
 	struct hyper_file_arg *arg = data;
 
+	/* TODO: wait for container finishing setup root */
 	if (setns(arg->mntns, CLONE_NEWNS) < 0) {
 		perror("fail to enter container ns");
 		goto err;
 	}
 
 	fprintf(stdout, "read file %s\n", arg->file);
-
-	/* TODO: wait for container finishing setup root */
-	if (chroot(arg->root) < 0) {
-		perror("chroot for exec command failed");
-		goto err;
-	}
 
 	if (stat(arg->file, &st) < 0) {
 		perror("fail to state file");
@@ -888,7 +877,6 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 	arg.file = reader.file;
 	arg.datalen = datalen;
 	arg.data = data;
-	sprintf(arg.root, "/tmp/hyper/%s/root/%s/", c->id, c->rootfs);
 
 	stack = malloc(stacksize);
 	if (stack == NULL) {
