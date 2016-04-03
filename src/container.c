@@ -277,7 +277,7 @@ static int container_setup_dns(struct hyper_container *container)
 {
 	int fd;
 	struct stat st;
-	char *src = "/.oldroot/tmp/hyper/resolv.conf";
+	char *src = "/tmp/hyper/resolv.conf";
 
 	if (stat(src, &st) < 0) {
 		if (errno == ENOENT) {
@@ -289,16 +289,16 @@ static int container_setup_dns(struct hyper_container *container)
 		return -1;
 	}
 
-	hyper_mkdir("/etc");
+	hyper_mkdir("./etc");
 
-	fd = open("/etc/resolv.conf", O_CREAT| O_WRONLY, 0644);
+	fd = open("./etc/resolv.conf", O_CREAT| O_WRONLY, 0644);
 	if (fd < 0) {
 		perror("create /etc/resolv.conf failed");
 		return -1;
 	}
 	close(fd);
 
-	if (mount(src, "/etc/resolv.conf", NULL, MS_BIND, NULL) < 0) {
+	if (mount(src, "./etc/resolv.conf", NULL, MS_BIND, NULL) < 0) {
 		perror("bind to /etc/resolv.conf failed");
 		return -1;
 	}
@@ -493,6 +493,11 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
+	if (container_setup_dns(container) < 0) {
+		fprintf(stderr, "container sets up dns failed\n");
+		goto fail;
+	}
+
 	// manipulate the rootfs of the container/namespace: move the prepared path @rootfs to /
 	if (mount(rootfs, "/", NULL, MS_MOVE, NULL) < 0) {
 		perror("failed to move rootfs");
@@ -506,11 +511,6 @@ static int hyper_container_init(void *data)
 
 	if (container_setup_sysctl(container) < 0) {
 		fprintf(stderr, "container sets up sysctl failed\n");
-		goto fail;
-	}
-
-	if (container_setup_dns(container) < 0) {
-		fprintf(stderr, "container sets up dns failed\n");
 		goto fail;
 	}
 
