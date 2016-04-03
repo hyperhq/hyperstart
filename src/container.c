@@ -78,9 +78,14 @@ static int container_setup_volume(struct hyper_container *container)
 			return -1;
 		}
 
-		if (vol->docker && container->initialize &&
-		    (container_populate_volume(vol->mountpoint, volume) < 0)) {
-			fprintf(stderr, "fail to populate volume %s\n", vol->mountpoint);
+		if (vol->docker) {
+			if (container->initialize &&
+			    (container_populate_volume(vol->mountpoint, volume) < 0)) {
+				fprintf(stderr, "fail to populate volume %s\n", vol->mountpoint);
+				return -1;
+			}
+		} else if (hyper_mkdir(volume) < 0) {
+			fprintf(stderr, "fail to create directroy %s\n", volume);
 			return -1;
 		}
 
