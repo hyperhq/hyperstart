@@ -151,40 +151,6 @@ static int container_setup_volume(struct hyper_container *container)
 	return 0;
 }
 
-static void container_unmount_oldroot(char *path)
-{
-	FILE *mtab;
-	struct mntent *mnt;
-	char *mntlist[128];
-	int i;
-	int n = 0;
-	char *filesys;
-
-	mtab = setmntent("/proc/mounts", "r");
-	if (mtab == NULL) {
-		fprintf(stderr, "cannot open /proc/mount");
-		return;
-	}
-
-	while (n < 128 && (mnt = getmntent(mtab))) {
-		if (strncmp(mnt->mnt_dir, path, strlen(path)))
-			continue;
-		mntlist[n++] = strdup(mnt->mnt_dir);
-	}
-
-	endmntent(mtab);
-
-	for (i = n - 1; i >= 0; i--) {
-		filesys = mntlist[i];
-		fprintf(stdout, "umount %s\n", filesys);
-		if (umount(mntlist[i]) < 0 && umount2(mntlist[i],
-			   MNT_DETACH) < 0) {
-			fprintf(stdout, "umount %s: %s failed\n",
-				filesys, strerror(errno));
-		}
-	}
-}
-
 static int container_setup_mount(struct hyper_container *container)
 {
 	char src[512];
@@ -383,7 +349,7 @@ static int hyper_container_init(void *data)
 {
 	struct hyper_container_arg *arg = data;
 	struct hyper_container *container = arg->c;
-	char root[512], oldroot[512], rootfs[512];
+	char root[512], rootfs[512];
 
 	fprintf(stdout, "%s in\n", __func__);
 	if (container->exec.argv == NULL) {
@@ -465,17 +431,6 @@ static int hyper_container_init(void *data)
 	fprintf(stdout, "root directory for container is %s/%s, init task %s\n",
 		root, container->rootfs, container->exec.argv[0]);
 
-	sprintf(oldroot, "%s/%s/.oldroot", root, container->rootfs);
-	if (hyper_mkdir(oldroot) < 0) {
-		perror("make oldroot directroy failed");
-		goto fail;
-	}
-
-	if (mount("/", oldroot, NULL, MS_BIND|MS_REC, NULL) < 0) {
-		perror("bind oldroot failed");
-		goto fail;
-	}
-
 	sprintf(rootfs, "%s/%s/", root, container->rootfs);
 	if (mount(rootfs, rootfs, NULL, MS_BIND|MS_REC, NULL) < 0) {
 		perror("failed to bind rootfs");
@@ -518,8 +473,6 @@ static int hyper_container_init(void *data)
 		fprintf(stderr, "container sets up work directory failed\n");
 		goto fail;
 	}
-
-	container_unmount_oldroot("/.oldroot");
 
 	fflush(stdout);
 
