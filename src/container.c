@@ -56,19 +56,21 @@ static int container_setup_volume(struct hyper_container *container)
 
 	for (i = 0; i < container->vols_num; i++) {
 		char volume[512];
+		char mountpoint[512];
 		vol = &container->vols[i];
 
 		if (vol->scsiaddr)
-			hyper_find_sd("/.oldroot", vol->scsiaddr, &vol->device);
+			hyper_find_sd("", vol->scsiaddr, &vol->device);
 
 		sprintf(dev, "/dev/%s", vol->device);
 		sprintf(path, "/tmp/%s", vol->mountpoint);
 		sprintf(volume, "/%s/_data", path);
+		sprintf(mountpoint, "./%s", vol->mountpoint);
 
 		fprintf(stdout, "mount %s to %s, tmp path %s\n",
 			dev, vol->mountpoint, path);
 
-		if (hyper_mkdir(path) < 0 || hyper_mkdir(vol->mountpoint) < 0) {
+		if (hyper_mkdir(path) < 0 || hyper_mkdir(mountpoint) < 0) {
 			perror("create volume dir failed");
 			return -1;
 		}
@@ -80,8 +82,8 @@ static int container_setup_volume(struct hyper_container *container)
 
 		if (vol->docker) {
 			if (container->initialize &&
-			    (container_populate_volume(vol->mountpoint, volume) < 0)) {
-				fprintf(stderr, "fail to populate volume %s\n", vol->mountpoint);
+			    (container_populate_volume(mountpoint, volume) < 0)) {
+				fprintf(stderr, "fail to populate volume %s\n", mountpoint);
 				return -1;
 			}
 		} else if (hyper_mkdir(volume) < 0) {
@@ -89,13 +91,13 @@ static int container_setup_volume(struct hyper_container *container)
 			return -1;
 		}
 
-		if (mount(volume, vol->mountpoint, NULL, MS_BIND, NULL) < 0) {
+		if (mount(volume, mountpoint, NULL, MS_BIND, NULL) < 0) {
 			perror("mount volume device faled");
 			return -1;
 		}
 
 		if (vol->readonly &&
-		    mount(volume, vol->mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
+		    mount(volume, mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
 			perror("mount fsmap faled");
 			return -1;
 		}
@@ -107,24 +109,26 @@ static int container_setup_volume(struct hyper_container *container)
 		struct stat st;
 		char src[512];
 		struct fsmap *map = &container->maps[i];
+		char mountpoint[512];
 
-		sprintf(src, "/.oldroot/tmp/hyper/shared/%s", map->source);
-		fprintf(stdout, "mount %s to %s\n", src, map->path);
+		sprintf(src, "/tmp/hyper/shared/%s", map->source);
+		sprintf(mountpoint, "./%s", map->path);
+		fprintf(stdout, "mount %s to %s\n", src, mountpoint);
 
 		stat(src, &st);
 		if (st.st_mode & S_IFDIR) {
-			if (hyper_mkdir(map->path) < 0) {
+			if (hyper_mkdir(mountpoint) < 0) {
 				perror("create map dir failed");
 				continue;
 			}
 
 			if (map->docker && container->initialize &&
-			    (container_populate_volume(map->path, src) < 0)) {
-				fprintf(stderr, "fail to populate volume %s\n", map->path);
+			    (container_populate_volume(mountpoint, src) < 0)) {
+				fprintf(stderr, "fail to populate volume %s\n", mountpoint);
 				continue;
 			}
 		} else {
-			int fd = open(map->path, O_CREAT|O_WRONLY, 0755);
+			int fd = open(mountpoint, O_CREAT|O_WRONLY, 0755);
 			if (fd < 0) {
 				perror("create map file failed");
 				continue;
@@ -132,7 +136,7 @@ static int container_setup_volume(struct hyper_container *container)
 			close(fd);
 		}
 
-		if (mount(src, map->path, NULL, MS_BIND, NULL) < 0) {
+		if (mount(src, mountpoint, NULL, MS_BIND, NULL) < 0) {
 			perror("mount fsmap faled");
 			continue;
 		}
@@ -140,7 +144,7 @@ static int container_setup_volume(struct hyper_container *container)
 		if (map->readonly == 0)
 			continue;
 
-		if (mount(src, map->path, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0)
+		if (mount(src, mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0)
 			perror("mount fsmap faled");
 	}
 
@@ -484,6 +488,11 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
+	if (container_setup_volume(container) < 0) {
+		fprintf(stderr, "container sets up voulme failed\n");
+		goto fail;
+	}
+
 	// manipulate the rootfs of the container/namespace: move the prepared path @rootfs to /
 	if (mount(rootfs, "/", NULL, MS_MOVE, NULL) < 0) {
 		perror("failed to move rootfs");
@@ -494,11 +503,6 @@ static int hyper_container_init(void *data)
 	chroot(".");
 
 	chdir("/");
-
-	if (container_setup_volume(container) < 0) {
-		fprintf(stderr, "container sets up voulme failed\n");
-		goto fail;
-	}
 
 	if (container_setup_sysctl(container) < 0) {
 		fprintf(stderr, "container sets up sysctl failed\n");
