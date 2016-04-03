@@ -200,6 +200,61 @@ static int container_setup_mount(struct hyper_container *container)
 	return 0;
 }
 
+static int container_recreate_file(char *filename)
+{
+	struct stat stbuf;
+
+	fprintf(stdout, "recreate file %s\n", filename);
+	if (stat(filename, &stbuf) < 0) {
+		if (errno != ENOENT) {
+			fprintf(stderr, "failed to stat %s: %d\n", filename, errno);
+			return -1;
+		}
+		return hyper_create(filename);
+	}
+	if (stbuf.st_mode & S_IFREG && stbuf.st_size == 0)
+		return 0;
+
+	hyper_unlink(filename);
+	return hyper_create(filename);
+}
+
+static int container_recreate_symlink(char *oldpath, char *newpath)
+{
+	fprintf(stdout, "recreate symlink %s to %s\n", newpath, oldpath);
+	hyper_unlink(newpath);
+	return hyper_symlink(oldpath, newpath);
+}
+
+/*
+ * Docker uses the init layer to protect against unwanted side effects on
+ * the rw layer. We recreate the same files here to have similar effect.
+ * Docker also creates directories like /dev/pts, /dev/shm, /proc, /sys,
+ * which we have over ridden in container_setup_mount, so no need to create
+ * them here.
+ */
+static int container_setup_init_layer(struct hyper_container *container)
+{
+	if (!container->initialize)
+		return 0;
+
+	hyper_mkdir("./etc/");
+
+	if (container_recreate_file("./etc/resolv.conf") < 0)
+		return -1;
+
+	if (container_recreate_file("./etc/hosts") < 0)
+		return -1;
+
+	if (container_recreate_file("./etc/hostname") < 0)
+		return -1;
+
+	if (container_recreate_symlink("/proc/mounts", "./etc/mtab") < 0)
+		return -1;
+
+	return 0;
+}
+
 static int container_setup_sysctl(struct hyper_container *container)
 {
 	int i, size, len, l, fd;
@@ -437,6 +492,11 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 	chdir(rootfs);
+
+	if (container_setup_init_layer(container) < 0) {
+		fprintf(stderr, "container sets up init layer failed\n");
+		goto fail;
+	}
 
 	if (container_setup_mount(container) < 0) {
 		fprintf(stderr, "container sets up mount failed\n");
