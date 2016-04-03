@@ -99,13 +99,13 @@ int hyper_copy_dir(char *src, char *dest) {
 	return 0;
 }
 
-int hyper_find_sd(char *prefix, char *addr, char **dev) {
+int hyper_find_sd(char *addr, char **dev) {
 	struct dirent **list;
 	struct dirent *dir;
 	char path[512];
 	int i, num;
 
-	sprintf(path, "%s/sys/class/scsi_disk/0:0:%s/device/block/", prefix, addr);
+	sprintf(path, "/sys/class/scsi_disk/0:0:%s/device/block/", addr);
 	fprintf(stdout, "orig dev %s, scan path %s\n", *dev, path);
 
 	num = scandir(path, &list, NULL, NULL);

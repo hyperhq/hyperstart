@@ -60,7 +60,7 @@ static int container_setup_volume(struct hyper_container *container)
 		vol = &container->vols[i];
 
 		if (vol->scsiaddr)
-			hyper_find_sd("", vol->scsiaddr, &vol->device);
+			hyper_find_sd(vol->scsiaddr, &vol->device);
 
 		sprintf(dev, "/dev/%s", vol->device);
 		sprintf(path, "/tmp/%s", vol->mountpoint);
@@ -407,7 +407,7 @@ static int hyper_container_init(void *data)
 		char dev[128];
 
 		if (container->scsiaddr)
-			hyper_find_sd("", container->scsiaddr, &container->image);
+			hyper_find_sd(container->scsiaddr, &container->image);
 
 		sprintf(dev, "/dev/%s", container->image);
 		fprintf(stdout, "device %s\n", dev);
