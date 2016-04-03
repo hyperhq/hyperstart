@@ -185,45 +185,46 @@ static int container_setup_mount(struct hyper_container *container)
 {
 	char src[512];
 
-	hyper_mkdir("/proc");
-	hyper_mkdir("/sys");
-	hyper_mkdir("/dev");
+	// current dir is container rootfs, the operations on "./PATH" are the operations on container's "/PATH"
+	hyper_mkdir("./proc");
+	hyper_mkdir("./sys");
+	hyper_mkdir("./dev");
 
-	if (mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
-	    mount("sysfs", "/sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
-	    mount("devtmpfs", "/dev", "devtmpfs", MS_NOSUID, NULL) < 0) {
+	if (mount("proc", "./proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
+	    mount("sysfs", "./sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
+	    mount("devtmpfs", "./dev", "devtmpfs", MS_NOSUID, NULL) < 0) {
 		perror("mount basic filesystem for container failed");
 		return -1;
 	}
 
-	if (hyper_mkdir("/dev/shm") < 0) {
+	if (hyper_mkdir("./dev/shm") < 0) {
 		fprintf(stderr, "create /dev/shm failed\n");
 		return -1;
 	}
 
-	if (mount("tmpfs", "/dev/shm/", "tmpfs", MS_NOSUID| MS_NODEV, NULL) < 0) {
+	if (mount("tmpfs", "./dev/shm/", "tmpfs", MS_NOSUID| MS_NODEV, NULL) < 0) {
 		perror("mount shm failed");
 		return -1;
 	}
 
-	if (hyper_mkdir("/dev/pts") < 0) {
+	if (hyper_mkdir("./dev/pts") < 0) {
 		fprintf(stderr, "create /dev/pts failed\n");
 		return -1;
 	}
 
-	if (sprintf(src, "/.oldroot/tmp/hyper/%s/devpts", container->id) < 0) {
+	if (sprintf(src, "/tmp/hyper/%s/devpts", container->id) < 0) {
 		fprintf(stderr, "get container devpts failed\n");
 		return -1;
 	}
 
-	if (mount(src, "/dev/pts/", NULL, MS_BIND, NULL) < 0) {
+	if (mount(src, "./dev/pts/", NULL, MS_BIND, NULL) < 0) {
 		perror("move pts to /dev/pts failed");
 		return -1;
 	}
 
-	if (unlink("/dev/ptmx") < 0)
+	if (unlink("./dev/ptmx") < 0)
 		perror("remove /dev/ptmx failed");
-	if (symlink("/dev/pts/ptmx", "/dev/ptmx") < 0)
+	if (symlink("/dev/pts/ptmx", "./dev/ptmx") < 0)
 		perror("link /dev/pts/ptmx to /dev/ptmx failed");
 
 	return 0;
@@ -477,6 +478,13 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 	chdir(rootfs);
+
+	if (container_setup_mount(container) < 0) {
+		fprintf(stderr, "container sets up mount failed\n");
+		goto fail;
+	}
+
+	// manipulate the rootfs of the container/namespace: move the prepared path @rootfs to /
 	if (mount(rootfs, "/", NULL, MS_MOVE, NULL) < 0) {
 		perror("failed to move rootfs");
 		goto fail;
@@ -486,11 +494,6 @@ static int hyper_container_init(void *data)
 	chroot(".");
 
 	chdir("/");
-
-	if (container_setup_mount(container) < 0) {
-		fprintf(stderr, "container sets up mount failed\n");
-		goto fail;
-	}
 
 	if (container_setup_volume(container) < 0) {
 		fprintf(stderr, "container sets up voulme failed\n");
