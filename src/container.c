@@ -56,19 +56,21 @@ static int container_setup_volume(struct hyper_container *container)
 
 	for (i = 0; i < container->vols_num; i++) {
 		char volume[512];
+		char mountpoint[512];
 		vol = &container->vols[i];
 
 		if (vol->scsiaddr)
-			hyper_find_sd("/.oldroot", vol->scsiaddr, &vol->device);
+			hyper_find_sd(vol->scsiaddr, &vol->device);
 
 		sprintf(dev, "/dev/%s", vol->device);
 		sprintf(path, "/tmp/%s", vol->mountpoint);
 		sprintf(volume, "/%s/_data", path);
+		sprintf(mountpoint, "./%s", vol->mountpoint);
 
 		fprintf(stdout, "mount %s to %s, tmp path %s\n",
 			dev, vol->mountpoint, path);
 
-		if (hyper_mkdir(path) < 0 || hyper_mkdir(vol->mountpoint) < 0) {
+		if (hyper_mkdir(path) < 0 || hyper_mkdir(mountpoint) < 0) {
 			perror("create volume dir failed");
 			return -1;
 		}
@@ -80,8 +82,8 @@ static int container_setup_volume(struct hyper_container *container)
 
 		if (vol->docker) {
 			if (container->initialize &&
-			    (container_populate_volume(vol->mountpoint, volume) < 0)) {
-				fprintf(stderr, "fail to populate volume %s\n", vol->mountpoint);
+			    (container_populate_volume(mountpoint, volume) < 0)) {
+				fprintf(stderr, "fail to populate volume %s\n", mountpoint);
 				return -1;
 			}
 		} else if (hyper_mkdir(volume) < 0) {
@@ -89,13 +91,13 @@ static int container_setup_volume(struct hyper_container *container)
 			return -1;
 		}
 
-		if (mount(volume, vol->mountpoint, NULL, MS_BIND, NULL) < 0) {
+		if (mount(volume, mountpoint, NULL, MS_BIND, NULL) < 0) {
 			perror("mount volume device faled");
 			return -1;
 		}
 
 		if (vol->readonly &&
-		    mount(volume, vol->mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
+		    mount(volume, mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
 			perror("mount fsmap faled");
 			return -1;
 		}
@@ -107,24 +109,26 @@ static int container_setup_volume(struct hyper_container *container)
 		struct stat st;
 		char src[512];
 		struct fsmap *map = &container->maps[i];
+		char mountpoint[512];
 
-		sprintf(src, "/.oldroot/tmp/hyper/shared/%s", map->source);
-		fprintf(stdout, "mount %s to %s\n", src, map->path);
+		sprintf(src, "/tmp/hyper/shared/%s", map->source);
+		sprintf(mountpoint, "./%s", map->path);
+		fprintf(stdout, "mount %s to %s\n", src, mountpoint);
 
 		stat(src, &st);
 		if (st.st_mode & S_IFDIR) {
-			if (hyper_mkdir(map->path) < 0) {
+			if (hyper_mkdir(mountpoint) < 0) {
 				perror("create map dir failed");
 				continue;
 			}
 
 			if (map->docker && container->initialize &&
-			    (container_populate_volume(map->path, src) < 0)) {
-				fprintf(stderr, "fail to populate volume %s\n", map->path);
+			    (container_populate_volume(mountpoint, src) < 0)) {
+				fprintf(stderr, "fail to populate volume %s\n", mountpoint);
 				continue;
 			}
 		} else {
-			int fd = open(map->path, O_CREAT|O_WRONLY, 0755);
+			int fd = open(mountpoint, O_CREAT|O_WRONLY, 0755);
 			if (fd < 0) {
 				perror("create map file failed");
 				continue;
@@ -132,7 +136,7 @@ static int container_setup_volume(struct hyper_container *container)
 			close(fd);
 		}
 
-		if (mount(src, map->path, NULL, MS_BIND, NULL) < 0) {
+		if (mount(src, mountpoint, NULL, MS_BIND, NULL) < 0) {
 			perror("mount fsmap faled");
 			continue;
 		}
@@ -140,90 +144,57 @@ static int container_setup_volume(struct hyper_container *container)
 		if (map->readonly == 0)
 			continue;
 
-		if (mount(src, map->path, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0)
+		if (mount(src, mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0)
 			perror("mount fsmap faled");
 	}
 
 	return 0;
 }
 
-static void container_unmount_oldroot(char *path)
-{
-	FILE *mtab;
-	struct mntent *mnt;
-	char *mntlist[128];
-	int i;
-	int n = 0;
-	char *filesys;
-
-	mtab = setmntent("/proc/mounts", "r");
-	if (mtab == NULL) {
-		fprintf(stderr, "cannot open /proc/mount");
-		return;
-	}
-
-	while (n < 128 && (mnt = getmntent(mtab))) {
-		if (strncmp(mnt->mnt_dir, path, strlen(path)))
-			continue;
-		mntlist[n++] = strdup(mnt->mnt_dir);
-	}
-
-	endmntent(mtab);
-
-	for (i = n - 1; i >= 0; i--) {
-		filesys = mntlist[i];
-		fprintf(stdout, "umount %s\n", filesys);
-		if (umount(mntlist[i]) < 0 && umount2(mntlist[i],
-			   MNT_DETACH) < 0) {
-			fprintf(stdout, "umount %s: %s failed\n",
-				filesys, strerror(errno));
-		}
-	}
-}
-
 static int container_setup_mount(struct hyper_container *container)
 {
 	char src[512];
 
-	hyper_mkdir("/proc");
-	hyper_mkdir("/sys");
-	hyper_mkdir("/dev");
+	// current dir is container rootfs, the operations on "./PATH" are the operations on container's "/PATH"
+	hyper_mkdir("./proc");
+	hyper_mkdir("./sys");
+	hyper_mkdir("./dev");
 
-	if (mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
-	    mount("sysfs", "/sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
-	    mount("devtmpfs", "/dev", "devtmpfs", MS_NOSUID, NULL) < 0) {
+	if (mount("proc", "./proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
+	    mount("sysfs", "./sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
+	    mount("devtmpfs", "./dev", "devtmpfs", MS_NOSUID, NULL) < 0) {
 		perror("mount basic filesystem for container failed");
 		return -1;
 	}
 
-	if (hyper_mkdir("/dev/shm") < 0) {
+	if (hyper_mkdir("./dev/shm") < 0) {
 		fprintf(stderr, "create /dev/shm failed\n");
 		return -1;
 	}
 
-	if (mount("tmpfs", "/dev/shm/", "tmpfs", MS_NOSUID| MS_NODEV, NULL) < 0) {
+	if (mount("tmpfs", "./dev/shm/", "tmpfs", MS_NOSUID| MS_NODEV, NULL) < 0) {
 		perror("mount shm failed");
 		return -1;
 	}
 
-	if (hyper_mkdir("/dev/pts") < 0) {
+	if (hyper_mkdir("./dev/pts") < 0) {
 		fprintf(stderr, "create /dev/pts failed\n");
 		return -1;
 	}
 
-	if (sprintf(src, "/.oldroot/tmp/hyper/%s/devpts", container->id) < 0) {
+	if (sprintf(src, "/tmp/hyper/%s/devpts", container->id) < 0) {
 		fprintf(stderr, "get container devpts failed\n");
 		return -1;
 	}
 
-	if (mount(src, "/dev/pts/", NULL, MS_BIND, NULL) < 0) {
+	if (mount(src, "./dev/pts/", NULL, MS_BIND, NULL) < 0) {
 		perror("move pts to /dev/pts failed");
 		return -1;
 	}
 
-	if (unlink("/dev/ptmx") < 0)
+	if (unlink("./dev/ptmx") < 0)
 		perror("remove /dev/ptmx failed");
-	if (symlink("/dev/pts/ptmx", "/dev/ptmx") < 0)
+	if (symlink("/dev/pts/ptmx", "./dev/ptmx") < 0)
 		perror("link /dev/pts/ptmx to /dev/ptmx failed");
 
 	return 0;
@@ -272,7 +243,7 @@ static int container_setup_dns(struct hyper_container *container)
 {
 	int fd;
 	struct stat st;
-	char *src = "/.oldroot/tmp/hyper/resolv.conf";
+	char *src = "/tmp/hyper/resolv.conf";
 
 	if (stat(src, &st) < 0) {
 		if (errno == ENOENT) {
@@ -284,16 +255,16 @@ static int container_setup_dns(struct hyper_container *container)
 		return -1;
 	}
 
-	hyper_mkdir("/etc");
+	hyper_mkdir("./etc");
 
-	fd = open("/etc/resolv.conf", O_CREAT| O_WRONLY, 0644);
+	fd = open("./etc/resolv.conf", O_CREAT| O_WRONLY, 0644);
 	if (fd < 0) {
 		perror("create /etc/resolv.conf failed");
 		return -1;
 	}
 	close(fd);
 
-	if (mount(src, "/etc/resolv.conf", NULL, MS_BIND, NULL) < 0) {
+	if (mount(src, "./etc/resolv.conf", NULL, MS_BIND, NULL) < 0) {
 		perror("bind to /etc/resolv.conf failed");
 		return -1;
 	}
@@ -378,7 +349,7 @@ static int hyper_container_init(void *data)
 {
 	struct hyper_container_arg *arg = data;
 	struct hyper_container *container = arg->c;
-	char root[512], oldroot[512], rootfs[512];
+	char root[512], rootfs[512];
 
 	fprintf(stdout, "%s in\n", __func__);
 	if (container->exec.argv == NULL) {
@@ -436,7 +407,7 @@ static int hyper_container_init(void *data)
 		char dev[128];
 
 		if (container->scsiaddr)
-			hyper_find_sd("", container->scsiaddr, &container->image);
+			hyper_find_sd(container->scsiaddr, &container->image);
 
 		sprintf(dev, "/dev/%s", container->image);
 		fprintf(stdout, "device %s\n", dev);
@@ -460,32 +431,12 @@ static int hyper_container_init(void *data)
 	fprintf(stdout, "root directory for container is %s/%s, init task %s\n",
 		root, container->rootfs, container->exec.argv[0]);
 
-	sprintf(oldroot, "%s/%s/.oldroot", root, container->rootfs);
-	if (hyper_mkdir(oldroot) < 0) {
-		perror("make oldroot directroy failed");
-		goto fail;
-	}
-
-	if (mount("/", oldroot, NULL, MS_BIND|MS_REC, NULL) < 0) {
-		perror("bind oldroot failed");
-		goto fail;
-	}
-
 	sprintf(rootfs, "%s/%s/", root, container->rootfs);
 	if (mount(rootfs, rootfs, NULL, MS_BIND|MS_REC, NULL) < 0) {
 		perror("failed to bind rootfs");
 		goto fail;
 	}
 	chdir(rootfs);
-	if (mount(rootfs, "/", NULL, MS_MOVE, NULL) < 0) {
-		perror("failed to move rootfs");
-		goto fail;
-	}
-	/* pivot_root won't work, see
-	 * Documention/filesystem/ramfs-rootfs-initramfs.txt */
-	chroot(".");
-
-	chdir("/");
 
 	if (container_setup_mount(container) < 0) {
 		fprintf(stderr, "container sets up mount failed\n");
@@ -497,13 +448,24 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
-	if (container_setup_sysctl(container) < 0) {
-		fprintf(stderr, "container sets up sysctl failed\n");
+	if (container_setup_dns(container) < 0) {
+		fprintf(stderr, "container sets up dns failed\n");
 		goto fail;
 	}
 
-	if (container_setup_dns(container) < 0) {
-		fprintf(stderr, "container sets up dns failed\n");
+	// manipulate the rootfs of the container/namespace: move the prepared path @rootfs to /
+	if (mount(rootfs, "/", NULL, MS_MOVE, NULL) < 0) {
+		perror("failed to move rootfs");
+		goto fail;
+	}
+	/* pivot_root won't work, see
+	 * Documention/filesystem/ramfs-rootfs-initramfs.txt */
+	chroot(".");
+
+	chdir("/");
+
+	if (container_setup_sysctl(container) < 0) {
+		fprintf(stderr, "container sets up sysctl failed\n");
 		goto fail;
 	}
 
@@ -511,8 +473,6 @@ static int hyper_container_init(void *data)
 		fprintf(stderr, "container sets up work directory failed\n");
 		goto fail;
 	}
-
-	container_unmount_oldroot("/.oldroot");
 
 	fflush(stdout);
 
