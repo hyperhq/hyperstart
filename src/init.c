@@ -1272,6 +1272,9 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	symlink("/busybox", "/sh");
+	symlink("/busybox", "/tar");
+
 	cmdline = read_cmdline();
 
 	setsid();

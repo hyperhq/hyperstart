@@ -89,7 +89,7 @@ int hyper_copy_dir(char *src, char *dest) {
 		return -1;
 	} else {
 		char cmd[512];
-		snprintf(cmd, sizeof(cmd), "tar zcf - -C %s . | tar zfx - -C %s", src, dest);
+		snprintf(cmd, sizeof(cmd), "/tar cf - -C %s . | /tar fx - -C %s", src, dest);
 		fprintf(stdout, "command for copy is %s\n", cmd);
 
 		execlp("/busybox", "sh", "-c", cmd, NULL);
