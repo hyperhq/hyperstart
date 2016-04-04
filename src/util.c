@@ -92,7 +92,7 @@ int hyper_copy_dir(char *src, char *dest) {
 		snprintf(cmd, sizeof(cmd), "tar zcf - -C %s . | tar zfx - -C %s", src, dest);
 		fprintf(stdout, "command for copy is %s\n", cmd);
 
-		execlp("/.oldroot/busybox", "sh", "-c", cmd, NULL);
+		execlp("/busybox", "sh", "-c", cmd, NULL);
 		perror("exec copy directroy command failed");
 	}
 
