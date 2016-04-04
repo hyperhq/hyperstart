@@ -96,7 +96,7 @@ int hyper_copy_dir(char *src, char *dest) {
 		perror("exec copy directroy command failed");
 	}
 
-	return 0;
+	return -1;
 }
 
 int hyper_find_sd(char *addr, char **dev) {
