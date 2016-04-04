@@ -89,14 +89,14 @@ int hyper_copy_dir(char *src, char *dest) {
 		return -1;
 	} else {
 		char cmd[512];
-		snprintf(cmd, sizeof(cmd), "tar zcf - -C %s . | tar zfx - -C %s", src, dest);
+		snprintf(cmd, sizeof(cmd), "/tar cf - -C %s . | /tar fx - -C %s", src, dest);
 		fprintf(stdout, "command for copy is %s\n", cmd);
 
-		execlp("/.oldroot/busybox", "sh", "-c", cmd, NULL);
+		execlp("/busybox", "sh", "-c", cmd, NULL);
 		perror("exec copy directroy command failed");
 	}
 
-	return 0;
+	return -1;
 }
 
 int hyper_find_sd(char *addr, char **dev) {
