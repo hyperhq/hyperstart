@@ -2,6 +2,10 @@
 #define _HYPER_H_
 
 #include <stdint.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "net.h"
 #include "list.h"
@@ -88,6 +92,21 @@ struct hyper_ctl {
 	struct hyper_event	tty;
 	struct hyper_event	chan;
 };
+
+static inline int hyper_symlink(char *oldpath, char *newpath)
+{
+	return symlink(oldpath, newpath);
+}
+
+static inline int hyper_unlink(char *hyper_path)
+{
+	return unlink(hyper_path);
+}
+
+static inline int hyper_create(char *hyper_path)
+{
+	return creat(hyper_path, 0755);
+}
 
 int hyper_mkdir(char *hyper_path);
 int hyper_open_serial(char *tty);
