@@ -227,8 +227,8 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	char ptmx[512], path[512];
 
 	if (e->seq == 0) {
-		e->ptyfd = open("/dev/null", O_RDWR | O_NOCTTY | O_CLOEXEC);
-		goto done;
+		fprintf(stderr, "e->seq should be set\n");
+		return -1;
 	}
 
 	if (!e->tty) { // don't use tty for stdio
@@ -289,7 +289,6 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 
 	e->stdinev.fd = ptymaster;
 	e->stdoutev.fd = dup(ptymaster);
-done:
 	if (e->errseq == 0) {
 		e->stderrev.fd = dup(e->stdoutev.fd);
 	}
