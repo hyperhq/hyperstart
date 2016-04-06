@@ -9,12 +9,6 @@ struct hyper_exec {
 	struct hyper_event	stdinev;
 	struct hyper_event	stdoutev;
 	struct hyper_event	stderrev;
-	char			*id;
-	char			**argv;
-	int			argc;
-	int			tty; // use tty or not
-	uint64_t		seq;
-	uint64_t		errseq;
 	int			pid;
 	int			ptyno;
 	int			init;
@@ -26,6 +20,15 @@ struct hyper_exec {
 	uint8_t			code;
 	uint8_t			exit;
 	uint8_t			ref;
+
+	// configs
+	char			*id;
+	char			**argv;
+	int			argc;
+	int			tty; // use tty or not
+	uint64_t		seq;
+	uint64_t		errseq;
+	char			*workdir;
 };
 
 struct hyper_pod;

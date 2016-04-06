@@ -164,6 +164,9 @@ static void container_cleanup_exec(struct hyper_exec *exec)
 	free(exec->id);
 	exec->id = NULL;
 
+	free(exec->workdir);
+	exec->workdir = NULL;
+
 	for (i = 0; i < exec->argc; i++) {
 		free(exec->argv[i]);
 	}
@@ -441,9 +444,6 @@ void hyper_free_container(struct hyper_container *c)
 	free(c->scsiaddr);
 	c->scsiaddr = NULL;
 
-	free(c->workdir);
-	c->workdir = NULL;
-
 	free(c->fstype);
 	c->fstype = NULL;
 
@@ -524,8 +524,8 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 			fprintf(stdout, "container stderr seq %" PRIu64 "\n", c->exec.errseq);
 			i++;
 		} else if (json_token_streq(json, t, "workdir") && t->size == 1) {
-			c->workdir = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "container workdir %s\n", c->workdir);
+			c->exec.workdir = (json_token_str(json, &toks[++i]));
+			fprintf(stdout, "container workdir %s\n", c->exec.workdir);
 			i++;
 		} else if (json_token_streq(json, t, "image") && t->size == 1) {
 			c->image = (json_token_str(json, &toks[++i]));

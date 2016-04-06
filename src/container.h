@@ -34,7 +34,6 @@ struct hyper_container {
 	char			*rootfs;
 	char			*image;
 	char			*scsiaddr;
-	char			*workdir;
 	char			*fstype;
 	struct volume		*vols;
 	struct env		*envs;
