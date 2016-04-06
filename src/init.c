@@ -692,7 +692,6 @@ static int hyper_cmd_write_file(char *json, int length)
 	struct hyper_pod *pod = &global_pod;
 	int pipe[2] = {-1, -1};
 	int pid, mntns = -1, fd;
-	char path[512];
 	int len = 0, size, ret = -1;
 
 	fprintf(stdout, "%s\n", __func__);
