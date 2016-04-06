@@ -197,6 +197,11 @@ static int container_setup_mount(struct hyper_container *container)
 	if (symlink("/dev/pts/ptmx", "./dev/ptmx") < 0)
 		perror("link /dev/pts/ptmx to /dev/ptmx failed");
 
+	symlink("/proc/self/fd", "./dev/fd");
+	symlink("/proc/self/fd/0", "./dev/stdin");
+	symlink("/proc/self/fd/1", "./dev/stdout");
+	symlink("/proc/self/fd/2", "./dev/stderr");
+
 	return 0;
 }
 
@@ -540,11 +545,6 @@ static int hyper_container_init(void *data)
 		fprintf(stdout, "setup tty failed\n");
 		goto fail;
 	}
-
-	symlink("/proc/self/fd", "/dev/fd");
-	symlink("/proc/self/fd/0", "/dev/stdin");
-	symlink("/proc/self/fd/1", "/dev/stdout");
-	symlink("/proc/self/fd/2", "/dev/stderr");
 
 	execvp(container->exec.argv[0], container->exec.argv);
 	perror("exec container command failed");
