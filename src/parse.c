@@ -157,17 +157,20 @@ static int container_parse_cmd(struct hyper_container *c, char *json, jsmntok_t 
 	return i;
 }
 
-static void container_free_cmd(struct hyper_container *c)
+static void container_cleanup_exec(struct hyper_exec *exec)
 {
 	int i;
 
-	for (i = 0; i < c->exec.argc; i++) {
-		free(c->exec.argv[i]);
+	free(exec->id);
+	exec->id = NULL;
+
+	for (i = 0; i < exec->argc; i++) {
+		free(exec->argv[i]);
 	}
 
-	free(c->exec.argv);
-	c->exec.argv = NULL;
-	c->exec.argc = 0;
+	free(exec->argv);
+	exec->argv = NULL;
+	exec->argc = 0;
 }
 
 static void container_free_volumes(struct hyper_container *c)
@@ -444,14 +447,11 @@ void hyper_free_container(struct hyper_container *c)
 	free(c->fstype);
 	c->fstype = NULL;
 
-	free(c->exec.id);
-	c->exec.id = NULL;
-
 	container_free_volumes(c);
 	container_free_envs(c);
 	container_free_sysctl(c);
 	container_free_fsmap(c);
-	container_free_cmd(c);
+	container_cleanup_exec(&c->exec);
 
 	list_del_init(&c->list);
 	free(c);
@@ -1098,13 +1098,8 @@ out:
 	free(toks);
 	return exec;
 fail:
-	free(exec->id);
-	for (i = 0; i < exec->argc; i++)
-		free(exec->argv[i]);
-
-	free(exec->argv);
+	container_cleanup_exec(exec);
 	free(exec);
-
 	exec = NULL;
 	goto out;
 }
