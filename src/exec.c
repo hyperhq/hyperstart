@@ -421,7 +421,9 @@ int hyper_enter_container(struct hyper_pod *pod,
 	/* TODO: wait for container finishing setup root */
 	chdir("/");
 
-	ret = hyper_setup_env(c->envs, c->envs_num);
+	if (hyper_setup_env(c->exec.envs, c->exec.envs_num) < 0)
+		goto out;
+	ret = hyper_setup_env(exec->envs, exec->envs_num);
 out:
 	close(ipcns);
 	close(utsns);

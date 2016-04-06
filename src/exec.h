@@ -4,6 +4,11 @@
 #include "list.h"
 #include "event.h"
 
+struct env {
+	char	*env;
+	char	*value;
+};
+
 struct hyper_exec {
 	struct list_head	list;
 	struct hyper_event	stdinev;
@@ -23,6 +28,8 @@ struct hyper_exec {
 
 	// configs
 	char			*id;
+	struct env		*envs;
+	int			envs_num;
 	char			**argv;
 	int			argc;
 	int			tty; // use tty or not

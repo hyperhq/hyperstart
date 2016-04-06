@@ -167,6 +167,15 @@ static void container_cleanup_exec(struct hyper_exec *exec)
 	free(exec->workdir);
 	exec->workdir = NULL;
 
+	for (i = 0; i < exec->envs_num; i++) {
+		free(exec->envs[i].env);
+		free(exec->envs[i].value);
+	}
+
+	free(exec->envs);
+	exec->envs = NULL;
+	exec->envs_num = 0;
+
 	for (i = 0; i < exec->argc; i++) {
 		free(exec->argv[i]);
 	}
@@ -323,21 +332,7 @@ static int container_parse_fsmap(struct hyper_container *c, char *json, jsmntok_
 	return i;
 }
 
-static void container_free_envs(struct hyper_container *c)
-{
-	int i;
-
-	for (i = 0; i < c->envs_num; i++) {
-		free(c->envs[i].env);
-		free(c->envs[i].value);
-	}
-
-	free(c->envs);
-	c->envs = NULL;
-	c->envs_num = 0;
-}
-
-static int container_parse_envs(struct hyper_container *c, char *json, jsmntok_t *toks)
+static int container_parse_envs(struct hyper_exec *exec, char *json, jsmntok_t *toks)
 {
 	int i = 0, j;
 
@@ -346,17 +341,17 @@ static int container_parse_envs(struct hyper_container *c, char *json, jsmntok_t
 		return -1;
 	}
 
-	c->envs = calloc(toks[i].size, sizeof(*c->envs));
-	if (c->envs == NULL) {
+	exec->envs = calloc(toks[i].size, sizeof(*exec->envs));
+	if (exec->envs == NULL) {
 		fprintf(stderr, "allocate memory for env failed\n");
 		return -1;
 	}
 
-	c->envs_num = toks[i].size;
-	fprintf(stdout, "envs num %d\n", c->envs_num);
+	exec->envs_num = toks[i].size;
+	fprintf(stdout, "envs num %d\n", exec->envs_num);
 
 	i++;
-	for (j = 0; j < c->envs_num; j++) {
+	for (j = 0; j < exec->envs_num; j++) {
 		int i_env, next_env;
 
 		if (toks[i].type != JSMN_OBJECT) {
@@ -367,13 +362,13 @@ static int container_parse_envs(struct hyper_container *c, char *json, jsmntok_t
 		i++;
 		for (i_env = 0; i_env < next_env; i_env++, i++) {
 			if (json_token_streq(json, &toks[i], "env")) {
-				c->envs[j].env =
+				exec->envs[j].env =
 				(json_token_str(json, &toks[++i]));
-				fprintf(stdout, "envs %d env %s\n", j, c->envs[j].env);
+				fprintf(stdout, "envs %d env %s\n", j, exec->envs[j].env);
 			} else if (json_token_streq(json, &toks[i], "value")) {
-				c->envs[j].value =
+				exec->envs[j].value =
 				(json_token_str(json, &toks[++i]));
-				fprintf(stdout, "envs %d value %s\n", j, c->envs[j].value);
+				fprintf(stdout, "envs %d value %s\n", j, exec->envs[j].value);
 			} else {
 				fprintf(stdout, "get unknown section %s in envs\n",
 					json_token_str(json, &toks[i]));
@@ -448,7 +443,6 @@ void hyper_free_container(struct hyper_container *c)
 	c->fstype = NULL;
 
 	container_free_volumes(c);
-	container_free_envs(c);
 	container_free_sysctl(c);
 	container_free_fsmap(c);
 	container_cleanup_exec(&c->exec);
@@ -550,7 +544,7 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 				goto fail;
 			i += next;
 		} else if (json_token_streq(json, t, "envs") && t->size == 1) {
-			next = container_parse_envs(c, json, &toks[++i]);
+			next = container_parse_envs(&c->exec, json, &toks[++i]);
 			if (next < 0)
 				goto fail;
 			i += next;

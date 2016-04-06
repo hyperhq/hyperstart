@@ -440,7 +440,7 @@ static int hyper_container_init(void *data)
 	else
 		unsetenv("TERM");
 
-	if (hyper_setup_env(container->envs, container->envs_num) < 0) {
+	if (hyper_setup_env(container->exec.envs, container->exec.envs_num) < 0) {
 		fprintf(stdout, "setup env failed\n");
 		goto fail;
 	}
