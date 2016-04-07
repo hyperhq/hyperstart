@@ -130,7 +130,7 @@ int json_token_streq(char *js, jsmntok_t *t, char *s)
 		strlen(s) == (size_t)(t->end - t->start));
 }
 
-static int container_parse_cmd(struct hyper_container *c, char *json, jsmntok_t *toks)
+static int container_parse_argv(struct hyper_exec *exec, char *json, jsmntok_t *toks)
 {
 	int i = 0, j;
 
@@ -139,19 +139,19 @@ static int container_parse_cmd(struct hyper_container *c, char *json, jsmntok_t 
 		return -1;
 	}
 
-	c->exec.argv = calloc(toks[i].size + 1, sizeof(*c->exec.argv));
-	if (c->exec.argv == NULL) {
+	exec->argv = calloc(toks[i].size + 1, sizeof(*exec->argv));
+	if (exec->argv == NULL) {
 		fprintf(stderr, "allocate memory for exec argv failed\n");
 		return -1;
 	}
 
-	c->exec.argv[c->exec.argc] = NULL;
-	c->exec.argc = toks[i].size;
+	exec->argv[exec->argc] = NULL;
+	exec->argc = toks[i].size;
 
 	i++;
-	for (j = 0; j < c->exec.argc; j++, i++) {
-		c->exec.argv[j] = (json_token_str(json, &toks[i]));
-		fprintf(stdout, "container init arg %d %s\n", j, c->exec.argv[j]);
+	for (j = 0; j < exec->argc; j++, i++) {
+		exec->argv[j] = (json_token_str(json, &toks[i]));
+		fprintf(stdout, "container init arg %d %s\n", j, exec->argv[j]);
 	}
 
 	return i;
@@ -493,7 +493,7 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 			fprintf(stdout, "container id %s\n", c->id);
 			i++;
 		} else if (json_token_streq(json, t, "cmd") && t->size == 1) {
-			next = container_parse_cmd(c, json, &toks[++i]);
+			next = container_parse_argv(&c->exec, json, &toks[++i]);
 			if (next < 0)
 				goto fail;
 			i += next;
