@@ -1032,7 +1032,7 @@ fail:
 
 struct hyper_exec *hyper_parse_execcmd(char *json, int length)
 {
-	int i, j, n, has_seq = 0;
+	int i, j, n;
 	struct hyper_exec *exec = NULL;
 
 	jsmn_parser p;
@@ -1073,43 +1073,21 @@ realloc:
 	exec->stderrev.fd = -1;
 	INIT_LIST_HEAD(&exec->list);
 
-	for (i = 0, j = 0; i < n; i++) {
+	for (i = 0; i < n; i++) {
 		jsmntok_t *t = &toks[i];
-
-		if (t->type != JSMN_STRING)
-			continue;
 
 		if (json_token_streq(json, t, "container")) {
 			exec->id = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "get container %s\n", exec->id);
-		} else if (json_token_streq(json, t, "seq")) {
-			has_seq = 1;
-			exec->seq = json_token_ll(json, &toks[++i]);
-			fprintf(stdout, "get seq %"PRIu64"\n", exec->seq);
-		} else if (json_token_streq(json, t, "cmd")) {
-			if (toks[++i].type != JSMN_ARRAY) {
-				fprintf(stdout, "execcmd need array\n");
+		} else if (json_token_streq(json, t, "process") && t->size == 1) {
+			j = hyper_parse_process(exec, json, &toks[++i]);
+			if (j < 0)
 				goto fail;
-			}
-
-			exec->argv = calloc(toks[i].size + 1, sizeof(*exec->argv));
-			if (exec->argv == NULL) {
-				fprintf(stdout, "allocate memory for exec cmd argv failed\n");
-				goto fail;
-			}
-			exec->argc = toks[i].size;
-			exec->argv[exec->argc] = NULL;
-		} else if (j < exec->argc) {
-			exec->argv[j++] = (json_token_str(json, &toks[i]));
-			fprintf(stdout, "argv %d, %s\n", j - 1, exec->argv[j - 1]);
-		} else {
-			fprintf(stderr, "get unknown section %s in exec cmd\n",
-				json_token_str(json, t));
-			goto fail;
+			i += j;
 		}
 	}
 
-	if (!has_seq) {
+	if (exec->seq == 0) {
 		fprintf(stderr, "execcmd format error, has no seq\n");
 		goto fail;
 	}
