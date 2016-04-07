@@ -3,11 +3,6 @@
 
 #include "exec.h"
 
-struct env {
-	char	*env;
-	char	*value;
-};
-
 struct volume {
 	char	*device;
 	char	*scsiaddr;
@@ -34,14 +29,11 @@ struct hyper_container {
 	char			*rootfs;
 	char			*image;
 	char			*scsiaddr;
-	char			*workdir;
 	char			*fstype;
 	struct volume		*vols;
-	struct env		*envs;
 	struct fsmap		*maps;
 	struct sysctl		*sys;
 	int			vols_num;
-	int			envs_num;
 	int			maps_num;
 	int			sys_num;
 	int			ns;

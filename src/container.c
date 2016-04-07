@@ -197,6 +197,11 @@ static int container_setup_mount(struct hyper_container *container)
 	if (symlink("/dev/pts/ptmx", "./dev/ptmx") < 0)
 		perror("link /dev/pts/ptmx to /dev/ptmx failed");
 
+	symlink("/proc/self/fd", "./dev/fd");
+	symlink("/proc/self/fd/0", "./dev/stdin");
+	symlink("/proc/self/fd/1", "./dev/stdout");
+	symlink("/proc/self/fd/2", "./dev/stderr");
+
 	return 0;
 }
 
@@ -331,10 +336,10 @@ static int container_setup_workdir(struct hyper_container *container)
 {
 	if (container->initialize) {
 		// create workdir
-		hyper_mkdir(container->workdir);
+		hyper_mkdir(container->exec.workdir);
 	}
 
-	if (container->workdir && chdir(container->workdir) < 0) {
+	if (container->exec.workdir && chdir(container->exec.workdir) < 0) {
 		perror("change work directory failed");
 		return -1;
 	}
@@ -435,7 +440,7 @@ static int hyper_container_init(void *data)
 	else
 		unsetenv("TERM");
 
-	if (hyper_setup_env(container->envs, container->envs_num) < 0) {
+	if (hyper_setup_env(container->exec.envs, container->exec.envs_num) < 0) {
 		fprintf(stdout, "setup env failed\n");
 		goto fail;
 	}
@@ -540,11 +545,6 @@ static int hyper_container_init(void *data)
 		fprintf(stdout, "setup tty failed\n");
 		goto fail;
 	}
-
-	symlink("/proc/self/fd", "/dev/fd");
-	symlink("/proc/self/fd/0", "/dev/stdin");
-	symlink("/proc/self/fd/1", "/dev/stdout");
-	symlink("/proc/self/fd/2", "/dev/stderr");
 
 	execvp(container->exec.argv[0], container->exec.argv);
 	perror("exec container command failed");

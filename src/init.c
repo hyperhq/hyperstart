@@ -143,7 +143,7 @@ static void hyper_term_all(struct hyper_pod *pod)
 	DIR *dp;
 	struct dirent *de;
 	pid_t *pids = NULL;
-	struct hyper_container *c;
+	struct hyper_exec *e;
 
 	dp = opendir("/proc");
 	if (dp == NULL)
@@ -175,8 +175,8 @@ static void hyper_term_all(struct hyper_pod *pod)
 	free(pids);
 	closedir(dp);
 
-	list_for_each_entry(c, &pod->containers, list)
-		hyper_kill_process(c->exec.pid);
+	list_for_each_entry(e, &pod->exec_head, list)
+		hyper_kill_process(e->pid);
 }
 
 static int hyper_handle_exit(struct hyper_pod *pod)
@@ -692,7 +692,6 @@ static int hyper_cmd_write_file(char *json, int length)
 	struct hyper_pod *pod = &global_pod;
 	int pipe[2] = {-1, -1};
 	int pid, mntns = -1, fd;
-	char path[512];
 	int len = 0, size, ret = -1;
 
 	fprintf(stdout, "%s\n", __func__);
