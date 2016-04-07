@@ -425,6 +425,57 @@ static int container_parse_sysctl(struct hyper_container *c, char *json, jsmntok
 	return i;
 }
 
+static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *toks)
+{
+	int i = 0, j, next, toks_size;
+	jsmntok_t *t;
+
+	if (toks[i].type != JSMN_OBJECT) {
+		fprintf(stdout, "process need object\n");
+		return -1;
+	}
+
+	toks_size = toks[i].size;
+	i++;
+	for (j = 0; j < toks_size; j++) {
+		t = &toks[i];
+		fprintf(stdout, "%d name %s\n", i, json_token_str(json, t));
+		if (json_token_streq(json, t, "terminal") && t->size == 1) {
+			if (!json_token_streq(json, &toks[++i], "false")) {
+				exec->tty = 1;
+				fprintf(stdout, "container uses terminal\n");
+			} else {
+				fprintf(stdout, "container doesn't use terminal\n");
+			}
+			i++;
+		} else if (json_token_streq(json, t, "stdio") && t->size == 1) {
+			exec->seq = json_token_ll(json, &toks[++i]);
+			fprintf(stdout, "container seq %" PRIu64 "\n", exec->seq);
+			i++;
+		} else if (json_token_streq(json, t, "stderr") && t->size == 1) {
+			exec->errseq = json_token_ll(json, &toks[++i]);
+			fprintf(stdout, "container stderr seq %" PRIu64 "\n", exec->errseq);
+			i++;
+		} else if (json_token_streq(json, t, "args") && t->size == 1) {
+			next = container_parse_argv(exec, json, &toks[++i]);
+			if (next < 0)
+				return -1;
+			i += next;
+		} else if (json_token_streq(json, t, "envs") && t->size == 1) {
+			next = container_parse_envs(exec, json, &toks[++i]);
+			if (next < 0)
+				return -1;
+			i += next;
+		} else if (json_token_streq(json, t, "workdir") && t->size == 1) {
+			exec->workdir = (json_token_str(json, &toks[++i]));
+			fprintf(stdout, "container workdir %s\n", exec->workdir);
+			i++;
+		}
+	}
+
+	return i;
+}
+
 void hyper_free_container(struct hyper_container *c)
 {
 	free(c->id);
@@ -492,34 +543,9 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 			c->exec.id = strdup(c->id);
 			fprintf(stdout, "container id %s\n", c->id);
 			i++;
-		} else if (json_token_streq(json, t, "cmd") && t->size == 1) {
-			next = container_parse_argv(&c->exec, json, &toks[++i]);
-			if (next < 0)
-				goto fail;
-			i += next;
 		} else if (json_token_streq(json, t, "rootfs") && t->size == 1) {
 			c->rootfs = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "container rootfs %s\n", c->rootfs);
-			i++;
-		} else if (json_token_streq(json, t, "tty") && t->size == 1) {
-			if (!json_token_streq(json, &toks[++i], "false")) {
-				c->exec.tty = 1;
-				fprintf(stdout, "container uses terminal\n");
-			} else {
-				fprintf(stdout, "container doesn't use terminal\n");
-			}
-			i++;
-		} else if (json_token_streq(json, t, "stdio") && t->size == 1) {
-			c->exec.seq = json_token_ll(json, &toks[++i]);
-			fprintf(stdout, "container seq %" PRIu64 "\n", c->exec.seq);
-			i++;
-		} else if (json_token_streq(json, t, "stderr") && t->size == 1) {
-			c->exec.errseq = json_token_ll(json, &toks[++i]);
-			fprintf(stdout, "container stderr seq %" PRIu64 "\n", c->exec.errseq);
-			i++;
-		} else if (json_token_streq(json, t, "workdir") && t->size == 1) {
-			c->exec.workdir = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "container workdir %s\n", c->exec.workdir);
 			i++;
 		} else if (json_token_streq(json, t, "image") && t->size == 1) {
 			c->image = (json_token_str(json, &toks[++i]));
@@ -543,13 +569,13 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 			if (next < 0)
 				goto fail;
 			i += next;
-		} else if (json_token_streq(json, t, "envs") && t->size == 1) {
-			next = container_parse_envs(&c->exec, json, &toks[++i]);
+		} else if (json_token_streq(json, t, "sysctl") && t->size == 1) {
+			next = container_parse_sysctl(c, json, &toks[++i]);
 			if (next < 0)
 				goto fail;
 			i += next;
-		} else if (json_token_streq(json, t, "sysctl") && t->size == 1) {
-			next = container_parse_sysctl(c, json, &toks[++i]);
+		} else if (json_token_streq(json, t, "process") && t->size == 1) {
+			next = hyper_parse_process(&c->exec, json, &toks[++i]);
 			if (next < 0)
 				goto fail;
 			i += next;
