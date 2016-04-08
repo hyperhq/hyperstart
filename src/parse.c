@@ -130,7 +130,7 @@ int json_token_streq(char *js, jsmntok_t *t, char *s)
 		strlen(s) == (size_t)(t->end - t->start));
 }
 
-static int container_parse_cmd(struct hyper_container *c, char *json, jsmntok_t *toks)
+static int container_parse_argv(struct hyper_exec *exec, char *json, jsmntok_t *toks)
 {
 	int i = 0, j;
 
@@ -139,19 +139,19 @@ static int container_parse_cmd(struct hyper_container *c, char *json, jsmntok_t 
 		return -1;
 	}
 
-	c->exec.argv = calloc(toks[i].size + 1, sizeof(*c->exec.argv));
-	if (c->exec.argv == NULL) {
+	exec->argv = calloc(toks[i].size + 1, sizeof(*exec->argv));
+	if (exec->argv == NULL) {
 		fprintf(stderr, "allocate memory for exec argv failed\n");
 		return -1;
 	}
 
-	c->exec.argv[c->exec.argc] = NULL;
-	c->exec.argc = toks[i].size;
+	exec->argv[exec->argc] = NULL;
+	exec->argc = toks[i].size;
 
 	i++;
-	for (j = 0; j < c->exec.argc; j++, i++) {
-		c->exec.argv[j] = (json_token_str(json, &toks[i]));
-		fprintf(stdout, "container init arg %d %s\n", j, c->exec.argv[j]);
+	for (j = 0; j < exec->argc; j++, i++) {
+		exec->argv[j] = (json_token_str(json, &toks[i]));
+		fprintf(stdout, "container init arg %d %s\n", j, exec->argv[j]);
 	}
 
 	return i;
@@ -425,6 +425,57 @@ static int container_parse_sysctl(struct hyper_container *c, char *json, jsmntok
 	return i;
 }
 
+static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *toks)
+{
+	int i = 0, j, next, toks_size;
+	jsmntok_t *t;
+
+	if (toks[i].type != JSMN_OBJECT) {
+		fprintf(stdout, "process need object\n");
+		return -1;
+	}
+
+	toks_size = toks[i].size;
+	i++;
+	for (j = 0; j < toks_size; j++) {
+		t = &toks[i];
+		fprintf(stdout, "%d name %s\n", i, json_token_str(json, t));
+		if (json_token_streq(json, t, "terminal") && t->size == 1) {
+			if (!json_token_streq(json, &toks[++i], "false")) {
+				exec->tty = 1;
+				fprintf(stdout, "container uses terminal\n");
+			} else {
+				fprintf(stdout, "container doesn't use terminal\n");
+			}
+			i++;
+		} else if (json_token_streq(json, t, "stdio") && t->size == 1) {
+			exec->seq = json_token_ll(json, &toks[++i]);
+			fprintf(stdout, "container seq %" PRIu64 "\n", exec->seq);
+			i++;
+		} else if (json_token_streq(json, t, "stderr") && t->size == 1) {
+			exec->errseq = json_token_ll(json, &toks[++i]);
+			fprintf(stdout, "container stderr seq %" PRIu64 "\n", exec->errseq);
+			i++;
+		} else if (json_token_streq(json, t, "args") && t->size == 1) {
+			next = container_parse_argv(exec, json, &toks[++i]);
+			if (next < 0)
+				return -1;
+			i += next;
+		} else if (json_token_streq(json, t, "envs") && t->size == 1) {
+			next = container_parse_envs(exec, json, &toks[++i]);
+			if (next < 0)
+				return -1;
+			i += next;
+		} else if (json_token_streq(json, t, "workdir") && t->size == 1) {
+			exec->workdir = (json_token_str(json, &toks[++i]));
+			fprintf(stdout, "container workdir %s\n", exec->workdir);
+			i++;
+		}
+	}
+
+	return i;
+}
+
 void hyper_free_container(struct hyper_container *c)
 {
 	free(c->id);
@@ -492,34 +543,9 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 			c->exec.id = strdup(c->id);
 			fprintf(stdout, "container id %s\n", c->id);
 			i++;
-		} else if (json_token_streq(json, t, "cmd") && t->size == 1) {
-			next = container_parse_cmd(c, json, &toks[++i]);
-			if (next < 0)
-				goto fail;
-			i += next;
 		} else if (json_token_streq(json, t, "rootfs") && t->size == 1) {
 			c->rootfs = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "container rootfs %s\n", c->rootfs);
-			i++;
-		} else if (json_token_streq(json, t, "tty") && t->size == 1) {
-			if (!json_token_streq(json, &toks[++i], "false")) {
-				c->exec.tty = 1;
-				fprintf(stdout, "container uses terminal\n");
-			} else {
-				fprintf(stdout, "container doesn't use terminal\n");
-			}
-			i++;
-		} else if (json_token_streq(json, t, "stdio") && t->size == 1) {
-			c->exec.seq = json_token_ll(json, &toks[++i]);
-			fprintf(stdout, "container seq %" PRIu64 "\n", c->exec.seq);
-			i++;
-		} else if (json_token_streq(json, t, "stderr") && t->size == 1) {
-			c->exec.errseq = json_token_ll(json, &toks[++i]);
-			fprintf(stdout, "container stderr seq %" PRIu64 "\n", c->exec.errseq);
-			i++;
-		} else if (json_token_streq(json, t, "workdir") && t->size == 1) {
-			c->exec.workdir = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "container workdir %s\n", c->exec.workdir);
 			i++;
 		} else if (json_token_streq(json, t, "image") && t->size == 1) {
 			c->image = (json_token_str(json, &toks[++i]));
@@ -543,13 +569,13 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 			if (next < 0)
 				goto fail;
 			i += next;
-		} else if (json_token_streq(json, t, "envs") && t->size == 1) {
-			next = container_parse_envs(&c->exec, json, &toks[++i]);
+		} else if (json_token_streq(json, t, "sysctl") && t->size == 1) {
+			next = container_parse_sysctl(c, json, &toks[++i]);
 			if (next < 0)
 				goto fail;
 			i += next;
-		} else if (json_token_streq(json, t, "sysctl") && t->size == 1) {
-			next = container_parse_sysctl(c, json, &toks[++i]);
+		} else if (json_token_streq(json, t, "process") && t->size == 1) {
+			next = hyper_parse_process(&c->exec, json, &toks[++i]);
 			if (next < 0)
 				goto fail;
 			i += next;
@@ -1006,7 +1032,7 @@ fail:
 
 struct hyper_exec *hyper_parse_execcmd(char *json, int length)
 {
-	int i, j, n, has_seq = 0;
+	int i, j, n;
 	struct hyper_exec *exec = NULL;
 
 	jsmn_parser p;
@@ -1037,7 +1063,6 @@ realloc:
 		goto out;
 	}
 
-	exec->tty = 1;
 	exec->ptyfd = -1;
 	exec->stdinfd = -1;
 	exec->stdoutfd = -1;
@@ -1047,43 +1072,21 @@ realloc:
 	exec->stderrev.fd = -1;
 	INIT_LIST_HEAD(&exec->list);
 
-	for (i = 0, j = 0; i < n; i++) {
+	for (i = 0; i < n; i++) {
 		jsmntok_t *t = &toks[i];
-
-		if (t->type != JSMN_STRING)
-			continue;
 
 		if (json_token_streq(json, t, "container")) {
 			exec->id = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "get container %s\n", exec->id);
-		} else if (json_token_streq(json, t, "seq")) {
-			has_seq = 1;
-			exec->seq = json_token_ll(json, &toks[++i]);
-			fprintf(stdout, "get seq %"PRIu64"\n", exec->seq);
-		} else if (json_token_streq(json, t, "cmd")) {
-			if (toks[++i].type != JSMN_ARRAY) {
-				fprintf(stdout, "execcmd need array\n");
+		} else if (json_token_streq(json, t, "process") && t->size == 1) {
+			j = hyper_parse_process(exec, json, &toks[++i]);
+			if (j < 0)
 				goto fail;
-			}
-
-			exec->argv = calloc(toks[i].size + 1, sizeof(*exec->argv));
-			if (exec->argv == NULL) {
-				fprintf(stdout, "allocate memory for exec cmd argv failed\n");
-				goto fail;
-			}
-			exec->argc = toks[i].size;
-			exec->argv[exec->argc] = NULL;
-		} else if (j < exec->argc) {
-			exec->argv[j++] = (json_token_str(json, &toks[i]));
-			fprintf(stdout, "argv %d, %s\n", j - 1, exec->argv[j - 1]);
-		} else {
-			fprintf(stderr, "get unknown section %s in exec cmd\n",
-				json_token_str(json, t));
-			goto fail;
+			i += j;
 		}
 	}
 
-	if (!has_seq) {
+	if (exec->seq == 0) {
 		fprintf(stderr, "execcmd format error, has no seq\n");
 		goto fail;
 	}
