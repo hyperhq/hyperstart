@@ -238,14 +238,15 @@ static int container_recreate_symlink(char *oldpath, char *newpath)
  * which we have over ridden in container_setup_mount, so no need to create
  * them here.
  */
-static int container_setup_init_layer(struct hyper_container *container)
+static int container_setup_init_layer(struct hyper_container *container,
+				      int setup_dns)
 {
 	if (!container->initialize)
 		return 0;
 
 	hyper_mkdir("./etc/");
 
-	if (container_recreate_file("./etc/resolv.conf") < 0)
+	if (setup_dns && container_recreate_file("./etc/resolv.conf") < 0)
 		return -1;
 
 	if (container_recreate_file("./etc/hosts") < 0)
@@ -410,6 +411,7 @@ static int hyper_container_init(void *data)
 	struct hyper_container_arg *arg = data;
 	struct hyper_container *container = arg->c;
 	char root[512], rootfs[512];
+	int setup_dns;
 
 	fprintf(stdout, "%s in\n", __func__);
 	if (container->exec.argv == NULL) {
@@ -498,7 +500,12 @@ static int hyper_container_init(void *data)
 	}
 	chdir(rootfs);
 
-	if (container_setup_init_layer(container) < 0) {
+	/*
+	 * Recreate dns resolver iif configured by pod spec. Other cases
+	 * are handled by hyperd instead.
+	 */
+	setup_dns = arg->pod->dns != NULL && arg->pod->d_num > 0;
+	if (container_setup_init_layer(container, setup_dns) < 0) {
 		fprintf(stderr, "container sets up init layer failed\n");
 		goto fail;
 	}
