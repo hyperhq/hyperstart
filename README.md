@@ -1,6 +1,6 @@
-# The init Task for Hyper
+# The init Task for HyperContainer
 
-You can get the binary installer of Hyper and HyperStart through [The Hyper Page](https://github.com/hyperhq/hyper)
+You can get the binary installer of HyperContainer and HyperStart through [The Hyper Page](https://github.com/hyperhq/hyperd)
 
 ## Build from source 
 
