@@ -1,10 +1,11 @@
 #!/bin/bash
 
 rm -rf root
-mkdir root
+mkdir -p root/lib
 
 cp ../src/init ./root
 cp busybox ./root
+cp modules -R ./root/lib/
 
 ldd ./root/init | while read line
 do

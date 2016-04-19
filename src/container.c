@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 #include <mntent.h>
 #include <signal.h>
@@ -151,6 +152,47 @@ static int container_setup_volume(struct hyper_container *container)
 	return 0;
 }
 
+static int container_setup_modules(struct hyper_container *container)
+{
+	struct stat st;
+	struct utsname uts;
+	char src[512], dst[512];
+
+	if (uname(&uts) < 0) {
+		perror("fail to call uname");
+		return -1;
+	}
+
+	sprintf(src, "/lib/modules/%s", uts.release);
+	sprintf(dst, "./%s", src);
+
+	if (stat(dst, &st) == 0) {
+		struct dirent **list;
+		int num;
+
+		if (!S_ISDIR(st.st_mode)) {
+			return -1;
+		}
+
+		num = scandir(dst, &list, NULL, NULL);
+		if (num > 2) {
+			fprintf(stdout, "%s is not null, %d", dst, num);
+			return 0;
+		}
+	} else if (errno == ENOENT) {
+		hyper_mkdir(dst);
+	} else {
+		return -1;
+	}
+
+	if (mount(src, dst, NULL, MS_BIND, NULL) < 0) {
+		perror("mount bind modules failed");
+		return -1;
+	}
+
+	return 0;
+}
+
 static int container_setup_mount(struct hyper_container *container)
 {
 	char src[512];
@@ -159,6 +201,7 @@ static int container_setup_mount(struct hyper_container *container)
 	hyper_mkdir("./proc");
 	hyper_mkdir("./sys");
 	hyper_mkdir("./dev");
+	hyper_mkdir("./lib/modules");
 
 	if (mount("proc", "./proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
 	    mount("sysfs", "./sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
@@ -512,6 +555,11 @@ static int hyper_container_init(void *data)
 
 	if (container_setup_mount(container) < 0) {
 		fprintf(stderr, "container sets up mount failed\n");
+		goto fail;
+	}
+
+	if (container_setup_modules(container) < 0) {
+		fprintf(stderr, "container sets up modules failed\n");
 		goto fail;
 	}
 

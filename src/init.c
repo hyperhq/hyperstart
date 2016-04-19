@@ -1239,6 +1239,7 @@ int main(int argc, char *argv[])
 
 	if (hyper_mkdir("/dev") < 0 ||
 	    hyper_mkdir("/sys") < 0 ||
+	    hyper_mkdir("/sbin") < 0 ||
 	    hyper_mkdir("/proc") < 0) {
 		perror("create basic directroy failed");
 		return -1;
@@ -1273,6 +1274,7 @@ int main(int argc, char *argv[])
 
 	symlink("/busybox", "/sh");
 	symlink("/busybox", "/tar");
+	symlink("/busybox", "/sbin/modprobe");
 
 	cmdline = read_cmdline();
 
