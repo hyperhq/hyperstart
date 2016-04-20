@@ -107,25 +107,31 @@ static int container_setup_volume(struct hyper_container *container)
 
 	for (i = 0; i < container->maps_num; i++) {
 		struct stat st;
-		char src[512];
+		char *src, path[512], volume[512];
 		struct fsmap *map = &container->maps[i];
 		char mountpoint[512];
 
-		sprintf(src, "/tmp/hyper/shared/%s", map->source);
+		sprintf(path, "/tmp/hyper/shared/%s", map->source);
 		sprintf(mountpoint, "./%s", map->path);
-		fprintf(stdout, "mount %s to %s\n", src, mountpoint);
+		fprintf(stdout, "mount %s to %s\n", path, mountpoint);
 
+		src = path;
 		stat(src, &st);
+
 		if (st.st_mode & S_IFDIR) {
 			if (hyper_mkdir(mountpoint) < 0) {
 				perror("create map dir failed");
 				continue;
 			}
-
-			if (map->docker && container->initialize &&
-			    (container_populate_volume(mountpoint, src) < 0)) {
-				fprintf(stderr, "fail to populate volume %s\n", mountpoint);
-				continue;
+			if (map->docker) {
+				/* converted from volume */
+				sprintf(volume, "%s/_data", path);
+				src = volume;
+				if (container->initialize &&
+				    (container_populate_volume(mountpoint, volume) < 0)) {
+					fprintf(stderr, "fail to populate volume %s\n", mountpoint);
+					continue;
+				}
 			}
 		} else {
 			int fd = open(mountpoint, O_CREAT|O_WRONLY, 0755);
