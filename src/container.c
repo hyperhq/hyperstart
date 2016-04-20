@@ -523,8 +523,10 @@ static int hyper_container_init(void *data)
 		char dev[128];
 		char *options = NULL;
 
-		if (container->scsiaddr)
+		if (container->scsiaddr) {
+			free(container->image);
 			hyper_find_sd(container->scsiaddr, &container->image);
+		}
 
 		sprintf(dev, "/dev/%s", container->image);
 		fprintf(stdout, "device %s\n", dev);
