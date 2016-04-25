@@ -99,6 +99,18 @@ int hyper_copy_dir(char *src, char *dest) {
 	return -1;
 }
 
+void hyper_sync_time_hctosys() {
+	int pid;
+	pid = fork();
+	if (pid < 0) {
+		perror("fail to fork to copy directory");
+	} else if (pid == 0) {
+		execlp("/busybox", "hwclock", "-s", NULL);
+		perror("exec hwclock -s command failed");
+		exit(-1);
+	}
+}
+
 int hyper_find_sd(char *addr, char **dev) {
 	struct dirent **list;
 	struct dirent *dir;
