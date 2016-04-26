@@ -58,6 +58,7 @@ static int container_setup_volume(struct hyper_container *container)
 	for (i = 0; i < container->vols_num; i++) {
 		char volume[512];
 		char mountpoint[512];
+		char *options = NULL;
 		vol = &container->vols[i];
 
 		if (vol->scsiaddr)
@@ -76,7 +77,10 @@ static int container_setup_volume(struct hyper_container *container)
 			return -1;
 		}
 
-		if (mount(dev, path, vol->fstype, 0, NULL) < 0) {
+		if (!strncmp(vol->fstype, "xfs", strlen("xfs")))
+			options = "nouuid";
+
+		if (mount(dev, path, vol->fstype, 0, options) < 0) {
 			perror("mount volume device faled");
 			return -1;
 		}
@@ -516,6 +520,7 @@ static int hyper_container_init(void *data)
 
 	if (container->fstype) {
 		char dev[128];
+		char *options = NULL;
 
 		if (container->scsiaddr)
 			hyper_find_sd(container->scsiaddr, &container->image);
@@ -523,7 +528,10 @@ static int hyper_container_init(void *data)
 		sprintf(dev, "/dev/%s", container->image);
 		fprintf(stdout, "device %s\n", dev);
 
-		if (mount(dev, root, container->fstype, 0, NULL) < 0) {
+		if (!strncmp(container->fstype, "xfs", strlen("xfs")))
+			options = "nouuid";
+
+		if (mount(dev, root, container->fstype, 0, options) < 0) {
 			perror("mount device failed");
 			goto fail;
 		}
