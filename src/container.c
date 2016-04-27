@@ -190,7 +190,8 @@ static int container_setup_modules(struct hyper_container *container)
 			return 0;
 		}
 	} else if (errno == ENOENT) {
-		hyper_mkdir(dst);
+		if (hyper_mkdir(dst) < 0)
+			return -1;
 	} else {
 		return -1;
 	}
@@ -572,10 +573,8 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
-	if (container_setup_modules(container) < 0) {
-		fprintf(stderr, "container sets up modules failed\n");
-		goto fail;
-	}
+	// ignore error of setup modules
+	container_setup_modules(container);
 
 	if (container_setup_volume(container) < 0) {
 		fprintf(stderr, "container sets up voulme failed\n");

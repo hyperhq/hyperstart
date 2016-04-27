@@ -181,8 +181,10 @@ int hyper_mkdir(char *hyper_path)
 	}
 
 	fprintf(stdout, "create directory %s\n", path);
-	if (mkdir(path, 0755) < 0 && errno != EEXIST)
+	if (mkdir(path, 0755) < 0 && errno != EEXIST) {
+		perror("failed to create directory");
 		return -1;
+	}
 
 	return 0;
 }
