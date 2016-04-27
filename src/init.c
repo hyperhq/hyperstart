@@ -620,6 +620,7 @@ static int hyper_start_pod(char *json, int length)
 	if (pod->init_pid)
 		fprintf(stdout, "pod init_pid exist %d\n", pod->init_pid);
 
+	hyper_sync_time_hctosys();
 	if (hyper_parse_pod(pod, json, length) < 0) {
 		fprintf(stderr, "parse pod json failed\n");
 		return -1;
