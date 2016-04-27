@@ -652,7 +652,7 @@ static int hyper_setup_pty(struct hyper_container *c)
 int hyper_start_container(struct hyper_container *container,
 			  int utsns, int ipcns, struct hyper_pod *pod)
 {
-	int stacksize = getpagesize() * 4;
+	int stacksize = getpagesize() * 42;
 	struct hyper_container_arg arg = {
 		.c	= container,
 		.pod	= pod,
