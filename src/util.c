@@ -111,7 +111,8 @@ void hyper_sync_time_hctosys() {
 	}
 }
 
-int hyper_find_sd(char *addr, char **dev) {
+int hyper_find_sd(char *addr, char **dev)
+{
 	struct dirent **list;
 	struct dirent *dir;
 	char path[512];
@@ -152,30 +153,30 @@ int hyper_mkdir(char *hyper_path)
 
 	if (path == NULL) {
 		errno = ENOMEM;
-		return -1;
+		goto fail;
 	}
 
 	if (stat(path, &st) >= 0) {
 		if (S_ISDIR(st.st_mode))
-			return 0;
+			goto out;
 		errno = ENOTDIR;
-		return -1;
+		goto fail;
 	}
 
 	if (errno != ENOENT)
-		return -1;
+		goto fail;
 
 	p = strrchr(path, '/');
 	if (p == NULL) {
 		errno = EINVAL;
-		return -1;
+		goto fail;
 	}
 
 	if (p != path) {
 		*p = '\0';
 
 		if (hyper_mkdir(path) < 0)
-			return -1;
+			goto fail;
 
 		*p = '/';
 	}
@@ -183,10 +184,15 @@ int hyper_mkdir(char *hyper_path)
 	fprintf(stdout, "create directory %s\n", path);
 	if (mkdir(path, 0755) < 0 && errno != EEXIST) {
 		perror("failed to create directory");
-		return -1;
+		goto fail;
 	}
-
+out:
+	free(path);
 	return 0;
+
+fail:
+	free(path);
+	return -1;
 }
 
 void online_cpu(void)
@@ -519,6 +525,8 @@ static void hyper_unmount_all(void)
 			fprintf(stdout, ("umount %s: %s failed\n"),
 				filesys, strerror(errno));
 		}
+		free(filesys);
+		mntlist[i] = NULL;
 	}
 
 	sync();
