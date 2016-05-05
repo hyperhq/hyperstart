@@ -525,6 +525,7 @@ static int hyper_container_init(void *data)
 
 		if (container->scsiaddr) {
 			free(container->image);
+			container->image = NULL;
 			hyper_find_sd(container->scsiaddr, &container->image);
 		}
 

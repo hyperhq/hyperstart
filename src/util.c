@@ -134,7 +134,6 @@ int hyper_find_sd(char *addr, char **dev)
 		}
 
 		fprintf(stdout, "%s get %s\n", path, dir->d_name);
-		free(*dev);
 		*dev = strdup(dir->d_name);
 		break;
 	}
