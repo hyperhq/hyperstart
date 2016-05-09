@@ -610,6 +610,11 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
+	if (hyper_setup_exec_user(&container->exec) < 0) {
+		fprintf(stderr, "setup exec user failed\n");
+		goto fail;
+	}
+
 	fflush(stdout);
 
 	if (container_setup_tty(arg->pipe[1], container) < 0) {

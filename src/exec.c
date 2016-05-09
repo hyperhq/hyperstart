@@ -14,6 +14,8 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <grp.h>
+#include <pwd.h>
 
 #include "hyper.h"
 #include "util.h"
@@ -184,6 +186,96 @@ struct hyper_event_ops err_ops = {
 	/* don't need read buff, the stderr data will store in tty buffer */
 	/* don't need write buff, the stderr data is one way */
 };
+
+int hyper_setup_exec_user(struct hyper_exec *exec)
+{
+	char *user = exec->user == NULL || strlen(exec->user) == 0 ? NULL : exec->user;
+	char *group = exec->group == NULL || strlen(exec->group) == 0 ? NULL : exec->group;
+
+	// check the config
+	if (!user) {
+		if (group || exec->nr_additional_groups > 0) {
+			fprintf(stderr, "group or additional groups can only be set when user is set\n");
+			return -1;
+		}
+		return 0;
+	}
+
+	// get uid
+	fprintf(stdout, "try to find the user: %s\n", user);
+	struct passwd *pwd = hyper_getpwnam(user);
+	if (pwd == NULL) {
+		perror("can't find the user");
+		return -1;
+	}
+	uid_t uid = pwd->pw_uid;
+
+	// get gid
+	gid_t gid = pwd->pw_gid;
+	if (group) {
+		fprintf(stdout, "try to find the group: %s\n", group);
+		struct group *gr = hyper_getgrnam(group);
+		if (gr == NULL) {
+			perror("can't find the group");
+			return -1;
+		}
+		gid = gr->gr_gid;
+	}
+
+	// get all gids
+	int i, ngroups = 10;
+	gid_t *reallocgroups, *groups = malloc(sizeof(gid_t) * ngroups);
+	if (groups == NULL)
+		goto fail;
+	if (hyper_getgrouplist(pwd->pw_name, gid, groups, &ngroups) < 0) {
+		reallocgroups = realloc(groups, sizeof(gid_t) * ngroups);
+		if (reallocgroups == NULL)
+			goto fail;
+		groups = reallocgroups;
+		if (hyper_getgrouplist(pwd->pw_name, gid, groups, &ngroups) < 0)
+			goto fail;
+	}
+	reallocgroups = realloc(groups, sizeof(gid_t) * (ngroups + exec->nr_additional_groups));
+	if (reallocgroups == NULL)
+		goto fail;
+	groups = reallocgroups;
+	for (i = 0; i < exec->nr_additional_groups; i++) {
+		fprintf(stdout, "try to find the group: %s\n", exec->additional_groups[i]);
+		struct group *gr = hyper_getgrnam(exec->additional_groups[i]);
+		if (gr == NULL) {
+			perror("can't find the group");
+			goto fail;
+		}
+		groups[ngroups] = gr->gr_gid;
+		ngroups++;
+	}
+
+	// setup the owner of tty
+	if (exec->tty) {
+		char ptmx[512];
+		sprintf(ptmx, "/dev/pts/%d", exec->ptyno);
+		chown(ptmx, uid, gid);
+	}
+
+	// apply
+	if (setgroups(ngroups, groups) < 0) {
+		perror("setgroups() fails");
+		goto fail;
+	}
+	if (setgid(gid) < 0) {
+		perror("setgid() fails");
+		goto fail;
+	}
+	if (setuid(uid) < 0) {
+		perror("setuid() fails");
+		goto fail;
+	}
+	return 0;
+
+fail:
+	free(groups);
+	return -1;
+}
 
 static int hyper_setup_exec_notty(struct hyper_exec *e)
 {
@@ -499,6 +591,11 @@ static int hyper_do_exec_cmd(void *data)
 
 	if (exec->id && hyper_enter_container(pod, exec) < 0) {
 		fprintf(stderr, "enter container ns failed\n");
+		goto exit;
+	}
+
+	if (hyper_setup_exec_user(exec) < 0) {
+		fprintf(stderr, "setup exec user failed\n");
 		goto exit;
 	}
 

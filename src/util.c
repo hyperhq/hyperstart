@@ -16,6 +16,8 @@
 #include <sys/socket.h>
 #include <sys/reboot.h>
 #include <linux/reboot.h>
+#include <grp.h>
+#include <pwd.h>
 
 #include "util.h"
 #include "hyper.h"
@@ -143,6 +145,92 @@ int hyper_find_sd(char *addr, char **dev)
 
 	free(list);
 	return 0;
+}
+
+static unsigned long id_or_max(const char *name)
+{
+	char *ptr;
+	long id = strtol(name, &ptr, 10);
+	if (name == ptr || id < 0 || (errno != 0 && id == 0) || *ptr != '\0')
+		return ~0UL;
+	return id;
+}
+
+// the same as getpwnam(), but it only parses /etc/passwd and allows name to be id string
+struct passwd *hyper_getpwnam(const char *name)
+{
+	uid_t uid = (uid_t)id_or_max(name);
+	FILE *file = fopen("/etc/passwd", "r");
+	if (!file) {
+		perror("faile to open /etc/passwd");
+		return NULL;
+	}
+	for (;;) {
+		struct passwd *pwd = fgetpwent(file);
+		if (!pwd)
+			break;
+		if (!strcmp(pwd->pw_name, name) || pwd->pw_uid == uid) {
+			fclose(file);
+			return pwd;
+		}
+	}
+	fclose(file);
+	return NULL;
+}
+
+// the same as getgrnam(), but it only parses /etc/group and allows the name to be id string
+struct group *hyper_getgrnam(const char *name)
+{
+	gid_t gid = (gid_t)id_or_max(name);
+	FILE *file = fopen("/etc/group", "r");
+	if (!file) {
+		perror("faile to open /etc/group");
+		return NULL;
+	}
+	for (;;) {
+		struct group *gr = fgetgrent(file);
+		if (!gr)
+			break;
+		if (!strcmp(gr->gr_name, name) || gr->gr_gid == gid) {
+			fclose(file);
+			return gr;
+		}
+	}
+	fclose(file);
+	return NULL;
+}
+
+// the same as getgrouplist(), but it only parses /etc/group
+int hyper_getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroups)
+{
+	int nr = 0, ret;
+	FILE *file = fopen("/etc/group", "r");
+	if (!file) {
+		perror("faile to open /etc/group");
+		return -1;
+	}
+	for (;;) {
+		struct group *gr = fgetgrent(file);
+		if (!gr)
+			break;
+		int j;
+		for (j = 0; gr->gr_mem && gr->gr_mem[j]; j++) {
+			if (!strcmp(gr->gr_mem[j], user)) {
+				if (nr + 1 < *ngroups)
+					groups[nr] = gr->gr_gid;
+				nr++;
+			}
+		}
+	}
+	fclose(file);
+	if (nr == 0) {
+		if (nr + 1 < *ngroups)
+			groups[nr] = group;
+		nr++;
+	}
+	ret = nr <= *ngroups ? nr : -1;
+	*ngroups = nr;
+	return ret;
 }
 
 int hyper_mkdir(char *hyper_path)

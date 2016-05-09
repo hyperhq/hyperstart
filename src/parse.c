@@ -130,6 +130,31 @@ int json_token_streq(char *js, jsmntok_t *t, char *s)
 		strlen(s) == (size_t)(t->end - t->start));
 }
 
+static int container_parse_additional_groups(struct hyper_exec *exec, char *json, jsmntok_t *toks)
+{
+	int i = 0, j;
+
+	if (toks[i].type != JSMN_ARRAY) {
+		fprintf(stdout, "additional groups need array");
+		return -1;
+	}
+
+	exec->nr_additional_groups = toks[i].size;
+	exec->additional_groups = calloc(exec->nr_additional_groups, sizeof(*exec->additional_groups));
+	if (exec->additional_groups == NULL) {
+		fprintf(stderr, "allocate memory for additional groups failed\n");
+		return -1;
+	}
+
+	i++;
+	for (j = 0; j < exec->nr_additional_groups; j++, i++) {
+		exec->additional_groups[j] = (json_token_str(json, &toks[i]));
+		fprintf(stdout, "container process additional group %d %s\n", j, exec->additional_groups[j]);
+	}
+
+	return i;
+}
+
 static int container_parse_argv(struct hyper_exec *exec, char *json, jsmntok_t *toks)
 {
 	int i = 0, j;
@@ -163,6 +188,16 @@ static void container_cleanup_exec(struct hyper_exec *exec)
 
 	free(exec->id);
 	exec->id = NULL;
+
+	free(exec->user);
+	exec->user = NULL;
+	free(exec->group);
+	exec->group = NULL;
+	for (i = 0; i < exec->nr_additional_groups; i++) {
+		free(exec->additional_groups[i]);
+	}
+	free(exec->additional_groups);
+	exec->additional_groups = NULL;
 
 	free(exec->workdir);
 	exec->workdir = NULL;
@@ -440,7 +475,20 @@ static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *t
 	for (j = 0; j < toks_size; j++) {
 		t = &toks[i];
 		fprintf(stdout, "%d name %s\n", i, json_token_str(json, t));
-		if (json_token_streq(json, t, "terminal") && t->size == 1) {
+		if (json_token_streq(json, t, "user") && t->size == 1) {
+			exec->user = (json_token_str(json, &toks[++i]));
+			fprintf(stdout, "container process user %s\n", exec->user);
+			i++;
+		} else if (json_token_streq(json, t, "group") && t->size == 1) {
+			exec->group = (json_token_str(json, &toks[++i]));
+			fprintf(stdout, "container process group %s\n", exec->group);
+			i++;
+		} else if (json_token_streq(json, t, "additionalGroups") && t->size == 1) {
+			next = container_parse_additional_groups(exec, json, &toks[++i]);
+			if (next < 0)
+				return -1;
+			i += next;
+		} else if (json_token_streq(json, t, "terminal") && t->size == 1) {
 			if (!json_token_streq(json, &toks[++i], "false")) {
 				exec->tty = 1;
 				fprintf(stdout, "container uses terminal\n");
