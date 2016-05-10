@@ -81,7 +81,7 @@ static int container_setup_volume(struct hyper_container *container)
 			options = "nouuid";
 
 		if (mount(dev, path, vol->fstype, 0, options) < 0) {
-			perror("mount volume device faled");
+			perror("mount volume device failed");
 			return -1;
 		}
 
@@ -97,13 +97,13 @@ static int container_setup_volume(struct hyper_container *container)
 		}
 
 		if (mount(volume, mountpoint, NULL, MS_BIND, NULL) < 0) {
-			perror("mount volume device faled");
+			perror("mount volume device failed");
 			return -1;
 		}
 
 		if (vol->readonly &&
 		    mount(volume, mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
-			perror("mount fsmap faled");
+			perror("mount fsmap failed");
 			return -1;
 		}
 
@@ -148,7 +148,7 @@ static int container_setup_volume(struct hyper_container *container)
 		}
 
 		if (mount(src, mountpoint, NULL, MS_BIND, NULL) < 0) {
-			perror("mount fsmap faled");
+			perror("mount fsmap failed");
 			continue;
 		}
 
@@ -156,7 +156,7 @@ static int container_setup_volume(struct hyper_container *container)
 			continue;
 
 		if (mount(src, mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0)
-			perror("mount fsmap faled");
+			perror("mount fsmap failed");
 	}
 
 	return 0;
