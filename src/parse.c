@@ -635,9 +635,92 @@ fail:
 	return -1;
 }
 
-static int hyper_parse_interfaces(struct hyper_pod *pod, char *json, jsmntok_t *toks)
+static int hyper_parse_interface(struct hyper_interface *iface,
+				 char *json, jsmntok_t *toks)
 {
 	int i = 0, j, next_if;
+
+	if (toks[i].type != JSMN_OBJECT) {
+		fprintf(stdout, "network array need object\n");
+		return -1;
+	}
+
+	next_if = toks[i].size;
+
+	i++;
+	for (j = 0; j < next_if; j++, i++) {
+		if (json_token_streq(json, &toks[i], "device")) {
+			iface->device = (json_token_str(json, &toks[++i]));
+			fprintf(stdout, "net device is %s\n", iface->device);
+		} else if (json_token_streq(json, &toks[i], "ipAddress")) {
+			iface->ipaddr = (json_token_str(json, &toks[++i]));
+			fprintf(stdout, "net ipaddress is %s\n", iface->ipaddr);
+		} else if (json_token_streq(json, &toks[i], "netMask")) {
+			iface->mask = (json_token_str(json, &toks[++i]));
+			fprintf(stdout, "net mask is %s\n", iface->mask);
+		} else {
+			fprintf(stderr, "get unknown section %s in interfaces\n",
+				json_token_str(json, &toks[i]));
+			goto fail;
+		}
+	}
+
+	return i;
+
+fail:
+	free(iface->device);
+	free(iface->ipaddr);
+	free(iface->mask);
+	return -1;
+}
+
+struct hyper_interface *hyper_parse_setup_interface(char *json, int length)
+{
+	jsmn_parser p;
+	int toks_num = 10, n;
+	jsmntok_t *toks = NULL;
+
+	struct hyper_interface *iface = NULL;
+realloc:
+	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
+	if (toks == NULL) {
+		fprintf(stderr, "allocate tokens for execcmd failed\n");
+		goto fail;
+	}
+
+	jsmn_init(&p);
+	n = jsmn_parse(&p, json, length, toks, toks_num);
+	if (n < 0) {
+		fprintf(stdout, "jsmn parse failed, n is %d\n", n);
+		if (n == JSMN_ERROR_NOMEM) {
+			toks_num *= 2;
+			goto realloc;
+		}
+		goto out;
+	}
+
+	iface = calloc(1, sizeof(*iface));
+	if (iface == NULL) {
+		fprintf(stderr, "allocate memory for interface failed\n");
+		goto out;
+	}
+
+	if (hyper_parse_interface(iface, json, toks) < 0) {
+		fprintf(stderr, "allocate memory for interface failed\n");
+		goto fail;
+	}
+out:
+	free(toks);
+	return iface;
+fail:
+	free(iface);
+	iface = NULL;
+	goto out;
+}
+
+static int hyper_parse_interfaces(struct hyper_pod *pod, char *json, jsmntok_t *toks)
+{
+	int i = 0, j, next;
 	struct hyper_interface *iface;
 
 	if (toks[i].type != JSMN_ARRAY) {
@@ -656,32 +739,11 @@ static int hyper_parse_interfaces(struct hyper_pod *pod, char *json, jsmntok_t *
 
 	i++;
 	for (j = 0; j < pod->i_num; j++) {
-		int i_if;
-		iface = &pod->iface[j];
-
-		if (toks[i].type != JSMN_OBJECT) {
-			fprintf(stdout, "network array need object\n");
+		next = hyper_parse_interface(&pod->iface[j], json, toks + i);
+		if (next < 0)
 			return -1;
-		}
-		next_if = toks[i].size;
 
-		i++;
-		for (i_if = 0; i_if < next_if; i_if++, i++) {
-			if (json_token_streq(json, &toks[i], "device")) {
-				iface->device = (json_token_str(json, &toks[++i]));
-				fprintf(stdout, "net device is %s\n", iface->device);
-			} else if (json_token_streq(json, &toks[i], "ipAddress")) {
-				iface->ipaddr = (json_token_str(json, &toks[++i]));
-				fprintf(stdout, "net ipaddress is %s\n", iface->ipaddr);
-			} else if (json_token_streq(json, &toks[i], "netMask")) {
-				iface->mask = (json_token_str(json, &toks[++i]));
-				fprintf(stdout, "net mask is %s\n", iface->mask);
-			} else {
-				fprintf(stderr, "get unknown section %s in interfaces\n",
-					json_token_str(json, &toks[i]));
-				return -1;
-			}
-		}
+		i += next;
 	}
 
 	return i;

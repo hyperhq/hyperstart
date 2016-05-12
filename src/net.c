@@ -11,6 +11,7 @@
 
 #include "hyper.h"
 #include "util.h"
+#include "parse.h"
 #include "../config.h"
 
 void hyper_set_be32(uint8_t *buf, uint32_t val)
@@ -781,6 +782,40 @@ void hyper_cleanup_network(struct hyper_pod *pod)
 	pod->iface = NULL;
 	pod->i_num = 0;
 	netlink_close(&rth);
+}
+
+int hyper_cmd_setup_interface(char *json, int length)
+{
+	int ret = -1;
+	struct hyper_interface *iface;
+	struct rtnl_handle rth;
+
+	if (hyper_rescan() < 0)
+		return -1;
+
+	if (netlink_open(&rth) < 0)
+		return -1;
+
+
+	iface = hyper_parse_setup_interface(json, length);
+	if (iface == NULL) {
+		fprintf(stderr, "parse interface failed\n");
+		goto out;
+	}
+	ret = hyper_setup_interface(&rth, iface);
+	if (ret < 0) {
+		fprintf(stderr, "link up device %s failed\n", iface->device);
+		goto out1;
+	}
+	ret = 0;
+out1:
+	free(iface->device);
+	free(iface->ipaddr);
+	free(iface->mask);
+	free(iface);
+out:
+	netlink_close(&rth);
+	return ret;
 }
 
 int hyper_setup_dns(struct hyper_pod *pod)
