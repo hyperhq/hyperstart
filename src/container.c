@@ -624,8 +624,15 @@ static int hyper_container_init(void *data)
 	execvp(container->exec.argv[0], container->exec.argv);
 	perror("exec container command failed");
 
+	 /* the exit codes follow the `chroot` standard,
+	    see docker/docs/reference/run.md#exit-status */
+	if (errno == ENOENT)
+		_exit(127);
+	else if (errno == EACCES)
+		_exit(126);
+
 fail:
-	_exit(-1);
+	_exit(125);
 }
 
 static int hyper_setup_pty(struct hyper_container *c)

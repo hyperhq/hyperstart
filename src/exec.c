@@ -590,10 +590,20 @@ static int hyper_do_exec_cmd(void *data)
 		goto exit;
 	}
 
-	if (execvp(exec->argv[0], exec->argv) < 0)
+	if (execvp(exec->argv[0], exec->argv) < 0) {
 		perror("exec failed");
+
+		 /* the exit codes follow the `chroot` standard,
+		    see docker/docs/reference/run.md#exit-status */
+		if (errno == ENOENT)
+			exit(127);
+		else if (errno == EACCES)
+			exit(126);
+
+	}
+
 exit:
-	_exit(ret);
+	_exit(125);
 out:
 	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
 	_exit(ret);
