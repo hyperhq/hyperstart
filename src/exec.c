@@ -8,6 +8,7 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <dirent.h>
 #include <sched.h>
 #include <errno.h>
 #include <string.h>
@@ -726,6 +727,58 @@ struct hyper_exec *hyper_find_exec_by_seq(struct hyper_pod *pod, uint64_t seq)
 	return NULL;
 }
 
+static int hyper_kill_container_processes(struct hyper_container *c) {
+	struct stat st;
+	int pid, loop = 1;
+	DIR *dp;
+	struct dirent *de;
+
+	if (fstat(c->ns, &st) < 0) {
+		perror("fail to stat mnt ns");
+		return -1;
+	}
+
+	fprintf(stdout, "container init process %d\n", c->exec.pid);
+	while (loop) {
+		loop = 0;
+
+		dp = opendir("/proc");
+		if (dp == NULL) {
+			perror("open /proc failed");
+			return -1;
+		}
+
+		while ((de = readdir(dp)) && de != NULL) {
+			char mntns[512];
+			struct stat st1;
+
+			if (!isdigit(de->d_name[0]))
+				continue;
+			pid = atoi(de->d_name);
+			if (pid == 1 || pid == c->exec.pid)
+				continue;
+
+			sprintf(mntns, "/proc/%d/ns/mnt", pid);
+
+			if (stat(mntns, &st1) < 0) {
+				fprintf(stdout, "fail to stat mnt ns of process %d: %s\n",
+					pid, strerror(errno));
+				continue;
+			}
+
+			if (st.st_ino != st1.st_ino)
+			       continue;
+
+			fprintf(stdout, "kill process of container %d\n", pid);
+			kill(pid, SIGKILL);
+			loop = 1;
+		}
+
+		closedir(dp);
+	}
+	return 0;
+}
+
 int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 {
 	struct hyper_exec *exec;
@@ -753,6 +806,9 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 	exec->stderrfd = -1;
 
 	hyper_release_exec(exec, pod);
+
+	if (exec->init)
+		hyper_kill_container_processes(container_of(exec, struct hyper_container, exec));
 
 	return 0;
 }
