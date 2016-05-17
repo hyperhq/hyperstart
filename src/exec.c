@@ -390,7 +390,7 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	return 0;
 }
 
-int hyper_dup_exec_tty(int to, struct hyper_exec *e)
+int hyper_dup_exec_tty(struct hyper_exec *e)
 {
 	int ret = -1;
 
@@ -416,7 +416,6 @@ int hyper_dup_exec_tty(int to, struct hyper_exec *e)
 	}
 
 	fflush(stdout);
-	hyper_send_type(to, READY);
 
 	if (dup2(e->stdinfd, STDIN_FILENO) < 0) {
 		perror("dup tty device to stdin failed");
@@ -535,8 +534,7 @@ static int hyper_do_exec_cmd(void *data)
 	struct hyper_exec_arg *arg = data;
 	struct hyper_exec *exec = arg->exec;
 	struct hyper_pod *pod = arg->pod;
-	int pipe[2] = {-1, -1}, pid;
-	int ret = -1;
+	int pid, ret = -1;
 
 	if (exec->id) {
 		char path[512];
@@ -558,11 +556,6 @@ static int hyper_do_exec_cmd(void *data)
 		close(pidns);
 	}
 
-	if (pipe2(pipe, O_CLOEXEC) < 0) {
-		perror("create pipe in exec command failed");
-		goto out;
-	}
-
 	if (hyper_watch_exec_pty(exec, pod) < 0) {
 		fprintf(stderr, "add pts master event failed\n");
 		goto out;
@@ -573,14 +566,6 @@ static int hyper_do_exec_cmd(void *data)
 		perror("fail to fork");
 		goto out;
 	} else if (pid > 0) {
-		uint32_t type;
-
-		if (hyper_get_type(pipe[0], &type) < 0 || type != READY) {
-			fprintf(stderr, "hyper init doesn't get execcmd ready message\n");
-			goto out;
-		}
-
-		fprintf(stdout, "hyper init get ready message\n");
 		exec->pid = pid;
 		//TODO combin ref++ and add to list.
 		list_add_tail(&exec->list, &pod->exec_head);
@@ -600,25 +585,16 @@ static int hyper_do_exec_cmd(void *data)
 		goto exit;
 	}
 
-	if (hyper_dup_exec_tty(pipe[1], exec) < 0) {
+	if (hyper_dup_exec_tty(exec) < 0) {
 		fprintf(stderr, "dup pts to exec stdio failed\n");
 		goto exit;
 	}
 
-	if (execvp(exec->argv[0], exec->argv) < 0) {
+	if (execvp(exec->argv[0], exec->argv) < 0)
 		perror("exec failed");
-		goto exit;
-	}
-
-	ret = 0;
 exit:
-	close(pipe[0]);
-	close(pipe[1]);
-	hyper_send_type(pipe[1], ERROR);
 	_exit(ret);
 out:
-	close(pipe[0]);
-	close(pipe[1]);
 	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
 	_exit(ret);
 }
