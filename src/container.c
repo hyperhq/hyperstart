@@ -402,9 +402,9 @@ static int container_setup_workdir(struct hyper_container *container)
 	return 0;
 }
 
-static int container_setup_tty(int fd, struct hyper_container *container)
+static int container_setup_tty(struct hyper_container *container)
 {
-	return hyper_dup_exec_tty(fd, &container->exec);
+	return hyper_dup_exec_tty(&container->exec);
 }
 
 static int hyper_rescan_scsi(void)
@@ -457,7 +457,6 @@ struct hyper_container_arg {
 	struct hyper_pod	*pod;
 	int			ipcns;
 	int			utsns;
-	int			pipe[2];
 };
 
 static int hyper_container_init(void *data)
@@ -617,7 +616,7 @@ static int hyper_container_init(void *data)
 
 	fflush(stdout);
 
-	if (container_setup_tty(arg->pipe[1], container) < 0) {
+	if (container_setup_tty(container) < 0) {
 		fprintf(stdout, "setup tty failed\n");
 		goto fail;
 	}
@@ -625,11 +624,15 @@ static int hyper_container_init(void *data)
 	execvp(container->exec.argv[0], container->exec.argv);
 	perror("exec container command failed");
 
-	_exit(-1);
+	 /* the exit codes follow the `chroot` standard,
+	    see docker/docs/reference/run.md#exit-status */
+	if (errno == ENOENT)
+		_exit(127);
+	else if (errno == EACCES)
+		_exit(126);
 
 fail:
-	hyper_send_type(arg->pipe[1], ERROR);
-	_exit(-1);
+	_exit(125);
 }
 
 static int hyper_setup_pty(struct hyper_container *c)
@@ -666,11 +669,9 @@ int hyper_start_container(struct hyper_container *container,
 		.pod	= pod,
 		.utsns	= utsns,
 		.ipcns	= ipcns,
-		.pipe	= {-1, -1},
 	};
 	int flags = CLONE_NEWNS | SIGCHLD;
 	char path[128];
-	uint32_t type;
 	void *stack;
 	int pid;
 
@@ -682,11 +683,6 @@ int hyper_start_container(struct hyper_container *container,
 
 	if (hyper_setup_pty(container) < 0) {
 		fprintf(stderr, "setup pty device for container failed\n");
-		goto fail;
-	}
-
-	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
-		perror("create pipe between pod init execcmd failed");
 		goto fail;
 	}
 
@@ -715,24 +711,13 @@ int hyper_start_container(struct hyper_container *container,
 		goto fail;
 	}
 
-	/* wait for ready message */
-	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
-		fprintf(stderr, "wait for container started failed\n");
-		goto fail;
-	}
-
 	container->exec.pid = pid;
 	list_add_tail(&container->exec.list, &pod->exec_head);
 	container->exec.ref++;
 
-	close(arg.pipe[0]);
-	close(arg.pipe[1]);
-
 	fprintf(stdout, "container %s,init pid %d,ref %d\n", container->id, pid, container->exec.ref);
 	return 0;
 fail:
-	close(arg.pipe[0]);
-	close(arg.pipe[1]);
 	close(container->ns);
 	hyper_reset_event(&container->exec.stdinev);
 	hyper_reset_event(&container->exec.stdoutev);
