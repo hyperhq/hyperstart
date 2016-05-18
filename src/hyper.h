@@ -49,6 +49,7 @@ struct hyper_pod {
 	struct hyper_interface	*iface;
 	struct hyper_route	*rt;
 	char			**dns;
+	char 			**white_cidrs;
 	struct list_head	containers;
 	struct list_head	exec_head;
 	char			*hostname;

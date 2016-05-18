@@ -931,6 +931,33 @@ static int hyper_parse_dns(struct hyper_pod *pod, char *json, jsmntok_t *toks)
 	return i;
 }
 
+static int hyper_parse_white_cidrs(struct hyper_pod *pod, char *json, jsmntok_t *toks)
+{
+	int i = 0, j;
+
+	if (toks[i].type != JSMN_ARRAY) {
+		fprintf(stdout, "Dns format incorrect\n");
+		return -1;
+	}
+
+	pod->d_num = toks[i].size;
+	fprintf(stdout, "white cidr count %d\n", pod->d_num);
+
+	pod->white_cidrs = calloc(pod->d_num, sizeof(*pod->white_cidrs));
+	if (pod->white_cidrs == NULL) {
+		fprintf(stdout, "alloc memory for white_cidrs failed\n");
+		return -1;
+	}
+
+	i++;
+	for (j = 0; j < pod->d_num; j++, i++) {
+		pod->white_cidrs[j] = (json_token_str(json, &toks[i]));
+		fprintf(stdout, "pod white_cidr %d: %s\n", j, pod->dns[j]);
+	}
+
+	return i;
+}
+
 int hyper_parse_pod(struct hyper_pod *pod, char *json, int length)
 {
 	int i, n, next = -1;
@@ -1012,6 +1039,12 @@ realloc:
 				pod->policy = POLICY_ONFAILURE;
 			fprintf(stdout, "restartPolicy is %" PRIu8 "\n", pod->policy);
 			i++;
+		} else if (json_token_streq(json, t, "whiteCIDRs") && t->size == 1) {
+			next = hyper_parse_white_cidrs(pod, json, &toks[++i]);
+			if (next < 0)
+				goto out;
+
+			i += next;
 		} else {
 			fprintf(stdout, "get unknown section %s in pod\n",
 				json_token_str(json, &toks[i]));
