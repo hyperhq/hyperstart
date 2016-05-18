@@ -596,10 +596,9 @@ static int hyper_do_exec_cmd(void *data)
 		 /* the exit codes follow the `chroot` standard,
 		    see docker/docs/reference/run.md#exit-status */
 		if (errno == ENOENT)
-			exit(127);
+			_exit(127);
 		else if (errno == EACCES)
-			exit(126);
-
+			_exit(126);
 	}
 
 exit:
