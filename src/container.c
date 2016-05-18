@@ -457,6 +457,7 @@ struct hyper_container_arg {
 	struct hyper_pod	*pod;
 	int			ipcns;
 	int			utsns;
+	int			pipe[2];
 };
 
 static int hyper_container_init(void *data)
@@ -614,6 +615,7 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
+	hyper_send_type(arg->pipe[1], READY);
 	fflush(stdout);
 
 	if (container_setup_tty(container) < 0) {
@@ -632,6 +634,7 @@ static int hyper_container_init(void *data)
 		_exit(126);
 
 fail:
+	hyper_send_type(arg->pipe[1], ERROR);
 	_exit(125);
 }
 
@@ -669,15 +672,22 @@ int hyper_start_container(struct hyper_container *container,
 		.pod	= pod,
 		.utsns	= utsns,
 		.ipcns	= ipcns,
+		.pipe	= {-1, -1},
 	};
 	int flags = CLONE_NEWNS | SIGCHLD;
 	char path[128];
 	void *stack;
+	uint32_t type;
 	int pid;
 
 	if (container->image == NULL || container->exec.argv == NULL) {
 		fprintf(stdout, "container root image %s, argv %p\n",
 			container->image, container->exec.argv);
+		goto fail;
+	}
+
+	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
+		perror("create pipe between pod init execcmd failed");
 		goto fail;
 	}
 
@@ -711,10 +721,18 @@ int hyper_start_container(struct hyper_container *container,
 		goto fail;
 	}
 
+	/* wait for ready message */
+	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
+		fprintf(stderr, "wait for container started failed\n");
+		goto fail;
+	}
+
 	container->exec.pid = pid;
 	list_add_tail(&container->exec.list, &pod->exec_head);
 	container->exec.ref++;
 
+	close(arg.pipe[0]);
+	close(arg.pipe[1]);
 	fprintf(stdout, "container %s,init pid %d,ref %d\n", container->id, pid, container->exec.ref);
 	return 0;
 fail:
@@ -727,6 +745,8 @@ fail:
 	container->exec.code = -1;
 	container->exec.seq = 0;
 	container->exec.ref = 0;
+	close(arg.pipe[0]);
+	close(arg.pipe[1]);
 	return -1;
 }
 
