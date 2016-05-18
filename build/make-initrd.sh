@@ -5,6 +5,7 @@ mkdir -p root/lib
 
 cp ../src/init ./root
 cp busybox ./root
+cp iptables ./root
 tar -xf modules.tar -C ./root/lib/
 
 ldd ./root/init | while read line
