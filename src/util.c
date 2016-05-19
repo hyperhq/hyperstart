@@ -625,3 +625,9 @@ void hyper_shutdown()
 	hyper_unmount_all();
 	reboot(LINUX_REBOOT_CMD_POWER_OFF);
 }
+
+int hyper_cmd(char *cmd)
+{
+	int status = system(cmd);
+	return ((WIFEXITED(status)) ? ((char)WEXITSTATUS(status)) : -1);
+}

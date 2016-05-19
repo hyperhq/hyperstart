@@ -363,6 +363,11 @@ int hyper_start_container_stage0(struct hyper_container *c, struct hyper_pod *po
 		goto out;
 	}
 
+	if (hyper_setup_container_portmapping(c, pod) < 0) {
+		perror("fail to setup port mapping for container");
+		goto out;
+	}
+
 	pid = clone(hyper_container_stage0, stack + stacksize, CLONE_VM| CLONE_FILES| SIGQUIT, &arg);
 	if (pid < 0) {
 		perror("enter container pid ns failed");
@@ -577,6 +582,11 @@ static int hyper_setup_pod(struct hyper_pod *pod)
 		return -1;
 	}
 
+	if (hyper_setup_portmapping(pod) < 0) {
+		fprintf(stderr, "setup port mapping failed\n");
+		return -1;
+	}
+
 	if (hyper_setup_container(pod) < 0) {
 		fprintf(stderr, "start container failed\n");
 		return -1;
@@ -657,7 +667,7 @@ static int hyper_new_container(char *json, int length)
 	ret = hyper_start_container_stage0(c, pod);
 	if (ret < 0) {
 		//TODO full grace cleanup
-		hyper_cleanup_container(c);
+		hyper_cleanup_container(c, pod);
 	}
 
 	return ret;
@@ -960,6 +970,7 @@ void hyper_cleanup_pod(struct hyper_pod *pod)
 	hyper_cleanup_network(pod);
 	hyper_cleanup_shared(pod);
 	hyper_cleanup_dns(pod);
+	hyper_cleanup_portmapping(pod);
 	hyper_cleanup_hostname(pod);
 }
 

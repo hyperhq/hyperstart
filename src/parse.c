@@ -524,6 +524,68 @@ static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *t
 	return i;
 }
 
+static void container_free_ports(struct hyper_container *c)
+{
+	int i;
+
+	for (i = 0; i < c->ports_num; i++) {
+		free(c->ports[i].protocol);
+	}
+	free(c->ports);
+	c->ports = NULL;
+	c->ports_num = 0;
+}
+
+static int container_parse_ports(struct hyper_container *c, char *json, jsmntok_t *toks)
+{
+	int i = 0, j;
+
+	if (toks[i].type != JSMN_ARRAY) {
+		fprintf(stdout, "ports need array\n");
+		return -1;
+	}
+
+	c->ports = calloc(toks[i].size, sizeof(*c->ports));
+	if (c->ports == NULL) {
+		fprintf(stderr, "allocate memory for ports failed\n");
+		return -1;
+	}
+
+	c->ports_num = toks[i].size;
+	fprintf(stdout, "ports num %d\n", c->ports_num);
+
+	i++;
+	for (j = 0; j < c->ports_num; j++) {
+		int i_port, next_port;
+
+		if (toks[i].type != JSMN_OBJECT) {
+			fprintf(stdout, "port array need object\n");
+			return -1;
+		}
+		next_port = toks[i].size;
+		i++;
+		for (i_port = 0; i_port < next_port; i_port++, i++) {
+			if (json_token_streq(json, &toks[i], "protocol")) {
+				c->ports[j].protocol =
+				(json_token_str(json, &toks[++i]));
+				fprintf(stdout, "port %d protocol %s\n", j, c->ports[j].protocol);
+			} else if (json_token_streq(json, &toks[i], "hostPort")) {
+				c->ports[j].host_port = json_token_int(json, &toks[++i]);
+				fprintf(stdout, "port %d host_port %d\n", j, c->ports[j].host_port);
+			} else if (json_token_streq(json, &toks[i], "containerPort")) {
+				c->ports[j].container_port = json_token_int(json, &toks[++i]);
+				fprintf(stdout, "port %d container_port %d\n", j, c->ports[j].container_port);
+			} else {
+				fprintf(stdout, "get unknown section %s in ports\n",
+					json_token_str(json, &toks[i]));
+				return -1;
+			}
+		}
+	}
+
+	return i;
+}
+
 void hyper_free_container(struct hyper_container *c)
 {
 	free(c->id);
@@ -542,6 +604,7 @@ void hyper_free_container(struct hyper_container *c)
 	c->fstype = NULL;
 
 	container_free_volumes(c);
+	container_free_ports(c);
 	container_free_sysctl(c);
 	container_free_fsmap(c);
 	container_cleanup_exec(&c->exec);
@@ -636,6 +699,11 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 				fprintf(stdout, "need to initialize container\n");
 			}
 			i++;
+		} else if (json_token_streq(json, t, "ports") && t->size == 1) {
+			next = container_parse_ports(c, json, &toks[++i]);
+			if (next < 0)
+				goto fail;
+			i += next;
 		} else {
 			fprintf(stdout, "get unknown section %s in container\n",
 				json_token_str(json, t));
@@ -940,17 +1008,17 @@ static int hyper_parse_white_cidrs(struct hyper_pod *pod, char *json, jsmntok_t 
 		return -1;
 	}
 
-	pod->d_num = toks[i].size;
-	fprintf(stdout, "white cidr count %d\n", pod->d_num);
+	pod->w_num = toks[i].size;
+	fprintf(stdout, "white cidr count %d\n", pod->w_num);
 
-	pod->white_cidrs = calloc(pod->d_num, sizeof(*pod->white_cidrs));
+	pod->white_cidrs = calloc(pod->w_num, sizeof(*pod->white_cidrs));
 	if (pod->white_cidrs == NULL) {
 		fprintf(stdout, "alloc memory for white_cidrs failed\n");
 		return -1;
 	}
 
 	i++;
-	for (j = 0; j < pod->d_num; j++, i++) {
+	for (j = 0; j < pod->w_num; j++, i++) {
 		pod->white_cidrs[j] = (json_token_str(json, &toks[i]));
 		fprintf(stdout, "pod white_cidr %d: %s\n", j, pod->dns[j]);
 	}

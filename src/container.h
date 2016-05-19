@@ -24,6 +24,12 @@ struct sysctl {
 	char	*value;
 };
 
+struct port {
+	int  host_port;
+	int  container_port;
+	char *protocol;
+}
+
 struct hyper_container {
 	char			*id;
 	char			*rootfs;
@@ -33,9 +39,11 @@ struct hyper_container {
 	struct volume		*vols;
 	struct fsmap		*maps;
 	struct sysctl		*sys;
+	struct port			*ports;
 	int			vols_num;
 	int			maps_num;
 	int			sys_num;
+	int 		ports_num;
 	int			ns;
 	int			initialize;
 	uint32_t		code;
@@ -48,7 +56,7 @@ struct hyper_pod;
 int hyper_start_container(struct hyper_container *container,
 			  int utsns, int ipcns, struct hyper_pod *pod);
 struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id);
-void hyper_cleanup_container(struct hyper_container *container);
+void hyper_cleanup_container(struct hyper_container *container, struct hyper_pod *pod);
 void hyper_cleanup_containers(struct hyper_pod *pod);
 void hyper_free_container(struct hyper_container *c);
 

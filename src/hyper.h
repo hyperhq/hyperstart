@@ -12,6 +12,7 @@
 #include "exec.h"
 #include "event.h"
 #include "container.h"
+#include "portmapping.h"
 
 enum {
 	RESERVED,
@@ -59,6 +60,7 @@ struct hyper_pod {
 	uint32_t		r_num;
 	uint32_t		e_num;
 	uint32_t		d_num;
+	uint32_t 		w_num;
 	uint32_t		type;
 	/* how many containers are running */
 	uint32_t		remains;
