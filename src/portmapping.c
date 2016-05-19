@@ -260,7 +260,11 @@ void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper
 	char rule[128] = {0};
 
 	for (i=0; i<c->ports_num; i++) {
-		sprintf(rule, "-p tcp -m tcp --dport %d -j REDIRECT --to-ports %d", c->ports[i].host_port, c->ports[i].container_port);
+		sprintf(rule, "-p %s -m %s --dport %d -j REDIRECT --to-ports %d", 
+        c->ports[i].protocol, 
+        c->ports[i].protocol,  
+        c->ports[i].host_port, 
+        c->ports[i].container_port);
 		struct ipt_rule rediect_rule = {
 			.table = "nat",
 			.op = "-D",
