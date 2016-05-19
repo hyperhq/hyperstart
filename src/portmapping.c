@@ -197,7 +197,6 @@ void hyper_cleanup_portmapping(struct hyper_pod *pod)
 	int i = 0;
 	for(i=0; i< sizeof(rules)/sizeof(struct ipt_rule); i++) {
 		if (hyper_setup_iptables_rule(rules[i])<0) {
-			return -1;
 		}
 	}
 }
@@ -216,7 +215,11 @@ int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_po
 	char rule[128] = {0};
 
 	for (i=0; i<c->ports_num; i++) {
-		sprintf(rule, "-p tcp -m tcp --dport %d -j REDIRECT --to-ports %d", c->ports[i].host_port, c->ports[i].container_port);
+		sprintf(rule, "-p %s -m %s --dport %d -j REDIRECT --to-ports %d",
+			c->ports[i].protocol,
+			c->ports[i].protocol,
+			c->ports[i].host_port,
+			c->ports[i].container_port);
 		struct ipt_rule rediect_rule = {
 			.table = "nat",
 			.op = "-I",
@@ -229,7 +232,11 @@ int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_po
 		}
 
 		for (j=0; j<pod->w_num; j++) {
-			sprintf(rule, "-s %s -p %s -m multiport --dports %d -j ACCEPT", pod->white_cidrs[j], c->ports[i].protocol, c->ports[i].container_port);
+			sprintf(rule, "-s %s -p %s -m %s --dport %d -j ACCEPT",
+				pod->white_cidrs[j],
+				c->ports[i].protocol,
+				c->ports[i].protocol,
+				c->ports[i].container_port);
 			struct ipt_rule accept_rule = {
 				.table = "filter",
 				.op = "-I",
@@ -263,9 +270,9 @@ void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper
 
 	for (i=0; i<c->ports_num; i++) {
 		sprintf(rule, "-p %s -m %s --dport %d -j REDIRECT --to-ports %d", 
-        c->ports[i].protocol, 
-        c->ports[i].protocol,  
-        c->ports[i].host_port, 
+        c->ports[i].protocol,
+        c->ports[i].protocol,
+        c->ports[i].host_port,
         c->ports[i].container_port);
 		struct ipt_rule rediect_rule = {
 			.table = "nat",
@@ -278,7 +285,11 @@ void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper
 		}
 
 		for (j=0; j<pod->w_num; j++) {
-			sprintf(rule, "-s %s -p %s -m multiport --dports %d -j ACCEPT", pod->white_cidrs[j], c->ports[i].protocol, c->ports[i].container_port);
+			sprintf(rule, "-s %s -p %s -m %s --dport %d -j ACCEPT",
+				pod->white_cidrs[j],
+				c->ports[i].protocol,
+				c->ports[i].protocol,
+				c->ports[i].container_port);
 			struct ipt_rule accept_rule = {
 				.table = "filter",
 				.op = "-D",
