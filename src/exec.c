@@ -271,6 +271,12 @@ int hyper_setup_exec_user(struct hyper_exec *exec)
 		perror("setuid() fails");
 		goto fail;
 	}
+	free(groups);
+
+	// set user related envs. the container env config can overwrite it
+	setenv("USER", pwd->pw_name, 1);
+	setenv("HOME", pwd->pw_dir, 1);
+
 	return 0;
 
 fail:
