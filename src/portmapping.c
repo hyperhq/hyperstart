@@ -45,7 +45,9 @@ int hyper_setup_iptables_rule(struct ipt_rule rule)
 
 	if (check == 0) {
 		// iptables rule already exist, do not insert it again
-		if (rule.op == "-A" || rule.op == "-I" || rule.op == "-N") {
+		if (!strncmp(rule.op, "-A", strlen("-A")) ||
+			!strncmp(rule.op, "-I", strlen("-I")) ||
+			!strncmp(rule.op, "-N", strlen("-N"))) {
 			fprintf(stdout, "iptables rule '%s' already exist\n", rule.rule);
 			return 0;
 		}
