@@ -1293,6 +1293,10 @@ int main(int argc, char *argv[])
 	symlink("/busybox", "/sh");
 	symlink("/busybox", "/tar");
 	symlink("/busybox", "/sbin/modprobe");
+	symlink("/busybox", "/sbin/depmod");
+	symlink("/iptables", "/sbin/iptables");
+	symlink("/iptables", "/sbin/iptables-restore");
+	symlink("/iptables", "/sbin/iptables-save");
 
 	cmdline = read_cmdline();
 

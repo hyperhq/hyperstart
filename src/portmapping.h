@@ -18,6 +18,6 @@ struct hyper_container;
 int hyper_setup_portmapping(struct hyper_pod *pod);
 void hyper_cleanup_portmapping(struct hyper_pod *pod);
 int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_pod *pod);
-int hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper_pod *pod);
+void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper_pod *pod);
 
 #endif

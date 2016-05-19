@@ -28,7 +28,7 @@ struct port {
 	int  host_port;
 	int  container_port;
 	char *protocol;
-}
+};
 
 struct hyper_container {
 	char			*id;

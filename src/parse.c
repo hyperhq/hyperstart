@@ -540,8 +540,12 @@ static int container_parse_ports(struct hyper_container *c, char *json, jsmntok_
 {
 	int i = 0, j;
 
+	if (toks[i].size == 0) {
+		return 0;
+	}
+
 	if (toks[i].type != JSMN_ARRAY) {
-		fprintf(stdout, "ports need array\n");
+		fprintf(stdout, "ports format error\n");
 		return -1;
 	}
 
@@ -1003,13 +1007,17 @@ static int hyper_parse_white_cidrs(struct hyper_pod *pod, char *json, jsmntok_t 
 {
 	int i = 0, j;
 
+	if (toks[i].size == 0) {
+		return 0;
+	}
+
 	if (toks[i].type != JSMN_ARRAY) {
-		fprintf(stdout, "Dns format incorrect\n");
+		fprintf(stdout, "white CIDRs format incorrect\n");
 		return -1;
 	}
 
 	pod->w_num = toks[i].size;
-	fprintf(stdout, "white cidr count %d\n", pod->w_num);
+	fprintf(stdout, "white CIDRs count %d\n", pod->w_num);
 
 	pod->white_cidrs = calloc(pod->w_num, sizeof(*pod->white_cidrs));
 	if (pod->white_cidrs == NULL) {
