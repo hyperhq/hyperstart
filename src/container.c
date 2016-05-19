@@ -488,18 +488,13 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
-	// set additinal env before config so that the config can overwrite it
+	// set early env. the container env config can overwrite it
 	setenv("HOME", "/root", 1);
 	setenv("HOSTNAME", arg->pod->hostname, 1);
 	if (container->exec.tty)
 		setenv("TERM", "xterm", 1);
 	else
 		unsetenv("TERM");
-
-	if (hyper_setup_env(container->exec.envs, container->exec.envs_num) < 0) {
-		fprintf(stdout, "setup env failed\n");
-		goto fail;
-	}
 
 	if (mount("", "/", NULL, MS_SLAVE|MS_REC, NULL) < 0) {
 		perror("mount SLAVE failed");
@@ -612,6 +607,12 @@ static int hyper_container_init(void *data)
 
 	if (hyper_setup_exec_user(&container->exec) < 0) {
 		fprintf(stderr, "setup exec user failed\n");
+		goto fail;
+	}
+
+	// set the container env
+	if (hyper_setup_env(container->exec.envs, container->exec.envs_num) < 0) {
+		fprintf(stdout, "setup env failed\n");
 		goto fail;
 	}
 
