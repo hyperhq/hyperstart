@@ -78,7 +78,10 @@ int hyper_setup_portmapping(struct hyper_pod *pod)
 	// iptables -t nat -N hyperstart-PREROUTING
 	// iptables -t filter -I INPUT -j hyperstart-INPUT
 	// iptables -t nat -I PREROUTING -j hyperstart-PREROUTING
-	// iptables -t filter -A hyperstart-INPUT -j DROP 
+	// iptables -t filter -A hyperstart-INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+	// iptables -t filter -A hyperstart-INPUT -p icmp -j ACCEPT
+	// iptables -t filter -A hyperstart-INPUT -i lo -j ACCEPT
+	// iptables -t filter -A hyperstart-INPUT -j DROP
 	// iptables -t nat -A hyperstart-PREROUTING -j RETURN
 	const struct ipt_rule rules[] = {
 		{
@@ -104,6 +107,24 @@ int hyper_setup_portmapping(struct hyper_pod *pod)
 			.op = "-I",
 			.chain = "PREROUTING",
 			.rule = "-j hyperstart-PREROUTING",
+		},
+		{
+			.table = "filter",
+			.op = "-A",
+			.chain = "hyperstart-INPUT",
+			.rule = "-m state --state RELATED,ESTABLISHED -j ACCEPT",
+		},
+		{
+			.table = "filter",
+			.op = "-A",
+			.chain = "hyperstart-INPUT",
+			.rule = "-p icmp -j ACCEPT",
+		},
+		{
+			.table = "filter",
+			.op = "-A",
+			.chain = "hyperstart-INPUT",
+			.rule = "-i lo -j ACCEPT",
 		},
 		{
 			.table = "filter",
@@ -135,9 +156,12 @@ void hyper_cleanup_portmapping(struct hyper_pod *pod)
 		return;
 	}
 
-	// iptables -t filter -D hyperstart-INPUT -j DROP 
-	// iptables -t nat -D hyperstart-PREROUTING -j RETURN
+	// iptables -t filter -D hyperstart-INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+	// iptables -t filter -D hyperstart-INPUT -p icmp -j ACCEPT
+	// iptables -t filter -D hyperstart-INPUT -i lo -j ACCEPT
+	// iptables -t filter -D hyperstart-INPUT -j DROP
 	// iptables -t filter -D INPUT -j hyperstart-DNPUT
+	// iptables -t nat -D hyperstart-PREROUTING -j RETURN
 	// iptables -t nat -D PREROUTING -j hyperstart-PREROUTING
 	// iptables -t filter -F hyperstart-INPUT
 	// iptables -t nat -F hyperstart-PREROUTING
@@ -145,16 +169,34 @@ void hyper_cleanup_portmapping(struct hyper_pod *pod)
 	// iptables -t nat -X hyperstart-PREROUTING
 	const struct ipt_rule rules[] = {
 		{
-			.table = "nat",
+			.table = "filter",
 			.op = "-D",
-			.chain = "hyperstart-PREROUTING",
-			.rule = "-j RETURN",
+			.chain = "hyperstart-INPUT",
+			.rule = "-m state --state RELATED,ESTABLISHED -j ACCEPT",
+		},
+		{
+			.table = "filter",
+			.op = "-D",
+			.chain = "hyperstart-INPUT",
+			.rule = "-p icmp -j ACCEPT",
+		},
+		{
+			.table = "filter",
+			.op = "-D",
+			.chain = "hyperstart-INPUT",
+			.rule = "-i lo -j ACCEPT",
 		},
 		{
 			.table = "filter",
 			.op = "-D",
 			.chain = "hyperstart-INPUT",
 			.rule = "-j DROP",
+		},
+		{
+			.table = "nat",
+			.op = "-D",
+			.chain = "hyperstart-PREROUTING",
+			.rule = "-j RETURN",
 		},
 		{
 			.table = "nat",
