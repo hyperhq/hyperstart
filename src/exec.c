@@ -758,11 +758,12 @@ int hyper_release_exec(struct hyper_exec *exec,
 
 	fprintf(stdout, "%s exit code %" PRIu8"\n", __func__, exec->code);
 	if (exec->init) {
-		fprintf(stdout, "%s container init exited, type %d, remains %d, policy %d\n",
-			__func__, pod->type, pod->remains, pod->policy);
+		struct hyper_container *c = container_of(exec, struct hyper_container, exec);
+		fprintf(stdout, "%s container init exited, type %d, remains %d, policy %d, temp %d\n",
+			__func__, pod->type, pod->remains, pod->policy, c->temp);
 
 		// TODO send finish of this container and full cleanup
-		if (--pod->remains > 0)
+		if (--pod->remains > 0 || c->temp)
 			return 0;
 
 		if (pod->type == STOPPOD) {
