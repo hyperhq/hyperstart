@@ -712,6 +712,34 @@ free_exec:
 	goto out;
 }
 
+static int hyper_send_container_finished(struct hyper_pod *pod, struct hyper_container *c)
+{
+	int ret = -1;
+	uint8_t c_idx = 0;
+	struct hyper_container *cont;
+	uint8_t *data = NULL;
+
+	/* TODO: make id mapping stable */
+	list_for_each_entry(cont, &pod->containers, list) {
+		if (cont == c)
+			break;
+		c_idx++;
+	}
+	if (cont != c)
+		goto out;
+
+	data = malloc(8);
+	if (data == NULL)
+		goto out;
+	hyper_set_be32(data, c_idx);
+	hyper_set_be32(data + 4, c->exec.code);
+
+	ret = hyper_send_msg_block(ctl.chan.fd, CONTAINERFINISHED, 8, data);
+	free(data);
+out:
+	return ret;
+}
+
 static int hyper_send_pod_finished(struct hyper_pod *pod)
 {
 	int ret = -1;
@@ -762,9 +790,11 @@ int hyper_release_exec(struct hyper_exec *exec,
 		fprintf(stdout, "%s container init exited, type %d, remains %d, policy %d, temp %d\n",
 			__func__, pod->type, pod->remains, pod->policy, c->temp);
 
-		// TODO send finish of this container and full cleanup
-		if (--pod->remains > 0 || c->temp)
+		hyper_send_container_finished(pod, c);
+		if (--pod->remains > 0 || c->temp) {
+			hyper_cleanup_container(c);
 			return 0;
+		}
 
 		if (pod->type == STOPPOD) {
 			/* stop pod manually, hyper doesn't care the pod finished codes */
