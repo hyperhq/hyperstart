@@ -715,23 +715,12 @@ free_exec:
 static int hyper_send_container_finished(struct hyper_pod *pod, struct hyper_container *c)
 {
 	int ret = -1;
-	uint8_t c_idx = 0;
-	struct hyper_container *cont;
 	uint8_t *data = NULL;
-
-	/* TODO: make id mapping stable */
-	list_for_each_entry(cont, &pod->containers, list) {
-		if (cont == c)
-			break;
-		c_idx++;
-	}
-	if (cont != c)
-		goto out;
 
 	data = malloc(8);
 	if (data == NULL)
 		goto out;
-	hyper_set_be32(data, c_idx);
+	hyper_set_be32(data, c->idx);
 	hyper_set_be32(data + 4, c->exec.code);
 
 	ret = hyper_send_msg_block(ctl.chan.fd, CONTAINERFINISHED, 8, data);

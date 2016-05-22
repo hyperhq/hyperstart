@@ -352,6 +352,10 @@ int hyper_start_container_stage0(struct hyper_container *c, struct hyper_pod *po
 	int ret = -1, pid, status;
 	uint32_t type;
 
+	if (pod->c_idx == UINT_MAX) {
+		fprintf(stderr, "reaching maximum container in pod %u\n", pod->c_idx);
+		goto out;
+	}
 	if (pipe2(arg.ctl_pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between hyper init and pod init failed");
 		goto out;
@@ -388,6 +392,8 @@ int hyper_start_container_stage0(struct hyper_container *c, struct hyper_pod *po
 
 	/* container process is spawned and ready to execute */
 	pod->remains++;
+	pod->c_idx++;
+	c->idx = pod->c_idx;
 	ret = 0;
 out:
 	close(arg.ctl_pipe[0]);
@@ -634,11 +640,12 @@ static int hyper_start_pod(char *json, int length)
 	return 0;
 }
 
-static int hyper_new_container(char *json, int length)
+static int hyper_new_container(char *json, int length, uint32_t *datalen, uint8_t **data)
 {
 	int ret;
 	struct hyper_container *c;
 	struct hyper_pod *pod = &global_pod;
+	uint8_t *buf;
 
 	fprintf(stdout, "call hyper_new_container, json %s, len %d\n", json, length);
 
@@ -653,11 +660,23 @@ static int hyper_new_container(char *json, int length)
 		return -1;
 	}
 
+	buf = malloc(4);
+	if (buf == NULL) {
+		perror("malloc buffer");
+		return -1;
+	}
+
+	/* FIXME: need locking around pod->containers. */
 	list_add_tail(&c->list, &pod->containers);
 	ret = hyper_start_container_stage0(c, pod);
 	if (ret < 0) {
 		//TODO full grace cleanup
 		hyper_cleanup_container(c);
+		free(buf);
+	} else {
+		hyper_set_be32(buf, c->idx);
+		*datalen = 4;
+		*data = buf;
 	}
 
 	return ret;
@@ -1129,7 +1148,7 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		ret = hyper_set_win_size((char *)buf->data + 8, len - 8);
 		break;
 	case NEWCONTAINER:
-		ret = hyper_new_container((char *)buf->data + 8, len - 8);
+		ret = hyper_new_container((char *)buf->data + 8, len - 8, &datalen, &data);
 		break;
 	case KILLCONTAINER:
 		ret = hyper_kill_container((char *)buf->data + 8, len - 8);

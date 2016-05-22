@@ -25,6 +25,7 @@ struct sysctl {
 };
 
 struct hyper_container {
+	uint32_t		idx;
 	char			*id;
 	char			*rootfs;
 	char			*image;
