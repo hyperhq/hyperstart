@@ -732,7 +732,7 @@ struct hyper_interface *hyper_parse_setup_interface(char *json, int length)
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
 	if (toks == NULL) {
-		fprintf(stderr, "allocate tokens for execcmd failed\n");
+		fprintf(stderr, "allocate tokens for setup interface failed\n");
 		goto fail;
 	}
 
@@ -754,7 +754,7 @@ realloc:
 	}
 
 	if (hyper_parse_interface(iface, json, toks) < 0) {
-		fprintf(stderr, "allocate memory for interface failed\n");
+		fprintf(stderr, "parse interface failed\n");
 		goto fail;
 	}
 out:
