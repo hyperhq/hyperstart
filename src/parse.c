@@ -797,33 +797,33 @@ static int hyper_parse_interfaces(struct hyper_pod *pod, char *json, jsmntok_t *
 	return i;
 }
 
-static int hyper_parse_routes(struct hyper_pod *pod, char *json, jsmntok_t *toks)
+static int hyper_parse_routes(struct hyper_route **routes, uint32_t *r_num, char *json, jsmntok_t *toks)
 {
-	int i = 0, j, next_rt;
-	struct hyper_route *rt;
+	int i = 0, j, num, next_rt;
+	struct hyper_route *rts;
 
 	if (toks[i].type != JSMN_ARRAY) {
 		fprintf(stdout, "routes need array\n");
 		return -1;
 	}
 
-	pod->r_num = toks[i].size;
-	fprintf(stdout, "network routes num %d\n", pod->r_num);
+	num = toks[i].size;
+	fprintf(stdout, "network routes num %d\n", num);
 
-	pod->rt = calloc(pod->r_num, sizeof(*rt));
-	if (pod->rt == NULL) {
-		fprintf(stdout, "alloc memory for router failed\n");
+	rts = calloc(num, sizeof(*rts));
+	if (rts == NULL) {
+		fprintf(stdout, "alloc memory for route failed\n");
 		return -1;
 	}
 
 	i++;
-	for (j = 0; j < pod->r_num; j++) {
+	for (j = 0; j < num; j++) {
 		int i_rt;
+		struct hyper_route *rt = &rts[j];
 
-		rt = &pod->rt[j];
 		if (toks[i].type != JSMN_OBJECT) {
 			fprintf(stdout, "routes array need object\n");
-			return -1;
+			goto out;
 		}
 		next_rt = toks[i].size;
 
@@ -841,12 +841,67 @@ static int hyper_parse_routes(struct hyper_pod *pod, char *json, jsmntok_t *toks
 			} else {
 				fprintf(stderr, "get unknown section %s in routes\n",
 					json_token_str(json, &toks[i]));
-				return -1;
+				goto out;
 			}
 		}
 	}
 
+	*routes = rts;
+	*r_num = num;
+
 	return i;
+out:
+	free(rts);
+	return -1;
+}
+
+int hyper_parse_setup_routes(struct hyper_route **routes, uint32_t *r_num, char *json, int length)
+{
+	jsmn_parser p;
+	int toks_num = 10, i, n, ret = -1;
+	jsmntok_t *toks = NULL;
+
+realloc:
+	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
+	if (toks == NULL) {
+		fprintf(stderr, "allocate tokens for setup route failed\n");
+		goto out;
+	}
+
+	jsmn_init(&p);
+	n = jsmn_parse(&p, json, length, toks, toks_num);
+	if (n < 0) {
+		fprintf(stdout, "jsmn parse failed, n is %d\n", n);
+		if (n == JSMN_ERROR_NOMEM) {
+			toks_num *= 2;
+			goto realloc;
+		}
+		goto out;
+	}
+
+	for (i = 0; i < n; i++) {
+		jsmntok_t *t = &toks[i];
+
+		if (t->type != JSMN_STRING)
+			continue;
+
+		if (i++ == n || !json_token_streq(json, t, "routes")) {
+			fprintf(stderr, "cannot find routes\n");
+			goto out;
+		}
+
+		break;
+	}
+
+	if (hyper_parse_routes(routes, r_num, json, &toks[i]) < 0) {
+		fprintf(stdout, "fail to parse routes\n");
+		goto out;
+	}
+
+	ret = 0;
+out:
+	free(toks);
+	return ret;
 }
 
 static int hyper_parse_dns(struct hyper_pod *pod, char *json, jsmntok_t *toks)
@@ -930,7 +985,7 @@ realloc:
 
 			i += next;
 		} else if (json_token_streq(json, t, "routes") && t->size == 1) {
-			next = hyper_parse_routes(pod, json, &toks[++i]);
+			next = hyper_parse_routes(&pod->rt, &pod->r_num, json, &toks[++i]);
 			if (next < 0)
 				goto out;
 

@@ -15,5 +15,6 @@ int hyper_parse_read_file(struct hyper_reader *reader, char *json, int length);
 struct hyper_container *hyper_parse_new_container(struct hyper_pod *pod, char *json, int length);
 void hyper_free_container(struct hyper_container *c);
 struct hyper_interface *hyper_parse_setup_interface(char *json, int length);
+int hyper_parse_setup_routes(struct hyper_route **routes, uint32_t *r_num, char *json, int length);
 
 #endif

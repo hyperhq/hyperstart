@@ -818,6 +818,35 @@ out:
 	return ret;
 }
 
+int hyper_cmd_setup_route(char *json, int length) {
+	struct hyper_route *rts = NULL;
+	int i, ret = -1;
+	uint32_t r_num;
+	struct rtnl_handle rth;
+
+	if (netlink_open(&rth) < 0)
+		return -1;
+
+	if (hyper_parse_setup_routes(&rts, &r_num, json, length) < 0) {
+		fprintf(stderr, "parse route failed\n");
+		goto out;
+	}
+
+	for (i = 0; i < r_num; i++) {
+		ret = hyper_setup_route(&rth, &rts[i]);
+		if (ret < 0) {
+			fprintf(stderr, "setup route failed\n");
+			goto out;
+		}
+	}
+
+	ret = 0;
+out:
+	netlink_close(&rth);
+	free(rts);
+	return ret;
+}
+
 int hyper_setup_dns(struct hyper_pod *pod)
 {
 	int i, fd, ret = -1;
