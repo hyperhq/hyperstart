@@ -106,7 +106,12 @@ static inline int hyper_unlink(char *hyper_path)
 
 static inline int hyper_create(char *hyper_path)
 {
-	return creat(hyper_path, 0755);
+	int fd = creat(hyper_path, 0755);
+	if (fd < 0)
+		return -1;
+
+	close(fd);
+	return 0;
 }
 
 int hyper_mkdir(char *hyper_path);
