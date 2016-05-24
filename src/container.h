@@ -25,6 +25,7 @@ struct sysctl {
 };
 
 struct hyper_container {
+	uint32_t		idx;
 	char			*id;
 	char			*rootfs;
 	char			*image;
@@ -38,6 +39,7 @@ struct hyper_container {
 	int			sys_num;
 	int			ns;
 	int			initialize;
+	int			temp;
 	uint32_t		code;
 	struct list_head	list;
 	struct hyper_exec	exec;

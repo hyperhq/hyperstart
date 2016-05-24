@@ -636,6 +636,12 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 				fprintf(stdout, "need to initialize container\n");
 			}
 			i++;
+		} else if (json_token_streq(json, t, "tempContainer") && t->size == 1) {
+			if (!json_token_streq(json, &toks[++i], "false")) {
+				c->temp = 1;
+				fprintf(stdout, "got temporary container\n");
+			}
+			i++;
 		} else {
 			fprintf(stdout, "get unknown section %s in container\n",
 				json_token_str(json, t));
