@@ -10,3 +10,6 @@ endif
 
 cbfs-local:
 	bash ./make-initrd.sh cbfs
+
+kernel-local:
+	bash ./make-kernel.sh
