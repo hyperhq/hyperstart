@@ -1140,6 +1140,9 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	case SETUPINTERFACE:
 		ret = hyper_cmd_setup_interface((char *)buf->data + 8, len - 8);
 		break;
+	case SETUPROUTE:
+		ret = hyper_cmd_setup_route((char *)buf->data + 8, len - 8);
+		break;
 	default:
 		ret = -1;
 		break;

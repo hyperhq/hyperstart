@@ -48,6 +48,7 @@ void hyper_set_be64(uint8_t *buf, uint64_t val);
 uint64_t hyper_get_be64(uint8_t *buf);
 int hyper_setup_network(struct hyper_pod *pod);
 int hyper_cmd_setup_interface(char *json, int length);
+int hyper_cmd_setup_route(char *json, int length);
 void hyper_cleanup_network(struct hyper_pod *pod);
 int hyper_setup_dns(struct hyper_pod *pod);
 void hyper_cleanup_dns(struct hyper_pod *pod);
