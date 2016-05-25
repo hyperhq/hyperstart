@@ -1,0 +1,43 @@
+From 084b4a5aa4b90975f7ac6b4714a6b449430ef4c4 Mon Sep 17 00:00:00 2001
+From: Peng Tao <bergwolf@gmail.com>
+Date: Wed, 4 May 2016 12:01:22 +0800
+Subject: [PATCH] HACK: 9P: always use cached inode to fill in v9fs_vfs_getattr
+
+So that if in cache=none mode, we don't have to lookup server that
+might not support open-unlink-fstat operation.
+
+Signed-off-by: Peng Tao <bergwolf@gmail.com>
+---
+ fs/9p/vfs_inode.c      | 2 +-
+ fs/9p/vfs_inode_dotl.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/fs/9p/vfs_inode.c b/fs/9p/vfs_inode.c
+index 5110785..43ebb31 100644
+--- a/fs/9p/vfs_inode.c
++++ b/fs/9p/vfs_inode.c
+@@ -1059,7 +1059,7 @@ v9fs_vfs_getattr(struct vfsmount *mnt, struct dentry *dentry,
+ 
+ 	p9_debug(P9_DEBUG_VFS, "dentry: %p\n", dentry);
+ 	v9ses = v9fs_dentry2v9ses(dentry);
+-	if (v9ses->cache == CACHE_LOOSE || v9ses->cache == CACHE_FSCACHE) {
++	if (!d_really_is_negative(dentry) || v9ses->cache == CACHE_LOOSE || v9ses->cache == CACHE_FSCACHE) {
+ 		generic_fillattr(d_inode(dentry), stat);
+ 		return 0;
+ 	}
+diff --git a/fs/9p/vfs_inode_dotl.c b/fs/9p/vfs_inode_dotl.c
+index cb899af..b1e4205 100644
+--- a/fs/9p/vfs_inode_dotl.c
++++ b/fs/9p/vfs_inode_dotl.c
+@@ -479,7 +479,7 @@ v9fs_vfs_getattr_dotl(struct vfsmount *mnt, struct dentry *dentry,
+ 
+ 	p9_debug(P9_DEBUG_VFS, "dentry: %p\n", dentry);
+ 	v9ses = v9fs_dentry2v9ses(dentry);
+-	if (v9ses->cache == CACHE_LOOSE || v9ses->cache == CACHE_FSCACHE) {
++	if (!d_really_is_negative(dentry) || v9ses->cache == CACHE_LOOSE || v9ses->cache == CACHE_FSCACHE) {
+ 		generic_fillattr(d_inode(dentry), stat);
+ 		return 0;
+ 	}
+-- 
+2.5.0
+
