@@ -860,6 +860,7 @@ int hyper_parse_setup_routes(struct hyper_route **routes, uint32_t *r_num, char 
 	jsmn_parser p;
 	int toks_num = 10, i, n, ret = -1;
 	jsmntok_t *toks = NULL;
+	int found = 0;
 
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
@@ -889,11 +890,11 @@ realloc:
 			fprintf(stderr, "cannot find routes\n");
 			goto out;
 		}
-
+		found = 1;
 		break;
 	}
 
-	if (hyper_parse_routes(routes, r_num, json, &toks[i]) < 0) {
+	if (found && (hyper_parse_routes(routes, r_num, json, &toks[i]) < 0)) {
 		fprintf(stdout, "fail to parse routes\n");
 		goto out;
 	}
