@@ -239,6 +239,7 @@ void hyper_cleanup_portmapping(struct hyper_pod *pod)
 	int i = 0;
 	for(i=0; i< sizeof(rules)/sizeof(struct ipt_rule); i++) {
 		if (hyper_setup_iptables_rule(rules[i])<0) {
+			return;
 		}
 	}
 }

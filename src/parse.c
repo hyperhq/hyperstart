@@ -1028,7 +1028,7 @@ static int hyper_parse_white_cidrs(struct hyper_pod *pod, char *json, jsmntok_t 
 	i++;
 	for (j = 0; j < pod->w_num; j++, i++) {
 		pod->white_cidrs[j] = (json_token_str(json, &toks[i]));
-		fprintf(stdout, "pod white_cidr %d: %s\n", j, pod->dns[j]);
+		fprintf(stdout, "pod white_cidr %d: %s\n", j, pod->white_cidrs[j]);
 	}
 
 	return i;
