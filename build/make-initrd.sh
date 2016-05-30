@@ -1,13 +1,13 @@
 #!/bin/bash
 
 rm -rf root
-mkdir -p root/lib root/lib64
+mkdir -p root/lib root/lib64 root/lib/modules
 
 cp ../src/init ./root
 cp busybox ./root
 cp iptables ./root
 cp libm.so.6 ./root/lib64/
-tar -xf modules.tar -C ./root/lib/
+tar -xf modules.tar -C ./root/lib/modules
 
 ldd ./root/init | while read line
 do
