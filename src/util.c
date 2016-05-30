@@ -625,3 +625,33 @@ void hyper_shutdown()
 	hyper_unmount_all();
 	reboot(LINUX_REBOOT_CMD_POWER_OFF);
 }
+
+int hyper_cmd(char *cmd)
+{
+	int pid, status;
+
+	pid = fork();
+	if (pid < 0) {
+		perror("fail to fork");
+		return -1;
+	} else if (pid > 0) {
+		if (waitpid(pid, &status, 0) <= 0) {
+			perror("waiting fork cmd failed");
+			return -1;
+		}
+		if (WIFEXITED(status)) {
+			int ret = WEXITSTATUS(status);
+			fprintf(stdout, "%s cmd exit normally, status %" PRIu8 "\n", cmd, ret);
+			if (ret == 0)
+				return 0;
+		}
+
+		fprintf(stdout, "cmd %s exit unexpectedly, status %" PRIu8 "\n", cmd, status);
+		return -1;
+	} else {
+		fprintf(stdout, "executing cmd %s\n", cmd);
+		execlp("/busybox", "sh", "-c", cmd, NULL);
+	}
+
+	return -1;
+}

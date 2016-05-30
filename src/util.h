@@ -24,6 +24,7 @@ int hyper_copy_dir(char *src, char *dst);
 void hyper_sync_time_hctosys();
 void online_cpu(void);
 void online_memory(void);
+int hyper_cmd(char *cmd);
 int hyper_mkdir(char *path);
 int hyper_open_channel(char *channel, int mode);
 int hyper_open_serial_dev(char *tty);

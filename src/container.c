@@ -768,7 +768,7 @@ struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id)
 	return NULL;
 }
 
-void hyper_cleanup_container(struct hyper_container *c)
+void hyper_cleanup_container(struct hyper_container *c, struct hyper_pod *pod)
 {
 	char root[512];
 
@@ -777,6 +777,7 @@ void hyper_cleanup_container(struct hyper_container *c)
 		perror("umount devpts failed");
 
 	close(c->ns);
+	hyper_cleanup_container_portmapping(c, pod);
 	hyper_free_container(c);
 }
 
@@ -785,7 +786,7 @@ void hyper_cleanup_containers(struct hyper_pod *pod)
 	struct hyper_container *c, *n;
 
 	list_for_each_entry_safe(c, n, &pod->containers, list)
-		hyper_cleanup_container(c);
+		hyper_cleanup_container(c, pod);
 
 	pod->remains = 0;
 }
