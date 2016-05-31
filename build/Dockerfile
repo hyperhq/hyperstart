@@ -3,7 +3,7 @@ MAINTAINER Hyper Developers <dev@hyper.sh>
 
 RUN yum install -y patch gcc ncurses-devel make openssl-devel bc
 
-ENV KERNEL_VERSION 4.4.7
+ENV KERNEL_VERSION 4.4.11
 ENV LOCALVERSION -hyper
 ENV KERNEL_RELEASE ${KERNEL_VERSION}${LOCALVERSION}
 
