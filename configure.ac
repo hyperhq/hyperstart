@@ -49,6 +49,19 @@ fi
 
 AM_CONDITIONAL([WITH_VBOX], [test "x$with_vbox" != "xno"])
 
+
+AC_ARG_WITH([musl],
+            [AS_HELP_STRING([--with-musl],
+                            [build hyperstart with musl libc])],
+            [],[with_musl=no])
+
+if test "x$with_musl" != "xno" ; then
+    AC_DEFINE_UNQUOTED([WITH_MUSL], 1, [build hyperstart with musl libc])
+fi
+
+AM_CONDITIONAL([WITH_MUSL], [test "x$with_musl" != "xno"])
+
+
 AC_CONFIG_FILES([
   Makefile
   src/Makefile
@@ -61,6 +74,7 @@ AC_MSG_RESULT([
 	prefix:		${prefix}
 
 	with-vbox:	${with_vbox}
+	with-musl:	${with_musl}
 
 	compiler:          ${CC}
 	cflags:            ${CFLAGS}
