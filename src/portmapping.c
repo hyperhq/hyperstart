@@ -66,7 +66,8 @@ int hyper_setup_iptables_rule(struct ipt_rule rule)
 // initialize modules and iptables chains
 int hyper_setup_portmapping(struct hyper_pod *pod)
 {
-	if (pod->w_num == 0) {
+	if (pod->portmap_white_lists == NULL || (pod->portmap_white_lists->i_num == 0 &&
+			pod->portmap_white_lists->e_num == 0)) {
 		return 0;
 	}
 
@@ -152,7 +153,8 @@ int hyper_setup_portmapping(struct hyper_pod *pod)
 
 void hyper_cleanup_portmapping(struct hyper_pod *pod)
 {
-	if (pod->w_num == 0) {
+	if (pod->portmap_white_lists == NULL || (pod->portmap_white_lists->i_num == 0 &&
+			pod->portmap_white_lists->e_num == 0)) {
 		return;
 	}
 
@@ -242,11 +244,17 @@ void hyper_cleanup_portmapping(struct hyper_pod *pod)
 			return;
 		}
 	}
+
+	free(pod->portmap_white_lists->internal_networks);
+	free(pod->portmap_white_lists->external_networks);
+	free(pod->portmap_white_lists);
+	pod->portmap_white_lists = NULL;
 }
 
 int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_pod *pod)
 {
-	if (pod->w_num == 0) {
+	if (pod->portmap_white_lists == NULL || (pod->portmap_white_lists->i_num == 0 &&
+			pod->portmap_white_lists->e_num == 0)) {
 		return 0;
 	}
 
@@ -256,27 +264,54 @@ int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_po
 
 	int i = 0, j = 0;
 	char rule[128] = {0};
-
+	char *network = NULL;
 	for (i=0; i<c->ports_num; i++) {
-		sprintf(rule, "-p %s -m %s --dport %d -j REDIRECT --to-ports %d",
-			c->ports[i].protocol,
-			c->ports[i].protocol,
-			c->ports[i].host_port,
-			c->ports[i].container_port);
-		struct ipt_rule rediect_rule = {
-			.table = "nat",
-			.op = "-I",
-			.chain = "hyperstart-PREROUTING",
-			.rule = rule,
-		};
-		if (hyper_setup_iptables_rule(rediect_rule)<0) {
-			fprintf(stderr, "setup rediect_rule '%s' failed\n", rule);
-			return -1;
+		// setup port mapping only if host_port is set
+		if (c->ports[i].host_port > 0) {
+			for (j=0; j<pod->portmap_white_lists->e_num; j++) {
+				network = pod->portmap_white_lists->external_networks[j];
+
+				// redirect host_port to container_port
+				sprintf(rule, "-s %s -p %s -m %s --dport %d -j REDIRECT --to-ports %d",
+					network,
+					c->ports[i].protocol,
+					c->ports[i].protocol,
+					c->ports[i].host_port,
+					c->ports[i].container_port);
+				struct ipt_rule rediect_rule = {
+					.table = "nat",
+					.op = "-I",
+					.chain = "hyperstart-PREROUTING",
+					.rule = rule,
+				};
+				if (hyper_setup_iptables_rule(rediect_rule)<0) {
+					fprintf(stderr, "setup rediect_rule '%s' failed\n", rule);
+					return -1;
+				}
+
+				// open container_port to external network
+				sprintf(rule, "-s %s -p %s -m %s --dport %d -j ACCEPT",
+					network,
+					c->ports[i].protocol,
+					c->ports[i].protocol,
+					c->ports[i].container_port);
+				struct ipt_rule accept_rule = {
+					.table = "filter",
+					.op = "-I",
+					.chain = "hyperstart-INPUT",
+					.rule = rule,
+				};
+				if (hyper_setup_iptables_rule(accept_rule)<0) {
+					fprintf(stderr, "setup accept_rule '%s' failed\n", rule);
+					return -1;
+				}
+			}
 		}
 
-		for (j=0; j<pod->w_num; j++) {
+		// only allow network request from white list
+		for (j=0; j<pod->portmap_white_lists->i_num; j++) {
 			sprintf(rule, "-s %s -p %s -m %s --dport %d -j ACCEPT",
-				pod->white_cidrs[j],
+				pod->portmap_white_lists->internal_networks[j],
 				c->ports[i].protocol,
 				c->ports[i].protocol,
 				c->ports[i].container_port);
@@ -291,7 +326,6 @@ int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_po
 				return -1;
 			}
 		}
-		
 	}
 
 	return 0;
@@ -299,7 +333,8 @@ int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_po
 
 void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper_pod *pod)
 {
-	if (pod->w_num == 0) {
+	if (pod->portmap_white_lists == NULL || (pod->portmap_white_lists->i_num == 0 &&
+			pod->portmap_white_lists->e_num == 0)) {
 		return;
 	}
 
@@ -307,29 +342,53 @@ void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper
 		return;
 	}
 
-
 	int i = 0, j = 0;
 	char rule[128] = {0};
-
+	char *network = NULL;
 	for (i=0; i<c->ports_num; i++) {
-		sprintf(rule, "-p %s -m %s --dport %d -j REDIRECT --to-ports %d", 
-        c->ports[i].protocol,
-        c->ports[i].protocol,
-        c->ports[i].host_port,
-        c->ports[i].container_port);
-		struct ipt_rule rediect_rule = {
-			.table = "nat",
-			.op = "-D",
-			.chain = "hyperstart-PREROUTING",
-			.rule = rule,
-		};
-		if (hyper_setup_iptables_rule(rediect_rule)<0) {
-			fprintf(stderr, "setup rediect_rule '%s' failed\n", rule);
+		// clean up port mapping only if host_port is set
+		if (c->ports[i].host_port > 0) {
+			for (j=0; j<pod->portmap_white_lists->e_num; j++) {
+				network = pod->portmap_white_lists->external_networks[j];
+
+				// redirect host_port to container_port
+				sprintf(rule, "-s %s -p %s -m %s --dport %d -j REDIRECT --to-ports %d",
+					network,
+					c->ports[i].protocol,
+					c->ports[i].protocol,
+					c->ports[i].host_port,
+					c->ports[i].container_port);
+				struct ipt_rule rediect_rule = {
+					.table = "nat",
+					.op = "-D",
+					.chain = "hyperstart-PREROUTING",
+					.rule = rule,
+				};
+				if (hyper_setup_iptables_rule(rediect_rule)<0) {
+					fprintf(stderr, "setup rediect_rule '%s' failed\n", rule);
+				}
+
+				// open container_port to external network
+				sprintf(rule, "-s %s -p %s -m %s --dport %d -j ACCEPT",
+					network,
+					c->ports[i].protocol,
+					c->ports[i].protocol,
+					c->ports[i].container_port);
+				struct ipt_rule accept_rule = {
+					.table = "filter",
+					.op = "-D",
+					.chain = "hyperstart-INPUT",
+					.rule = rule,
+				};
+				if (hyper_setup_iptables_rule(accept_rule)<0) {
+					fprintf(stderr, "setup accept_rule '%s' failed\n", rule);
+				}
+			}
 		}
 
-		for (j=0; j<pod->w_num; j++) {
+		for (j=0; j<pod->portmap_white_lists->i_num; j++) {
 			sprintf(rule, "-s %s -p %s -m %s --dport %d -j ACCEPT",
-				pod->white_cidrs[j],
+				pod->portmap_white_lists->internal_networks[j],
 				c->ports[i].protocol,
 				c->ports[i].protocol,
 				c->ports[i].container_port);
@@ -343,6 +402,5 @@ void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper
 				fprintf(stderr, "setup accept_rule '%s' failed\n", rule);
 			}
 		}
-		
 	}
 }
