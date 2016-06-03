@@ -49,8 +49,8 @@ struct hyper_pod {
 	struct hyper_container	*c;
 	struct hyper_interface	*iface;
 	struct hyper_route	*rt;
+	struct portmapping_white_list	*portmap_white_lists;
 	char			**dns;
-	char 			**white_cidrs;
 	struct list_head	containers;
 	struct list_head	exec_head;
 	char			*hostname;
@@ -60,12 +60,18 @@ struct hyper_pod {
 	uint32_t		r_num;
 	uint32_t		e_num;
 	uint32_t		d_num;
-	uint32_t 		w_num;
 	uint32_t		type;
 	/* how many containers are running */
 	uint32_t		remains;
 	uint8_t			policy;
 	int			efd;
+};
+
+struct portmapping_white_list {
+	char **internal_networks;
+	char **external_networks;
+	uint32_t i_num;
+	uint32_t e_num;
 };
 
 struct hyper_win_size {

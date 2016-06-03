@@ -997,14 +997,14 @@ static int hyper_parse_dns(struct hyper_pod *pod, char *json, jsmntok_t *toks)
 
 	i++;
 	for (j = 0; j < pod->d_num; j++, i++) {
-		pod->dns[j] = (json_token_str(json, &toks[i]));
+		pod->dns[j] = json_token_str(json, &toks[i]);
 		fprintf(stdout, "pod dns %d: %s\n", j, pod->dns[j]);
 	}
 
 	return i;
 }
 
-static int hyper_parse_white_cidrs(struct hyper_pod *pod, char *json, jsmntok_t *toks)
+static int hyper_parse_portmapping_internal_networks(struct portmapping_white_list *podmapping, char *json, jsmntok_t *toks)
 {
 	int i = 0, j;
 
@@ -1013,26 +1013,112 @@ static int hyper_parse_white_cidrs(struct hyper_pod *pod, char *json, jsmntok_t 
 	}
 
 	if (toks[i].type != JSMN_ARRAY) {
-		fprintf(stdout, "white CIDRs format incorrect\n");
+		fprintf(stdout, "internal networks format incorrect\n");
 		return -1;
 	}
 
-	pod->w_num = toks[i].size;
-	fprintf(stdout, "white CIDRs count %d\n", pod->w_num);
+	podmapping->i_num = toks[i].size;
+	fprintf(stdout, "internal networks count %d\n", podmapping->i_num);
 
-	pod->white_cidrs = calloc(pod->w_num, sizeof(*pod->white_cidrs));
-	if (pod->white_cidrs == NULL) {
-		fprintf(stdout, "alloc memory for white_cidrs failed\n");
+	podmapping->internal_networks = calloc(podmapping->i_num, sizeof(*podmapping->internal_networks));
+	if (podmapping->internal_networks == NULL) {
+		fprintf(stdout, "alloc memory for internal_networks failed\n");
 		return -1;
 	}
 
 	i++;
-	for (j = 0; j < pod->w_num; j++, i++) {
-		pod->white_cidrs[j] = (json_token_str(json, &toks[i]));
-		fprintf(stdout, "pod white_cidr %d: %s\n", j, pod->white_cidrs[j]);
+	for (j = 0; j < podmapping->i_num; j++, i++) {
+		podmapping->internal_networks[j] = json_token_str(json, &toks[i]);
+		fprintf(stdout, "podmapping internal_networks %d: %s\n", j, podmapping->internal_networks[j]);
 	}
 
 	return i;
+}
+
+static int hyper_parse_portmapping_external_networks(struct portmapping_white_list *podmapping, char *json, jsmntok_t *toks)
+{
+	int i = 0, j;
+
+	if (toks[i].size == 0) {
+		return 0;
+	}
+
+	if (toks[i].type != JSMN_ARRAY) {
+		fprintf(stdout, "external networks format incorrect\n");
+		return -1;
+	}
+
+	podmapping->e_num = toks[i].size;
+	fprintf(stdout, "external networks count %d\n", podmapping->e_num);
+
+	podmapping->external_networks = calloc(podmapping->e_num, sizeof(*podmapping->external_networks));
+	if (podmapping->external_networks == NULL) {
+		fprintf(stdout, "alloc memory for external_networks failed\n");
+		return -1;
+	}
+
+	i++;
+	for (j = 0; j < podmapping->e_num; j++, i++) {
+		podmapping->external_networks[j] = json_token_str(json, &toks[i]);
+		fprintf(stdout, "podmapping external_networks %d: %s\n", j, podmapping->external_networks[j]);
+	}
+
+	return i;
+}
+
+static int hyper_parse_portmapping_whitelist(struct hyper_pod *pod, char *json, jsmntok_t *toks)
+{
+	int i = 0, j, toks_size, next;
+
+	if (toks[i].type != JSMN_OBJECT) {
+		fprintf(stdout, "PortmappingWhiteLists format incorrect\n");
+		return -1;
+	}
+
+	pod->portmap_white_lists = calloc(1, sizeof(*pod->portmap_white_lists));
+	if (pod->portmap_white_lists == NULL) {
+		fprintf(stdout, "alloc memory for portmap_white_lists failed\n");
+		return -1;
+	}
+
+	toks_size = toks[i].size;
+	i++;
+	for (j = 0; j < toks_size; j++) {
+		jsmntok_t *t = &toks[i];
+
+		fprintf(stdout, "token %d, type is %d, size is %d\n", i, t->type, t->size);
+		if (t->type != JSMN_STRING) {
+			i++;
+			continue;
+		}
+
+		if (json_token_streq(json, t, "internalNetworks") && t->size == 1) {
+			next = hyper_parse_portmapping_internal_networks(pod->portmap_white_lists, json, &toks[++i]);
+			if (next < -1) {
+				goto out;
+			}
+
+			i += next;
+		} else if (json_token_streq(json, t, "externalNetworks") && t->size == 1) {
+			next = hyper_parse_portmapping_external_networks(pod->portmap_white_lists, json, &toks[++i]);
+			if (next < -1) {
+				goto out;
+			}
+			i += next;
+		} else {
+			fprintf(stdout, "get unknown section %s in portmap_white_lists\n", json_token_str(json, t));
+			goto out;
+		}
+	}
+
+	return i;
+
+out:
+	free(pod->portmap_white_lists->internal_networks);
+	free(pod->portmap_white_lists->external_networks);
+	free(pod->portmap_white_lists);
+	pod->portmap_white_lists = NULL;
+	return -1;
 }
 
 int hyper_parse_pod(struct hyper_pod *pod, char *json, int length)
@@ -1116,8 +1202,8 @@ realloc:
 				pod->policy = POLICY_ONFAILURE;
 			fprintf(stdout, "restartPolicy is %" PRIu8 "\n", pod->policy);
 			i++;
-		} else if (json_token_streq(json, t, "whiteCIDRs") && t->size == 1) {
-			next = hyper_parse_white_cidrs(pod, json, &toks[++i]);
+		} else if (json_token_streq(json, t, "portmappingWhiteLists") && t->size == 1) {
+			next = hyper_parse_portmapping_whitelist(pod, json, &toks[++i]);
 			if (next < 0)
 				goto out;
 
