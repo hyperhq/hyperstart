@@ -278,14 +278,14 @@ int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_po
 					c->ports[i].protocol,
 					c->ports[i].host_port,
 					c->ports[i].container_port);
-				struct ipt_rule rediect_rule = {
+				struct ipt_rule redirect_rule = {
 					.table = "nat",
 					.op = "-I",
 					.chain = "hyperstart-PREROUTING",
 					.rule = rule,
 				};
-				if (hyper_setup_iptables_rule(rediect_rule)<0) {
-					fprintf(stderr, "setup rediect_rule '%s' failed\n", rule);
+				if (hyper_setup_iptables_rule(redirect_rule)<0) {
+					fprintf(stderr, "setup redirect_rule '%s' failed\n", rule);
 					return -1;
 				}
 
@@ -358,14 +358,14 @@ void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper
 					c->ports[i].protocol,
 					c->ports[i].host_port,
 					c->ports[i].container_port);
-				struct ipt_rule rediect_rule = {
+				struct ipt_rule redirect_rule = {
 					.table = "nat",
 					.op = "-D",
 					.chain = "hyperstart-PREROUTING",
 					.rule = rule,
 				};
-				if (hyper_setup_iptables_rule(rediect_rule)<0) {
-					fprintf(stderr, "setup rediect_rule '%s' failed\n", rule);
+				if (hyper_setup_iptables_rule(redirect_rule)<0) {
+					fprintf(stderr, "cleanup redirect '%s' failed\n", rule);
 				}
 
 				// open container_port to external network
@@ -381,7 +381,7 @@ void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper
 					.rule = rule,
 				};
 				if (hyper_setup_iptables_rule(accept_rule)<0) {
-					fprintf(stderr, "setup accept_rule '%s' failed\n", rule);
+					fprintf(stderr, "cleanup accept_rule '%s' failed\n", rule);
 				}
 			}
 		}
@@ -399,7 +399,7 @@ void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper
 				.rule = rule,
 			};
 			if (hyper_setup_iptables_rule(accept_rule)<0) {
-				fprintf(stderr, "setup accept_rule '%s' failed\n", rule);
+				fprintf(stderr, "cleanup accept_rule '%s' failed\n", rule);
 			}
 		}
 	}

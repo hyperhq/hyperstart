@@ -1068,7 +1068,7 @@ static int hyper_parse_portmapping_external_networks(struct portmapping_white_li
 
 static int hyper_parse_portmapping_whitelist(struct hyper_pod *pod, char *json, jsmntok_t *toks)
 {
-	int i = 0, j, toks_size, next, ret = 0;
+	int i = 0, j, toks_size, next;
 
 	if (toks[i].type != JSMN_OBJECT) {
 		fprintf(stdout, "PortmappingWhiteLists format incorrect\n");
@@ -1095,7 +1095,6 @@ static int hyper_parse_portmapping_whitelist(struct hyper_pod *pod, char *json, 
 		if (json_token_streq(json, t, "internalNetworks") && t->size == 1) {
 			next = hyper_parse_portmapping_internal_networks(pod->portmap_white_lists, json, &toks[++i]);
 			if (next < -1) {
-				ret = -1;
 				goto out;
 			}
 
@@ -1103,27 +1102,23 @@ static int hyper_parse_portmapping_whitelist(struct hyper_pod *pod, char *json, 
 		} else if (json_token_streq(json, t, "externalNetworks") && t->size == 1) {
 			next = hyper_parse_portmapping_external_networks(pod->portmap_white_lists, json, &toks[++i]);
 			if (next < -1) {
-				ret = -1;
 				goto out;
 			}
 			i += next;
 		} else {
 			fprintf(stdout, "get unknown section %s in portmap_white_lists\n", json_token_str(json, t));
-			ret = -1;
 			goto out;
 		}
 	}
 
-out:
-	if (ret != -1) {
-		return i;
-	}
+	return i;
 
+out:
 	free(pod->portmap_white_lists->internal_networks);
 	free(pod->portmap_white_lists->external_networks);
 	free(pod->portmap_white_lists);
 	pod->portmap_white_lists = NULL;
-	return ret;
+	return -1;
 }
 
 int hyper_parse_pod(struct hyper_pod *pod, char *json, int length)
