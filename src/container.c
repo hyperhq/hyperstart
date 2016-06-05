@@ -391,12 +391,7 @@ static int container_setup_workdir(struct hyper_container *container)
 {
 	if (container->initialize) {
 		// create workdir
-		hyper_mkdir(container->exec.workdir);
-	}
-
-	if (container->exec.workdir && chdir(container->exec.workdir) < 0) {
-		perror("change work directory failed");
-		return -1;
+		return hyper_mkdir(container->exec.workdir);
 	}
 
 	return 0;
@@ -603,6 +598,11 @@ static int hyper_container_init(void *data)
 	if (container_setup_workdir(container) < 0) {
 		fprintf(stderr, "container sets up work directory failed\n");
 		goto fail;
+	}
+
+	if (container->exec.workdir && chdir(container->exec.workdir) < 0) {
+		perror("change work directory failed");
+		return -1;
 	}
 
 	if (hyper_setup_exec_user(&container->exec) < 0) {
