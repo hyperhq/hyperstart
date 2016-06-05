@@ -586,6 +586,11 @@ static int hyper_do_exec_cmd(void *data)
 		goto exit;
 	}
 
+	if (exec->workdir && chdir(exec->workdir) < 0) {
+		perror("change work directory failed");
+		goto exit;
+	}
+
 	if (hyper_setup_exec_user(exec) < 0) {
 		fprintf(stderr, "setup exec user failed\n");
 		goto exit;
