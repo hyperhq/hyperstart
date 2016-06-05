@@ -596,37 +596,7 @@ static int hyper_container_init(void *data)
 	}
 
 	hyper_send_type(arg->pipe[1], READY);
-
-	if (container->exec.workdir && chdir(container->exec.workdir) < 0) {
-		perror("change work directory failed");
-		return -1;
-	}
-
-	if (hyper_setup_exec_user(&container->exec) < 0) {
-		fprintf(stderr, "setup exec user failed\n");
-		goto fail;
-	}
-
-	// set the container env
-	if (hyper_setup_env(container->exec.envs, container->exec.envs_num) < 0) {
-		fprintf(stdout, "setup env failed\n");
-		goto fail;
-	}
-
-	if (hyper_dup_exec_tty(&container->exec) < 0) {
-		fprintf(stdout, "setup tty failed\n");
-		goto fail;
-	}
-
-	execvp(container->exec.argv[0], container->exec.argv);
-	perror("exec container command failed");
-
-	 /* the exit codes follow the `chroot` standard,
-	    see docker/docs/reference/run.md#exit-status */
-	if (errno == ENOENT)
-		_exit(127);
-	else if (errno == EACCES)
-		_exit(126);
+	hyper_exec_process(&container->exec);
 
 fail:
 	hyper_send_type(arg->pipe[1], ERROR);

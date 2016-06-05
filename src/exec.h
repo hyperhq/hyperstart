@@ -49,6 +49,7 @@ int hyper_release_exec(struct hyper_exec *, struct hyper_pod *);
 int hyper_container_execcmd(struct hyper_pod *pod);
 int hyper_setup_exec_tty(struct hyper_exec *e);
 int hyper_dup_exec_tty(struct hyper_exec *e);
+void hyper_exec_process(struct hyper_exec *e);
 struct hyper_exec *hyper_find_exec_by_pid(struct list_head *head, int pid);
 struct hyper_exec *hyper_find_exec_by_seq(struct hyper_pod *pod, uint64_t seq);
 int hyper_setup_exec_user(struct hyper_exec *e);

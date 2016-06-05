@@ -585,6 +585,18 @@ static int hyper_do_exec_cmd(void *data)
 		goto exit;
 	}
 
+	hyper_exec_process(exec);
+
+exit:
+	_exit(125);
+out:
+	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
+	_exit(ret);
+}
+
+// do the exec, no return
+void hyper_exec_process(struct hyper_exec *exec)
+{
 	if (exec->workdir && chdir(exec->workdir) < 0) {
 		perror("change work directory failed");
 		goto exit;
@@ -618,10 +630,8 @@ static int hyper_do_exec_cmd(void *data)
 	}
 
 exit:
+	fflush(stdout);
 	_exit(125);
-out:
-	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
-	_exit(ret);
 }
 
 static void hyper_free_exec(struct hyper_exec *exec)
