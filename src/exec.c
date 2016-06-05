@@ -474,7 +474,7 @@ int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 	return 0;
 }
 
-int hyper_enter_container(struct hyper_pod *pod,
+static int hyper_enter_container(struct hyper_pod *pod,
 			  struct hyper_exec *exec)
 {
 	int ipcns, utsns, mntns, ret;
