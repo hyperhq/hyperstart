@@ -397,11 +397,6 @@ static int container_setup_workdir(struct hyper_container *container)
 	return 0;
 }
 
-static int container_setup_tty(struct hyper_container *container)
-{
-	return hyper_dup_exec_tty(&container->exec);
-}
-
 static int hyper_rescan_scsi(void)
 {
 	struct dirent **list;
@@ -618,7 +613,7 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
-	if (container_setup_tty(container) < 0) {
+	if (hyper_dup_exec_tty(&container->exec) < 0) {
 		fprintf(stdout, "setup tty failed\n");
 		goto fail;
 	}
