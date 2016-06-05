@@ -519,9 +519,8 @@ int hyper_enter_container(struct hyper_pod *pod,
 	/* TODO: wait for container finishing setup root */
 	chdir("/");
 
-	if (hyper_setup_env(c->exec.envs, c->exec.envs_num) < 0)
-		goto out;
-	ret = hyper_setup_env(exec->envs, exec->envs_num);
+	// TODO: let the hyperd do it (merging the env) when needed.
+	ret = hyper_setup_env(c->exec.envs, c->exec.envs_num);
 out:
 	close(ipcns);
 	close(utsns);
@@ -593,6 +592,12 @@ static int hyper_do_exec_cmd(void *data)
 
 	if (hyper_setup_exec_user(exec) < 0) {
 		fprintf(stderr, "setup exec user failed\n");
+		goto exit;
+	}
+
+	// set the container env
+	if (hyper_setup_env(exec->envs, exec->envs_num) < 0) {
+		fprintf(stderr, "setup env failed\n");
 		goto exit;
 	}
 
