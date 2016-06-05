@@ -600,6 +600,8 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
+	hyper_send_type(arg->pipe[1], READY);
+
 	if (container->exec.workdir && chdir(container->exec.workdir) < 0) {
 		perror("change work directory failed");
 		return -1;
@@ -615,9 +617,6 @@ static int hyper_container_init(void *data)
 		fprintf(stdout, "setup env failed\n");
 		goto fail;
 	}
-
-	hyper_send_type(arg->pipe[1], READY);
-	fflush(stdout);
 
 	if (container_setup_tty(container) < 0) {
 		fprintf(stdout, "setup tty failed\n");
