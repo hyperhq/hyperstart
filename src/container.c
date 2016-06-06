@@ -391,20 +391,10 @@ static int container_setup_workdir(struct hyper_container *container)
 {
 	if (container->initialize) {
 		// create workdir
-		hyper_mkdir(container->exec.workdir);
-	}
-
-	if (container->exec.workdir && chdir(container->exec.workdir) < 0) {
-		perror("change work directory failed");
-		return -1;
+		return hyper_mkdir(container->exec.workdir);
 	}
 
 	return 0;
-}
-
-static int container_setup_tty(struct hyper_container *container)
-{
-	return hyper_dup_exec_tty(&container->exec);
 }
 
 static int hyper_rescan_scsi(void)
@@ -605,34 +595,8 @@ static int hyper_container_init(void *data)
 		goto fail;
 	}
 
-	if (hyper_setup_exec_user(&container->exec) < 0) {
-		fprintf(stderr, "setup exec user failed\n");
-		goto fail;
-	}
-
-	// set the container env
-	if (hyper_setup_env(container->exec.envs, container->exec.envs_num) < 0) {
-		fprintf(stdout, "setup env failed\n");
-		goto fail;
-	}
-
 	hyper_send_type(arg->pipe[1], READY);
-	fflush(stdout);
-
-	if (container_setup_tty(container) < 0) {
-		fprintf(stdout, "setup tty failed\n");
-		goto fail;
-	}
-
-	execvp(container->exec.argv[0], container->exec.argv);
-	perror("exec container command failed");
-
-	 /* the exit codes follow the `chroot` standard,
-	    see docker/docs/reference/run.md#exit-status */
-	if (errno == ENOENT)
-		_exit(127);
-	else if (errno == EACCES)
-		_exit(126);
+	hyper_exec_process(&container->exec);
 
 fail:
 	hyper_send_type(arg->pipe[1], ERROR);

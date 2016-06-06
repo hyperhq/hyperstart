@@ -474,7 +474,7 @@ int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 	return 0;
 }
 
-int hyper_enter_container(struct hyper_pod *pod,
+static int hyper_enter_container(struct hyper_pod *pod,
 			  struct hyper_exec *exec)
 {
 	int ipcns, utsns, mntns, ret;
@@ -519,9 +519,8 @@ int hyper_enter_container(struct hyper_pod *pod,
 	/* TODO: wait for container finishing setup root */
 	chdir("/");
 
-	if (hyper_setup_env(c->exec.envs, c->exec.envs_num) < 0)
-		goto out;
-	ret = hyper_setup_env(exec->envs, exec->envs_num);
+	// TODO: let the hyperd do it (merging the env) when needed.
+	ret = hyper_setup_env(c->exec.envs, c->exec.envs_num);
 out:
 	close(ipcns);
 	close(utsns);
@@ -586,8 +585,31 @@ static int hyper_do_exec_cmd(void *data)
 		goto exit;
 	}
 
+	hyper_exec_process(exec);
+
+exit:
+	_exit(125);
+out:
+	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
+	_exit(ret);
+}
+
+// do the exec, no return
+void hyper_exec_process(struct hyper_exec *exec)
+{
+	if (exec->workdir && chdir(exec->workdir) < 0) {
+		perror("change work directory failed");
+		goto exit;
+	}
+
 	if (hyper_setup_exec_user(exec) < 0) {
 		fprintf(stderr, "setup exec user failed\n");
+		goto exit;
+	}
+
+	// set the container env
+	if (hyper_setup_env(exec->envs, exec->envs_num) < 0) {
+		fprintf(stderr, "setup env failed\n");
 		goto exit;
 	}
 
@@ -608,10 +630,8 @@ static int hyper_do_exec_cmd(void *data)
 	}
 
 exit:
+	fflush(stdout);
 	_exit(125);
-out:
-	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
-	_exit(ret);
 }
 
 static void hyper_free_exec(struct hyper_exec *exec)
