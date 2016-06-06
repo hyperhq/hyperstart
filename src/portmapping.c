@@ -272,21 +272,23 @@ int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_po
 				network = pod->portmap_white_lists->external_networks[j];
 
 				// redirect host_port to container_port
-				sprintf(rule, "-s %s -p %s -m %s --dport %d -j REDIRECT --to-ports %d",
-					network,
-					c->ports[i].protocol,
-					c->ports[i].protocol,
-					c->ports[i].host_port,
-					c->ports[i].container_port);
-				struct ipt_rule redirect_rule = {
-					.table = "nat",
-					.op = "-I",
-					.chain = "hyperstart-PREROUTING",
-					.rule = rule,
-				};
-				if (hyper_setup_iptables_rule(redirect_rule)<0) {
-					fprintf(stderr, "setup redirect_rule '%s' failed\n", rule);
-					return -1;
+				if (c->ports[i].host_port != c->ports[i].container_port) {
+					sprintf(rule, "-s %s -p %s -m %s --dport %d -j REDIRECT --to-ports %d",
+						network,
+						c->ports[i].protocol,
+						c->ports[i].protocol,
+						c->ports[i].host_port,
+						c->ports[i].container_port);
+					struct ipt_rule redirect_rule = {
+						.table = "nat",
+						.op = "-I",
+						.chain = "hyperstart-PREROUTING",
+						.rule = rule,
+					};
+					if (hyper_setup_iptables_rule(redirect_rule)<0) {
+						fprintf(stderr, "setup redirect_rule '%s' failed\n", rule);
+						return -1;
+					}
 				}
 
 				// open container_port to external network
@@ -351,21 +353,23 @@ void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper
 			for (j=0; j<pod->portmap_white_lists->e_num; j++) {
 				network = pod->portmap_white_lists->external_networks[j];
 
-				// redirect host_port to container_port
-				sprintf(rule, "-s %s -p %s -m %s --dport %d -j REDIRECT --to-ports %d",
-					network,
-					c->ports[i].protocol,
-					c->ports[i].protocol,
-					c->ports[i].host_port,
-					c->ports[i].container_port);
-				struct ipt_rule redirect_rule = {
-					.table = "nat",
-					.op = "-D",
-					.chain = "hyperstart-PREROUTING",
-					.rule = rule,
-				};
-				if (hyper_setup_iptables_rule(redirect_rule)<0) {
-					fprintf(stderr, "cleanup redirect '%s' failed\n", rule);
+				//  delete rules redirecting host_port to container_port
+				if (c->ports[i].host_port != c->ports[i].container_port) {
+					sprintf(rule, "-s %s -p %s -m %s --dport %d -j REDIRECT --to-ports %d",
+						network,
+						c->ports[i].protocol,
+						c->ports[i].protocol,
+						c->ports[i].host_port,
+						c->ports[i].container_port);
+					struct ipt_rule redirect_rule = {
+						.table = "nat",
+						.op = "-D",
+						.chain = "hyperstart-PREROUTING",
+						.rule = rule,
+					};
+					if (hyper_setup_iptables_rule(redirect_rule)<0) {
+						fprintf(stderr, "cleanup redirect '%s' failed\n", rule);
+					}
 				}
 
 				// open container_port to external network
