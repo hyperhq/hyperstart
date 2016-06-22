@@ -233,6 +233,26 @@ int hyper_getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroup
 	return ret;
 }
 
+int hyper_create_file(const char *hyper_path)
+{
+	int fd;
+	struct stat stbuf;
+
+	if (stat(hyper_path, &stbuf) >= 0) {
+		if (S_ISREG(stbuf.st_mode))
+			return 0;
+		errno = S_ISDIR(stbuf.st_mode) ? EISDIR : EINVAL;
+		return -1;
+	}
+
+	fd = open(hyper_path, O_CREAT|O_WRONLY, 0666);
+	if (fd < 0)
+		return -1;
+	close(fd);
+	fprintf(stdout, "created file %s\n", hyper_path);
+	return 0;
+}
+
 int hyper_mkdir(char *hyper_path)
 {
 	struct stat st;
