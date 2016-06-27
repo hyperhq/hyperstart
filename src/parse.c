@@ -1321,6 +1321,64 @@ fail:
 	goto out;
 }
 
+int hyper_parse_stop_container(struct hyper_stopper *stopper, char *json, int length)
+{
+	int i, n, ret = -1;
+	jsmn_parser p;
+	int toks_num = 10;
+	jsmntok_t *toks = NULL;
+
+	memset(stopper, 0, sizeof(*stopper));
+realloc:
+	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
+	if (toks == NULL) {
+		fprintf(stderr, "allocate tokens for stop container failed\n");
+		goto out;
+	}
+
+	jsmn_init(&p);
+
+	n = jsmn_parse(&p, json, length,  toks, toks_num);
+	if (n < 0) {
+		fprintf(stdout, "jsmn parse failed, n is %d\n", n);
+		if (n == JSMN_ERROR_NOMEM) {
+			toks_num *= 2;
+			goto realloc;
+		}
+
+		goto out;
+	}
+
+	for (i = 0; i < n; i++) {
+		jsmntok_t *t = &toks[i];
+
+		if (t->type != JSMN_STRING)
+			continue;
+
+		if (i++ == n)
+			goto fail;
+
+		if (json_token_streq(json, t, "container")) {
+			if (toks[i].type != JSMN_STRING)
+				goto fail;
+			stopper->id = (json_token_str(json, &toks[i]));
+		} else {
+			fprintf(stderr, "get unknown section %s in stop container\n",
+				json_token_str(json, t));
+			goto fail;
+		}
+	}
+
+	ret = 0;
+out:
+	free(toks);
+	return ret;
+fail:
+	free(stopper->id);
+	stopper->id = NULL;
+	goto out;
+}
+
 int hyper_parse_winsize(struct hyper_win_size *ws, char *json, int length)
 {
 	int i, n, ret = -1;

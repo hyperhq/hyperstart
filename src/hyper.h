@@ -34,6 +34,7 @@ enum {
 	READFILE,
 	NEWCONTAINER,
 	KILLCONTAINER,
+	STOPCONTAINER,
 	ONLINECPUMEM,
 	SETUPINTERFACE,
 	SETUPROUTE,
@@ -89,6 +90,10 @@ struct hyper_killer {
 struct hyper_reader {
 	char		*id;
 	char		*file;
+};
+
+struct hyper_stopper{
+	char		*id;
 };
 
 struct hyper_writter {

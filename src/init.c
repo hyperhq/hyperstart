@@ -696,6 +696,29 @@ out:
 	return ret;
 }
 
+static int hyper_stop_container(char *json, int length)
+{
+	struct hyper_stopper stopper;
+	struct hyper_container *c;
+	struct hyper_pod *pod = &global_pod;
+	int ret = -1;
+
+	if (hyper_parse_stop_container(&stopper, json, length) < 0) {
+		goto out;
+	}
+
+	c = hyper_find_container(pod, stopper.id);
+	if (c == NULL) {
+		fprintf(stderr, "cann not find container whose id is %s\n", stopper.id);
+		goto out;
+	}
+
+	kill(c->exec.pid, SIGTERM);
+	ret = 0;
+out:
+	return ret;
+}
+
 static int hyper_cmd_write_file(char *json, int length)
 {
 	struct hyper_writter writter;
@@ -1144,6 +1167,9 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		break;
 	case KILLCONTAINER:
 		ret = hyper_kill_container((char *)buf->data + 8, len - 8);
+		break;
+	case STOPCONTAINER:
+		ret = hyper_stop_container((char *)buf->data + 8, len - 8);
 		break;
 	case ONLINECPUMEM:
 		hyper_cmd_online_cpu_mem();
