@@ -6,22 +6,26 @@ mkdir -p root/lib root/lib64 root/lib/modules
 cp ../src/init ./root
 cp busybox ./root
 cp iptables ./root
-cp libm.so.6 ./root/lib64/
 tar -xf modules.tar -C ./root/lib/modules
 
-ldd ./root/init | while read line
-do
-	arr=(${line// / })
-
-	for lib in ${arr[@]}
+if [ "$1"x = "musl"x ]; then
+	# don't support musl libc with vbox-boot.iso and cbfs.rom now
+	cp musl/lib/libc.so ./root/lib/ld-musl-x86_64.so.1
+else
+	ldd ./root/init | while read line
 	do
-		if [ "${lib:0:1}" = "/" ]; then
-			dir=root`dirname $lib`
-			mkdir -p "${dir}"
-			cp -f $lib $dir
-		fi
+		arr=(${line// / })
+
+		for lib in ${arr[@]}
+		do
+			if [ "${lib:0:1}" = "/" ]; then
+				dir=root`dirname $lib`
+				mkdir -p "${dir}"
+				cp -f $lib $dir
+			fi
+		done
 	done
-done
+fi
 
 if [ "$1"x = "vbox"x ]; then
 	echo "build initrd for vbox"

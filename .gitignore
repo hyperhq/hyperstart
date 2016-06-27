@@ -15,6 +15,7 @@ build/root/*
 build/*iso
 build/daemon
 build/kernel_config.old
+build/musl/*
 build/.*
 src/.*
 Makefile

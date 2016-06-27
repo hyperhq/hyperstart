@@ -59,6 +59,25 @@ autoconf
 autoheader
 automake --add-missing
 
+if [ "$1"x != "musl"x ]; then
+	echo
+	echo "type '$srcdir/configure' and 'make' to compile hyperstart."
+	echo
+	exit 0
+fi
+
+topdir=`pwd`
+rm -rf build/musl
+tar -xf build/musl.tar.gz -C build/
+
+sed 's#muslpath#'"$topdir"'/build/musl/#g' build/musl/lib/musl-gcc.specs.temp > build/musl/lib/musl-gcc.specs
+
+cat > build/musl/bin/musl-gcc << EOF
+#!/bin/sh
+exec "\${REALGCC:-gcc}" "\$@" -specs "$topdir/build/musl/lib/musl-gcc.specs"
+EOF
+chmod a+x build/musl/bin/musl-gcc
+
 echo
-echo "type '$srcdir/configure' and 'make' to compile hyperstart."
+echo "type 'CC="$topdir"/build/musl/bin/musl-gcc $srcdir/configure --with-musl --host=x86_64-none-linux' and 'make' to compile hyperstart."
 echo
