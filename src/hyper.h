@@ -124,6 +124,7 @@ static inline int hyper_create(char *hyper_path)
 	return 0;
 }
 
+int hyper_create_file(const char *hyper_path);
 int hyper_mkdir(char *hyper_path);
 int hyper_open_serial(char *tty);
 struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id);

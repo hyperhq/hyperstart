@@ -49,6 +49,42 @@ static int container_populate_volume(char *src, char *dest)
 	return hyper_copy_dir(src, dest);
 }
 
+const char *INIT_VOLUME_FILENAME = ".hyper_file_volume_data_do_not_create_on_your_own";
+
+static int container_check_file_volume(char *hyper_path, const char **filename)
+{
+	struct dirent **list;
+	struct stat stbuf;
+	int i, num, found = 0;
+	char path[PATH_MAX];
+
+	*filename = NULL;
+	num = scandir(hyper_path, &list, NULL, NULL);
+	if (num < 0) {
+		perror("scan path failed");
+		return -1;
+	} else if (num != 3) {
+		fprintf(stdout, "%s has %d files/dirs\n", hyper_path, num - 2);
+		return 0;
+	}
+
+	sprintf(path, "%s/%s", hyper_path, INIT_VOLUME_FILENAME);
+	for (i = 0; i < num; i++) {
+		if (strcmp(list[i]->d_name, ".") != 0 &&
+		    strcmp(list[i]->d_name, "..") != 0 &&
+		    strcmp(list[i]->d_name, INIT_VOLUME_FILENAME) == 0 &&
+		    stat(path, &stbuf) == 0 && S_ISREG(stbuf.st_mode)) {
+			found++;
+		}
+		free(list[i]);
+	}
+	free(list);
+
+	fprintf(stdout, "%s %s a file volume\n", hyper_path, found > 0?"is":"is not");
+	*filename = found > 0 ? INIT_VOLUME_FILENAME : NULL;
+	return 0;
+}
+
 static int container_setup_volume(struct hyper_container *container)
 {
 	int i;
@@ -59,6 +95,7 @@ static int container_setup_volume(struct hyper_container *container)
 		char volume[512];
 		char mountpoint[512];
 		char *options = NULL;
+		const char *filevolume = NULL;
 		vol = &container->vols[i];
 
 		if (vol->scsiaddr)
@@ -66,13 +103,12 @@ static int container_setup_volume(struct hyper_container *container)
 
 		sprintf(dev, "/dev/%s", vol->device);
 		sprintf(path, "/tmp/%s", vol->mountpoint);
-		sprintf(volume, "/%s/_data", path);
 		sprintf(mountpoint, "./%s", vol->mountpoint);
 
 		fprintf(stdout, "mount %s to %s, tmp path %s\n",
 			dev, vol->mountpoint, path);
 
-		if (hyper_mkdir(path) < 0 || hyper_mkdir(mountpoint) < 0) {
+		if (hyper_mkdir(path) < 0) {
 			perror("create volume dir failed");
 			return -1;
 		}
@@ -85,15 +121,33 @@ static int container_setup_volume(struct hyper_container *container)
 			return -1;
 		}
 
-		if (vol->docker) {
-			if (container->initialize &&
-			    (container_populate_volume(mountpoint, volume) < 0)) {
-				fprintf(stderr, "fail to populate volume %s\n", mountpoint);
-				return -1;
-			}
-		} else if (hyper_mkdir(volume) < 0) {
+		sprintf(volume, "/%s/_data", path);
+		if (hyper_mkdir(volume) < 0) {
 			fprintf(stderr, "fail to create directroy %s\n", volume);
 			return -1;
+		}
+
+		if (container_check_file_volume(volume, &filevolume) < 0)
+			return -1;
+
+		if (filevolume == NULL) {
+			if (hyper_mkdir(mountpoint) < 0) {
+				perror("create volume dir failed");
+				return -1;
+			}
+			if (vol->docker) {
+				if (container->initialize &&
+				    (container_populate_volume(mountpoint, volume) < 0)) {
+					fprintf(stderr, "fail to populate volume %s\n", mountpoint);
+					return -1;
+				}
+			}
+		} else {
+			if (hyper_create_file(mountpoint) < 0) {
+				perror("create volume file failed");
+				return -1;
+			}
+			sprintf(volume, "/%s/_data/%s", path, filevolume);
 		}
 
 		if (mount(volume, mountpoint, NULL, MS_BIND, NULL) < 0) {
