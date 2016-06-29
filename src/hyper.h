@@ -46,7 +46,6 @@ enum {
 };
 
 struct hyper_pod {
-	struct hyper_container	*c;
 	struct hyper_interface	*iface;
 	struct hyper_route	*rt;
 	struct portmapping_white_list	*portmap_white_lists;
@@ -58,7 +57,6 @@ struct hyper_pod {
 	int			init_pid;
 	uint32_t		i_num;
 	uint32_t		r_num;
-	uint32_t		e_num;
 	uint32_t		d_num;
 	uint32_t		type;
 	/* how many containers are running */
