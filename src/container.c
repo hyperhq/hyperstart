@@ -769,7 +769,7 @@ fail:
 	return -1;
 }
 
-struct hyper_container *hyper_find_container(struct hyper_pod *pod, char *id)
+struct hyper_container *hyper_find_container(struct hyper_pod *pod, const char *id)
 {
 	struct hyper_container *c;
 
