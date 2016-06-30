@@ -9,8 +9,6 @@
 /* parse_utf_16() and process_string() are copied from https://github.com/kgabis/parson */
 #include <ctype.h>
 
-#define JSONFailure (-1)
-#define JSONSuccess (0)
 #define parson_malloc malloc
 #define parson_free free
 
@@ -1597,4 +1595,14 @@ fail:
 	free(reader->file);
 	reader->file = NULL;
 	goto out;
+}
+
+JSON_Value *hyper_json_parse(char *json, int length)
+{
+	char *str = strndup(json, length);
+	if (str == NULL)
+		return NULL;
+	JSON_Value *ret = json_parse_string(str);
+	free(str);
+	return ret;
 }

@@ -3,6 +3,7 @@
 
 #include "hyper.h"
 #include "jsmn.h"
+#include "parson.h"
 
 int hyper_parse_pod(struct hyper_pod *pod, char *json, int length);
 struct hyper_exec *hyper_parse_execcmd(char *json, int length);
@@ -16,5 +17,6 @@ struct hyper_container *hyper_parse_new_container(struct hyper_pod *pod, char *j
 void hyper_free_container(struct hyper_container *c);
 struct hyper_interface *hyper_parse_setup_interface(char *json, int length);
 int hyper_parse_setup_routes(struct hyper_route **routes, uint32_t *r_num, char *json, int length);
+JSON_Value *hyper_json_parse(char *json, int length);
 
 #endif
