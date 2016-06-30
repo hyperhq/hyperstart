@@ -1257,68 +1257,6 @@ fail:
 	return NULL;
 }
 
-int hyper_parse_kill_container(struct hyper_killer *killer, char *json, int length)
-{
-	int i, n, ret = -1;
-	jsmn_parser p;
-	int toks_num = 10;
-	jsmntok_t *toks = NULL;
-
-	memset(killer, 0, sizeof(*killer));
-realloc:
-	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
-	if (toks == NULL) {
-		fprintf(stderr, "allocate tokens for kill container failed\n");
-		goto out;
-	}
-
-	jsmn_init(&p);
-
-	n = jsmn_parse(&p, json, length,  toks, toks_num);
-	if (n < 0) {
-		fprintf(stdout, "jsmn parse failed, n is %d\n", n);
-		if (n == JSMN_ERROR_NOMEM) {
-			toks_num *= 2;
-			goto realloc;
-		}
-
-		goto out;
-	}
-
-	for (i = 0; i < n; i++) {
-		jsmntok_t *t = &toks[i];
-
-		if (t->type != JSMN_STRING)
-			continue;
-
-		if (i++ == n)
-			goto fail;
-
-		if (json_token_streq(json, t, "container")) {
-			if (toks[i].type != JSMN_STRING)
-				goto fail;
-			killer->id = (json_token_str(json, &toks[i]));
-		} else if (json_token_streq(json, t, "signal")) {
-			if (toks[i].type != JSMN_PRIMITIVE)
-				goto fail;
-			killer->signal = json_token_int(json, &toks[i]);
-		} else {
-			fprintf(stderr, "get unknown section %s in kill container\n",
-				json_token_str(json, t));
-			goto fail;
-		}
-	}
-
-	ret = 0;
-out:
-	free(toks);
-	return ret;
-fail:
-	free(killer->id);
-	killer->id = NULL;
-	goto out;
-}
-
 int hyper_parse_winsize(struct hyper_win_size *ws, char *json, int length)
 {
 	int i, n, ret = -1;

@@ -79,11 +79,6 @@ struct hyper_win_size {
 	uint64_t	seq;
 };
 
-struct hyper_killer {
-	char		*id;
-	int		signal;
-};
-
 struct hyper_reader {
 	char		*id;
 	char		*file;

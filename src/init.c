@@ -675,24 +675,26 @@ static int hyper_new_container(char *json, int length)
 
 static int hyper_kill_container(char *json, int length)
 {
-	struct hyper_killer killer;
 	struct hyper_container *c;
 	struct hyper_pod *pod = &global_pod;
 	int ret = -1;
 
-	if (hyper_parse_kill_container(&killer, json, length) < 0) {
+	JSON_Value *value = hyper_json_parse(json, length);
+	if (value == NULL) {
 		goto out;
 	}
 
-	c = hyper_find_container(pod, killer.id);
+	const char *id = json_object_get_string(json_object(value), "container");
+	c = hyper_find_container(pod, id);
 	if (c == NULL) {
-		fprintf(stderr, "can not find container whose id is %s\n", killer.id);
+		fprintf(stderr, "can not find container whose id is %s\n", id);
 		goto out;
 	}
 
-	kill(c->exec.pid, killer.signal);
+	kill(c->exec.pid, (int)json_object_get_number(json_object(value), "signal"));
 	ret = 0;
 out:
+	json_value_free(value);
 	return ret;
 }
 
