@@ -698,6 +698,37 @@ out:
 	return ret;
 }
 
+static int hyper_remove_container(char *json, int length)
+{
+	struct hyper_container *c;
+	struct hyper_pod *pod = &global_pod;
+	int ret = -1;
+
+	JSON_Value *value = hyper_json_parse(json, length);
+	if (value == NULL) {
+		goto out;
+	}
+
+	const char *id = json_object_get_string(json_object(value), "container");
+	c = hyper_find_container(pod, id);
+	if (c == NULL) {
+		fprintf(stderr, "can not find container whose id is %s\n", id);
+		goto out;
+	}
+
+	if (c->exec.exit != 1) {
+		fprintf(stderr, "container %s has not been stopped\n", id);
+		goto out;
+	}
+
+	hyper_cleanup_container(c, pod);
+
+	ret = 0;
+out:
+	json_value_free(value);
+	return ret;
+}
+
 static int hyper_cmd_write_file(char *json, int length)
 {
 	struct hyper_writter writter;
@@ -1146,6 +1177,9 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		break;
 	case KILLCONTAINER:
 		ret = hyper_kill_container((char *)buf->data + 8, len - 8);
+		break;
+	case REMOVECONTAINER:
+		ret = hyper_remove_container((char *)buf->data + 8, len - 8);
 		break;
 	case ONLINECPUMEM:
 		hyper_cmd_online_cpu_mem();
