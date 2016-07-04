@@ -528,17 +528,8 @@ out:
 	return ret;
 }
 
-struct hyper_exec_arg {
-	struct hyper_pod	*pod;
-	struct hyper_exec	*exec;
-	int			pipe[2];
-};
-
-static int hyper_do_exec_cmd(void *data)
+static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int pipe)
 {
-	struct hyper_exec_arg *arg = data;
-	struct hyper_exec *exec = arg->exec;
-	struct hyper_pod *pod = arg->pod;
 	int pid = -1, ret = -1;
 	char path[512];
 	int pidns;
@@ -578,7 +569,7 @@ static int hyper_do_exec_cmd(void *data)
 exit:
 	_exit(125);
 out:
-	hyper_send_type(arg->pipe[1], pid);
+	hyper_send_type(pipe, pid);
 	_exit(ret);
 }
 
@@ -641,13 +632,7 @@ int hyper_exec_cmd(char *json, int length)
 {
 	struct hyper_exec *exec;
 	struct hyper_pod *pod = &global_pod;
-	int stacksize = getpagesize() * 4;
-	void *stack = NULL;
-	struct hyper_exec_arg arg = {
-		.pod	= pod,
-		.exec	= NULL,
-		.pipe	= {-1, -1},
-	};
+	int pipe[2] = {-1, -1};
 	int pid, ret = -1;
 	uint32_t type;
 
@@ -678,27 +663,21 @@ int hyper_exec_cmd(char *json, int length)
 	list_add_tail(&exec->list, &pod->exec_head);
 	exec->ref++;
 
-	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
+	if (pipe2(pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between pod init execcmd failed");
 		goto close_tty;
 	}
 
-	arg.exec = exec;
-
-	stack = malloc(stacksize);
-	if (stack == NULL) {
-		perror("fail to allocate stack for container init");
-		goto close_tty;
-	}
-
-	pid = clone(hyper_do_exec_cmd, stack + stacksize, CLONE_VM| CLONE_FILES| SIGQUIT, &arg);
-	fprintf(stdout, "do_exec_cmd pid %d\n", pid);
+	pid = fork();
 	if (pid < 0) {
 		perror("clone hyper_do_exec_cmd failed");
 		goto close_tty;
+	} else if (pid == 0) {
+		hyper_do_exec_cmd(exec, pod, pipe[1]);
 	}
+	fprintf(stdout, "do_exec_cmd pid %d\n", pid);
 
-	if (hyper_get_type(arg.pipe[0], &type) < 0 || (int)type < 0) {
+	if (hyper_get_type(pipe[0], &type) < 0 || (int)type < 0) {
 		fprintf(stderr, "hyper init doesn't get execcmd ready message\n");
 		goto close_tty;
 	}
@@ -707,9 +686,8 @@ int hyper_exec_cmd(char *json, int length)
 	fprintf(stdout, "%s get ready message %"PRIu32 "\n", __func__, type);
 	ret = 0;
 out:
-	close(arg.pipe[0]);
-	close(arg.pipe[1]);
-	free(stack);
+	close(pipe[0]);
+	close(pipe[1]);
 	return ret;
 close_tty:
 	hyper_reset_event(&exec->stdinev);
