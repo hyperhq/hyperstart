@@ -656,7 +656,7 @@ int hyper_exec_cmd(char *json, int length)
 		.exec	= NULL,
 		.pipe	= {-1, -1},
 	};
-	int pid, ret = -1, status;
+	int pid, ret = -1;
 	uint32_t type;
 
 	fprintf(stdout, "call hyper_exec_cmd, json %s, len %d\n", json, length);
@@ -695,11 +695,6 @@ int hyper_exec_cmd(char *json, int length)
 	fprintf(stdout, "do_exec_cmd pid %d\n", pid);
 	if (pid < 0) {
 		perror("clone hyper_do_exec_cmd failed");
-		goto close_tty;
-	}
-
-	if (waitpid(pid, &status, __WCLONE) <= 0) {
-		perror("waiting hyper_do_exec_cmd finish failed");
 		goto close_tty;
 	}
 
