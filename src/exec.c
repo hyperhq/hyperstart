@@ -558,19 +558,11 @@ static int hyper_do_exec_cmd(void *data)
 	}
 	close(pidns);
 
-	if (hyper_watch_exec_pty(exec, pod) < 0) {
-		fprintf(stderr, "add pts master event failed\n");
-		goto out;
-	}
-
 	pid = fork();
 	if (pid < 0) {
 		perror("fail to fork");
 		goto out;
 	} else if (pid > 0) {
-		//TODO combin ref++ and add to list.
-		list_add_tail(&exec->list, &pod->exec_head);
-		exec->ref++;
 		fprintf(stdout, "create exec cmd %s pid %d,ref %d\n", exec->argv[0], pid, exec->ref);
 		ret = 0;
 		goto out;
@@ -678,6 +670,14 @@ int hyper_exec_cmd(char *json, int length)
 		goto free_exec;
 	}
 
+	if (hyper_watch_exec_pty(exec, pod) < 0) {
+		fprintf(stderr, "add pts master event failed\n");
+		goto close_tty;
+	}
+
+	list_add_tail(&exec->list, &pod->exec_head);
+	exec->ref++;
+
 	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between pod init execcmd failed");
 		goto close_tty;
@@ -712,13 +712,15 @@ out:
 	free(stack);
 	return ret;
 close_tty:
+	hyper_reset_event(&exec->stdinev);
+	hyper_reset_event(&exec->stdoutev);
+	hyper_reset_event(&exec->stderrev);
+	list_del_init(&exec->list);
+
 	close(exec->ptyfd);
 	close(exec->stdinfd);
 	close(exec->stdoutfd);
 	close(exec->stderrfd);
-	close(exec->stdinev.fd);
-	close(exec->stdoutev.fd);
-	close(exec->stderrev.fd);
 free_exec:
 	hyper_free_exec(exec);
 	goto out;
