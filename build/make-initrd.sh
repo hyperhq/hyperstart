@@ -1,22 +1,22 @@
 #!/bin/bash
 
-rm -rf root
-mkdir -p root/lib root/lib64 root/lib/modules
+rm -rf /tmp/hyperstart-rootfs
+mkdir -p /tmp/hyperstart-rootfs/lib /tmp/hyperstart-rootfs/lib64 /tmp/hyperstart-rootfs/lib/modules
 
-cp ../src/init ./root
-cp busybox ./root
-cp iptables ./root
-cp libm.so.6 ./root/lib64/
-tar -xf modules.tar -C ./root/lib/modules
+cp ../src/init /tmp/hyperstart-rootfs
+cp busybox /tmp/hyperstart-rootfs
+cp iptables /tmp/hyperstart-rootfs
+cp libm.so.6 /tmp/hyperstart-rootfs/lib64/
+tar -xf modules.tar -C /tmp/hyperstart-rootfs/lib/modules
 
-ldd ./root/init | while read line
+ldd /tmp/hyperstart-rootfs/init | while read line
 do
 	arr=(${line// / })
 
 	for lib in ${arr[@]}
 	do
 		if [ "${lib:0:1}" = "/" ]; then
-			dir=root`dirname $lib`
+			dir=/tmp/hyperstart-rootfs`dirname $lib`
 			mkdir -p "${dir}"
 			cp -f $lib $dir
 		fi
@@ -25,13 +25,13 @@ done
 
 if [ "$1"x = "vbox"x ]; then
 	echo "build initrd for vbox"
-	cp ./vbox/driver/* ./root
+	cp ./vbox/driver/* /tmp/hyperstart-rootfs
 fi
 
-cd ./root && find . | cpio -H newc -o | gzip -9 > ../hyper-initrd.img
+( cd /tmp/hyperstart-rootfs && find . | cpio -H newc -o | gzip -9 ) > ./hyper-initrd.img
 
 cd ../
-rm -rf ./root
+rm -rf /tmp/hyperstart-rootfs
 
 if [ "$1"x = "cbfs"x ]; then
 	echo "build cbfs"
