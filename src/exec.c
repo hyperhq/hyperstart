@@ -540,26 +540,23 @@ static int hyper_do_exec_cmd(void *data)
 	struct hyper_exec *exec = arg->exec;
 	struct hyper_pod *pod = arg->pod;
 	int pid, ret = -1;
+	char path[512];
+	int pidns;
 
-	if (exec->id) {
-		char path[512];
-		int pidns;
-
-		sprintf(path, "/proc/%d/ns/pid", pod->init_pid);
-		pidns = open(path, O_RDONLY| O_CLOEXEC);
-		if (pidns < 0) {
-			perror("fail to open pidns of pod init");
-			goto out;
-		}
-
-		/* enter pidns of pod init, so the children of this process will run in
-		 * pidns of pod init, see man 2 setns */
-		if (setns(pidns, CLONE_NEWPID) < 0) {
-			perror("enter pidns of pod init failed");
-			goto out;
-		}
-		close(pidns);
+	sprintf(path, "/proc/%d/ns/pid", pod->init_pid);
+	pidns = open(path, O_RDONLY| O_CLOEXEC);
+	if (pidns < 0) {
+		perror("fail to open pidns of pod init");
+		goto out;
 	}
+
+	/* enter pidns of pod init, so the children of this process will run in
+	 * pidns of pod init, see man 2 setns */
+	if (setns(pidns, CLONE_NEWPID) < 0) {
+		perror("enter pidns of pod init failed");
+		goto out;
+	}
+	close(pidns);
 
 	if (hyper_watch_exec_pty(exec, pod) < 0) {
 		fprintf(stderr, "add pts master event failed\n");
@@ -580,7 +577,7 @@ static int hyper_do_exec_cmd(void *data)
 		goto out;
 	}
 
-	if (exec->id && hyper_enter_container(pod, exec) < 0) {
+	if (hyper_enter_container(pod, exec) < 0) {
 		fprintf(stderr, "enter container ns failed\n");
 		goto exit;
 	}
@@ -899,7 +896,7 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 	}
 
 	fprintf(stdout, "%s exec exit pid %d, seq %" PRIu64 ", container %s\n",
-		__func__, exec->pid, exec->seq, exec->id ? exec->id : "pod");
+		__func__, exec->pid, exec->seq, exec->id);
 
 	exec->code = code;
 	exec->exit = 1;

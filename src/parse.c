@@ -1383,6 +1383,11 @@ realloc:
 		}
 	}
 
+	if (exec->id == NULL || strlen(exec->id) == 0) {
+		fprintf(stderr, "execcmd format error, has no container id\n");
+		goto fail;
+	}
+
 	if (exec->seq == 0) {
 		fprintf(stderr, "execcmd format error, has no seq\n");
 		goto fail;
