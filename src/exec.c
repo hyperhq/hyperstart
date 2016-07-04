@@ -539,7 +539,7 @@ static int hyper_do_exec_cmd(void *data)
 	struct hyper_exec_arg *arg = data;
 	struct hyper_exec *exec = arg->exec;
 	struct hyper_pod *pod = arg->pod;
-	int pid, ret = -1;
+	int pid = -1, ret = -1;
 	char path[512];
 	int pidns;
 
@@ -568,7 +568,6 @@ static int hyper_do_exec_cmd(void *data)
 		perror("fail to fork");
 		goto out;
 	} else if (pid > 0) {
-		exec->pid = pid;
 		//TODO combin ref++ and add to list.
 		list_add_tail(&exec->list, &pod->exec_head);
 		exec->ref++;
@@ -587,7 +586,7 @@ static int hyper_do_exec_cmd(void *data)
 exit:
 	_exit(125);
 out:
-	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
+	hyper_send_type(arg->pipe[1], pid);
 	_exit(ret);
 }
 
@@ -704,10 +703,11 @@ int hyper_exec_cmd(char *json, int length)
 		goto close_tty;
 	}
 
-	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
+	if (hyper_get_type(arg.pipe[0], &type) < 0 || (int)type < 0) {
 		fprintf(stderr, "hyper init doesn't get execcmd ready message\n");
 		goto close_tty;
 	}
+	exec->pid = type;
 
 	fprintf(stdout, "%s get ready message %"PRIu32 "\n", __func__, type);
 	ret = 0;
