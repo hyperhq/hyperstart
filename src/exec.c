@@ -528,59 +528,38 @@ out:
 	return ret;
 }
 
-struct hyper_exec_arg {
-	struct hyper_pod	*pod;
-	struct hyper_exec	*exec;
-	int			pipe[2];
-};
-
-static int hyper_do_exec_cmd(void *data)
+static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int pipe)
 {
-	struct hyper_exec_arg *arg = data;
-	struct hyper_exec *exec = arg->exec;
-	struct hyper_pod *pod = arg->pod;
-	int pid, ret = -1;
+	int pid = -1, ret = -1;
+	char path[512];
+	int pidns;
 
-	if (exec->id) {
-		char path[512];
-		int pidns;
-
-		sprintf(path, "/proc/%d/ns/pid", pod->init_pid);
-		pidns = open(path, O_RDONLY| O_CLOEXEC);
-		if (pidns < 0) {
-			perror("fail to open pidns of pod init");
-			goto out;
-		}
-
-		/* enter pidns of pod init, so the children of this process will run in
-		 * pidns of pod init, see man 2 setns */
-		if (setns(pidns, CLONE_NEWPID) < 0) {
-			perror("enter pidns of pod init failed");
-			goto out;
-		}
-		close(pidns);
-	}
-
-	if (hyper_watch_exec_pty(exec, pod) < 0) {
-		fprintf(stderr, "add pts master event failed\n");
+	sprintf(path, "/proc/%d/ns/pid", pod->init_pid);
+	pidns = open(path, O_RDONLY| O_CLOEXEC);
+	if (pidns < 0) {
+		perror("fail to open pidns of pod init");
 		goto out;
 	}
+
+	/* enter pidns of pod init, so the children of this process will run in
+	 * pidns of pod init, see man 2 setns */
+	if (setns(pidns, CLONE_NEWPID) < 0) {
+		perror("enter pidns of pod init failed");
+		goto out;
+	}
+	close(pidns);
 
 	pid = fork();
 	if (pid < 0) {
 		perror("fail to fork");
 		goto out;
 	} else if (pid > 0) {
-		exec->pid = pid;
-		//TODO combin ref++ and add to list.
-		list_add_tail(&exec->list, &pod->exec_head);
-		exec->ref++;
 		fprintf(stdout, "create exec cmd %s pid %d,ref %d\n", exec->argv[0], pid, exec->ref);
 		ret = 0;
 		goto out;
 	}
 
-	if (exec->id && hyper_enter_container(pod, exec) < 0) {
+	if (hyper_enter_container(pod, exec) < 0) {
 		fprintf(stderr, "enter container ns failed\n");
 		goto exit;
 	}
@@ -590,7 +569,7 @@ static int hyper_do_exec_cmd(void *data)
 exit:
 	_exit(125);
 out:
-	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
+	hyper_send_type(pipe, pid);
 	_exit(ret);
 }
 
@@ -653,14 +632,8 @@ int hyper_exec_cmd(char *json, int length)
 {
 	struct hyper_exec *exec;
 	struct hyper_pod *pod = &global_pod;
-	int stacksize = getpagesize() * 4;
-	void *stack = NULL;
-	struct hyper_exec_arg arg = {
-		.pod	= pod,
-		.exec	= NULL,
-		.pipe	= {-1, -1},
-	};
-	int pid, ret = -1, status;
+	int pipe[2] = {-1, -1};
+	int pid, ret = -1;
 	uint32_t type;
 
 	fprintf(stdout, "call hyper_exec_cmd, json %s, len %d\n", json, length);
@@ -682,51 +655,50 @@ int hyper_exec_cmd(char *json, int length)
 		goto free_exec;
 	}
 
-	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
+	if (hyper_watch_exec_pty(exec, pod) < 0) {
+		fprintf(stderr, "add pts master event failed\n");
+		goto close_tty;
+	}
+
+	list_add_tail(&exec->list, &pod->exec_head);
+	exec->ref++;
+
+	if (pipe2(pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between pod init execcmd failed");
 		goto close_tty;
 	}
 
-	arg.exec = exec;
-
-	stack = malloc(stacksize);
-	if (stack == NULL) {
-		perror("fail to allocate stack for container init");
-		goto close_tty;
-	}
-
-	pid = clone(hyper_do_exec_cmd, stack + stacksize, CLONE_VM| CLONE_FILES| SIGQUIT, &arg);
-	fprintf(stdout, "do_exec_cmd pid %d\n", pid);
+	pid = fork();
 	if (pid < 0) {
 		perror("clone hyper_do_exec_cmd failed");
 		goto close_tty;
+	} else if (pid == 0) {
+		hyper_do_exec_cmd(exec, pod, pipe[1]);
 	}
+	fprintf(stdout, "do_exec_cmd pid %d\n", pid);
 
-	if (waitpid(pid, &status, __WCLONE) <= 0) {
-		perror("waiting hyper_do_exec_cmd finish failed");
-		goto close_tty;
-	}
-
-	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
+	if (hyper_get_type(pipe[0], &type) < 0 || (int)type < 0) {
 		fprintf(stderr, "hyper init doesn't get execcmd ready message\n");
 		goto close_tty;
 	}
+	exec->pid = type;
 
 	fprintf(stdout, "%s get ready message %"PRIu32 "\n", __func__, type);
 	ret = 0;
 out:
-	close(arg.pipe[0]);
-	close(arg.pipe[1]);
-	free(stack);
+	close(pipe[0]);
+	close(pipe[1]);
 	return ret;
 close_tty:
+	hyper_reset_event(&exec->stdinev);
+	hyper_reset_event(&exec->stdoutev);
+	hyper_reset_event(&exec->stderrev);
+	list_del_init(&exec->list);
+
 	close(exec->ptyfd);
 	close(exec->stdinfd);
 	close(exec->stdoutfd);
 	close(exec->stderrfd);
-	close(exec->stdinev.fd);
-	close(exec->stdoutev.fd);
-	close(exec->stderrev.fd);
 free_exec:
 	hyper_free_exec(exec);
 	goto out;
@@ -899,7 +871,7 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 	}
 
 	fprintf(stdout, "%s exec exit pid %d, seq %" PRIu64 ", container %s\n",
-		__func__, exec->pid, exec->seq, exec->id ? exec->id : "pod");
+		__func__, exec->pid, exec->seq, exec->id);
 
 	exec->code = code;
 	exec->exit = 1;
