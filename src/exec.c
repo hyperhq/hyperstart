@@ -518,9 +518,8 @@ static int hyper_enter_container(struct hyper_pod *pod,
 
 	/* TODO: wait for container finishing setup root */
 	chdir("/");
+	ret = 0;
 
-	// TODO: let the hyperd do it (merging the env) when needed.
-	ret = hyper_setup_env(c->exec.envs, c->exec.envs_num);
 out:
 	close(ipcns);
 	close(utsns);
