@@ -414,7 +414,7 @@ int hyper_start_containers(struct hyper_pod *pod)
 	return 0;
 }
 
-static int hyper_setup_container(struct hyper_pod *pod)
+static int hyper_setup_pod_init(struct hyper_pod *pod)
 {
 	int stacksize = getpagesize() * 4;
 	int flags = CLONE_NEWPID | CLONE_NEWNS | CLONE_NEWIPC |
@@ -458,11 +458,6 @@ static int hyper_setup_container(struct hyper_pod *pod)
 
 	if (type != READY) {
 		fprintf(stderr, "get incorrect message type %d, expect READY\n", type);
-		goto out;
-	}
-
-	if (hyper_start_containers(pod) < 0) {
-		fprintf(stderr, "start containers failed\n");
 		goto out;
 	}
 
@@ -587,7 +582,7 @@ static int hyper_setup_pod(struct hyper_pod *pod)
 		return -1;
 	}
 
-	if (hyper_setup_container(pod) < 0) {
+	if (hyper_setup_pod_init(pod) < 0) {
 		fprintf(stderr, "start container failed\n");
 		return -1;
 	}
@@ -637,6 +632,12 @@ static int hyper_start_pod(char *json, int length)
 	}
 
 	if (hyper_setup_pod(pod) < 0) {
+		hyper_destroy_pod(pod);
+		return -1;
+	}
+
+	if (hyper_start_containers(pod) < 0) {
+		fprintf(stderr, "start containers failed\n");
 		hyper_destroy_pod(pod);
 		return -1;
 	}
