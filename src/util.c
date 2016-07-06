@@ -639,9 +639,9 @@ static void hyper_unmount_all(void)
 	sync();
 }
 
-void hyper_shutdown()
+void hyper_shutdown(int error)
 {
-	hyper_send_msg_block(ctl.chan.fd, ACK, 0, NULL);
+	hyper_send_msg_block(ctl.chan.fd, error?ERROR:ACK, 0, NULL);
 	hyper_unmount_all();
 	reboot(LINUX_REBOOT_CMD_POWER_OFF);
 }

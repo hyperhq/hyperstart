@@ -481,11 +481,11 @@ static void hyper_print_uptime(void)
 	close(fd);
 }
 
-static int hyper_destroy_pod(struct hyper_pod *pod)
+static int hyper_destroy_pod(struct hyper_pod *pod, int error)
 {
 	if (pod->init_pid == 0) {
 		/* Pod stopped, just shutdown */
-		hyper_shutdown();
+		hyper_shutdown(error);
 	} else {
 		/* Kill pod */
 		hyper_term_all(pod);
@@ -509,13 +509,13 @@ static int hyper_start_pod(char *json, int length)
 	}
 
 	if (hyper_setup_pod(pod) < 0) {
-		hyper_destroy_pod(pod);
+		hyper_destroy_pod(pod, 1);
 		return -1;
 	}
 
 	if (hyper_start_containers(pod) < 0) {
 		fprintf(stderr, "start containers failed\n");
-		hyper_destroy_pod(pod);
+		hyper_destroy_pod(pod, 1);
 		return -1;
 	}
 
@@ -1032,7 +1032,7 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		//break;
 	case DESTROYPOD:
 		fprintf(stdout, "get DESTROYPOD message\n");
-		hyper_destroy_pod(pod);
+		hyper_destroy_pod(pod, 0);
 		return 0;
 	case EXECCMD:
 		ret = hyper_exec_cmd((char *)buf->data + 8, len - 8);
