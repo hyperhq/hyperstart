@@ -518,9 +518,8 @@ static int hyper_enter_container(struct hyper_pod *pod,
 
 	/* TODO: wait for container finishing setup root */
 	chdir("/");
+	ret = 0;
 
-	// TODO: let the hyperd do it (merging the env) when needed.
-	ret = hyper_setup_env(c->exec.envs, c->exec.envs_num);
 out:
 	close(ipcns);
 	close(utsns);
@@ -563,6 +562,14 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int
 		fprintf(stderr, "enter container ns failed\n");
 		goto exit;
 	}
+
+	// set early env. the container env config can overwrite it
+	setenv("HOME", "/root", 1);
+	setenv("HOSTNAME", pod->hostname, 1);
+	if (exec->tty)
+		setenv("TERM", "xterm", 1);
+	else
+		unsetenv("TERM");
 
 	hyper_exec_process(exec);
 
@@ -631,28 +638,38 @@ static void hyper_free_exec(struct hyper_exec *exec)
 int hyper_exec_cmd(char *json, int length)
 {
 	struct hyper_exec *exec;
-	struct hyper_pod *pod = &global_pod;
-	int pipe[2] = {-1, -1};
-	int pid, ret = -1;
-	uint32_t type;
 
 	fprintf(stdout, "call hyper_exec_cmd, json %s, len %d\n", json, length);
 
 	exec = hyper_parse_execcmd(json, length);
 	if (exec == NULL) {
 		fprintf(stderr, "parse exec cmd failed\n");
-		goto out;
+		return -1;
 	}
+
+	int ret = hyper_run_process(exec);
+	if (ret < 0) {
+		hyper_free_exec(exec);
+	}
+	return ret;
+}
+
+int hyper_run_process(struct hyper_exec *exec)
+{
+	struct hyper_pod *pod = &global_pod;
+	int pipe[2] = {-1, -1};
+	int pid, ret = -1;
+	uint32_t type;
 
 	if (exec->argv == NULL) {
 		fprintf(stderr, "cmd is %p, seq %" PRIu64 ", container %s\n",
 			exec->argv, exec->seq, exec->id);
-		goto free_exec;
+		goto out;
 	}
 
 	if (hyper_setup_exec_tty(exec) < 0) {
 		fprintf(stderr, "setup exec tty failed\n");
-		goto free_exec;
+		goto out;
 	}
 
 	if (hyper_watch_exec_pty(exec, pod) < 0) {
@@ -699,8 +716,6 @@ close_tty:
 	close(exec->stdinfd);
 	close(exec->stdoutfd);
 	close(exec->stderrfd);
-free_exec:
-	hyper_free_exec(exec);
 	goto out;
 }
 
