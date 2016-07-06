@@ -563,6 +563,14 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int
 		goto exit;
 	}
 
+	// set early env. the container env config can overwrite it
+	setenv("HOME", "/root", 1);
+	setenv("HOSTNAME", pod->hostname, 1);
+	if (exec->tty)
+		setenv("TERM", "xterm", 1);
+	else
+		unsetenv("TERM");
+
 	hyper_exec_process(exec);
 
 exit:
