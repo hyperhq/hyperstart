@@ -500,6 +500,7 @@ struct hyper_container_arg {
 	struct hyper_container	*c;
 	struct hyper_pod	*pod;
 	int			pipe[2];
+	int			pipens[2];
 };
 
 static int hyper_setup_container_rootfs(void *data)
@@ -508,6 +509,7 @@ static int hyper_setup_container_rootfs(void *data)
 	struct hyper_container *container = arg->c;
 	char root[512], rootfs[512];
 	int setup_dns;
+	uint32_t type;
 
 	if (hyper_rescan_scsi() < 0) {
 		fprintf(stdout, "rescan scsi failed\n");
@@ -623,6 +625,12 @@ static int hyper_setup_container_rootfs(void *data)
 		goto fail;
 	}
 
+	/* wait for ns-opened ready message */
+	if (hyper_get_type(arg->pipens[0], &type) < 0 || type != READY) {
+		fprintf(stderr, "wait for /proc/self/ns/mnt opened failed\n");
+		goto fail;
+	}
+
 	hyper_send_type(arg->pipe[1], READY);
 	fflush(NULL);
 	_exit(0);
@@ -659,6 +667,7 @@ int hyper_setup_container(struct hyper_container *container, struct hyper_pod *p
 		.c	= container,
 		.pod	= pod,
 		.pipe	= {-1, -1},
+		.pipens = {-1, -1},
 	};
 	int flags = CLONE_NEWNS | SIGCHLD;
 	char path[128];
@@ -666,7 +675,7 @@ int hyper_setup_container(struct hyper_container *container, struct hyper_pod *p
 	uint32_t type;
 	int pid;
 
-	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
+	if (pipe2(arg.pipe, O_CLOEXEC) < 0 || pipe2(arg.pipens, O_CLOEXEC) < 0) {
 		perror("create pipe between pod init execcmd failed");
 		goto fail;
 	}
@@ -693,28 +702,33 @@ int hyper_setup_container(struct hyper_container *container, struct hyper_pod *p
 		perror("create child process failed");
 		goto fail;
 	}
-	sprintf(path, "/proc/%d/ns/mnt", pid);
 
+	sprintf(path, "/proc/%d/ns/mnt", pid);
 	container->ns = open(path, O_RDONLY | O_CLOEXEC);
 	if (container->ns < 0) {
 		perror("open container mount ns failed");
 		goto fail;
 	}
+	hyper_send_type(arg.pipens[1], READY);
 
 	/* wait for ready message */
 	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
-		fprintf(stderr, "wait for container started failed\n");
+		fprintf(stderr, "wait for setup container rootfs failed\n");
 		goto fail;
 	}
 
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
+	close(arg.pipens[0]);
+	close(arg.pipens[1]);
 	return 0;
 fail:
 	close(container->ns);
 	container->ns = -1;
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
+	close(arg.pipens[0]);
+	close(arg.pipens[1]);
 	return -1;
 }
 
