@@ -268,8 +268,8 @@ static int container_setup_mount(struct hyper_container *container)
 	hyper_mkdir("./dev");
 	hyper_mkdir("./lib/modules");
 
-	if (mount("proc", "./proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
-	    mount("sysfs", "./sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
+	// mount proc filesystem when the container init process running in the pidns of podinit
+	if (mount("sysfs", "./sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
 	    mount("devtmpfs", "./dev", "devtmpfs", MS_NOSUID, NULL) < 0) {
 		perror("mount basic filesystem for container failed");
 		return -1;

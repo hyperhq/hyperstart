@@ -8,6 +8,7 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <sys/mount.h>
 #include <dirent.h>
 #include <sched.h>
 #include <errno.h>
@@ -518,8 +519,14 @@ static int hyper_enter_container(struct hyper_pod *pod,
 
 	/* TODO: wait for container finishing setup root */
 	chdir("/");
-	ret = 0;
 
+	/* already in pidns & mntns of container, mount proc filesystem */
+	if (exec->init && mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0) {
+		perror("fail to mount proc filesystem for container");
+		goto out;
+	}
+
+	ret = 0;
 out:
 	close(ipcns);
 	close(utsns);
