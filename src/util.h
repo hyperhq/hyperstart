@@ -32,7 +32,7 @@ int hyper_setfd_cloexec(int fd);
 int hyper_setfd_block(int fd);
 int hyper_setfd_nonblock(int fd);
 int hyper_socketpair(int domain, int type, int protocol, int sv[2]);
-void hyper_shutdown(void);
+void hyper_shutdown(int ack);
 int hyper_insmod(char *module);
 struct passwd *hyper_getpwnam(const char *name);
 struct group *hyper_getgrnam(const char *name);
