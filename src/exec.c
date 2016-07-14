@@ -517,6 +517,12 @@ static int hyper_enter_container(struct hyper_pod *pod,
 		goto out;
 	}
 
+	/* TODO: merge container env to exec env in hyperd */
+	if (hyper_setup_env(c->exec.envs, c->exec.envs_num) < 0) {
+		fprintf(stderr, "setup container envs for exec failed\n");
+		goto out;
+	}
+
 	/* TODO: wait for container finishing setup root */
 	chdir("/");
 
