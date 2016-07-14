@@ -10,25 +10,25 @@
 #include "hyper.h"
 #include "event.h"
 
-void hyper_reset_event(struct hyper_event *de)
+void hyper_reset_event(struct hyper_event *he)
 {
-	free(de->rbuf.data);
-	free(de->wbuf.data);
-	close(de->fd);
-	memset(de, 0, sizeof(*de));
-	de->fd = -1;
+	free(he->rbuf.data);
+	free(he->wbuf.data);
+	close(he->fd);
+	memset(he, 0, sizeof(*he));
+	he->fd = -1;
 }
 
-int hyper_init_event(struct hyper_event *de, struct hyper_event_ops *ops, void *arg)
+int hyper_init_event(struct hyper_event *he, struct hyper_event_ops *ops, void *arg)
 {
-	struct hyper_buf *rbuf = &de->rbuf;
-	struct hyper_buf *wbuf = &de->wbuf;
+	struct hyper_buf *rbuf = &he->rbuf;
+	struct hyper_buf *wbuf = &he->wbuf;
 
 	memset(rbuf, 0, sizeof(*rbuf));
 	memset(wbuf, 0, sizeof(*wbuf));
 
-	de->ops		= ops;
-	de->ptr		= arg;
+	he->ops		= ops;
+	he->ptr		= arg;
 	rbuf->size	= ops->rbuf_size;
 	wbuf->size	= ops->wbuf_size;
 
@@ -51,22 +51,22 @@ int hyper_init_event(struct hyper_event *de, struct hyper_event_ops *ops, void *
 	return 0;
 }
 
-int hyper_add_event(int efd, struct hyper_event *de, int flag)
+int hyper_add_event(int efd, struct hyper_event *he, int flag)
 {
 	struct epoll_event event = {
 		.events		= flag,
-		.data.ptr	= de,
+		.data.ptr	= he,
 	};
 
-	de->flag = flag;
-	if (hyper_setfd_nonblock(de->fd) < 0) {
+	he->flag = flag;
+	if (hyper_setfd_nonblock(he->fd) < 0) {
 		perror("set fd nonblock failed");
 		return -1;
 	}
 
-	fprintf(stdout, "%s add event fd %d, %p\n", __func__, de->fd, de->ops);
+	fprintf(stdout, "%s add event fd %d, %p\n", __func__, he->fd, he->ops);
 
-	if (epoll_ctl(efd, EPOLL_CTL_ADD, de->fd, &event) < 0) {
+	if (epoll_ctl(efd, EPOLL_CTL_ADD, he->fd, &event) < 0) {
 		perror("epoll_ctl fd failed");
 		return -1;
 	}
@@ -74,21 +74,21 @@ int hyper_add_event(int efd, struct hyper_event *de, int flag)
 	return 0;
 }
 
-int hyper_modify_event(int efd, struct hyper_event *de, int flag)
+int hyper_modify_event(int efd, struct hyper_event *he, int flag)
 {
 	struct epoll_event event = {
 		.events		= flag,
-		.data.ptr	= de,
+		.data.ptr	= he,
 	};
 
-	if (de->flag == flag)
+	if (he->flag == flag)
 		return 0;
 
-	de->flag = flag;
+	he->flag = flag;
 	fprintf(stdout, "%s modify event fd %d, %p, event %d\n",
-			__func__, de->fd, de, flag);
+			__func__, he->fd, he, flag);
 
-	if (epoll_ctl(efd, EPOLL_CTL_MOD, de->fd, &event) < 0) {
+	if (epoll_ctl(efd, EPOLL_CTL_MOD, he->fd, &event) < 0) {
 		perror("epoll_ctl fd failed");
 		return -1;
 	}
@@ -96,39 +96,39 @@ int hyper_modify_event(int efd, struct hyper_event *de, int flag)
 	return 0;
 }
 
-static int hyper_getmsg_len(struct hyper_event *de, uint32_t *len)
+static int hyper_getmsg_len(struct hyper_event *he, uint32_t *len)
 {
-	struct hyper_buf *buf = &de->rbuf;
+	struct hyper_buf *buf = &he->rbuf;
 
-	if (buf->get < de->ops->len_offset + 4)
+	if (buf->get < he->ops->len_offset + 4)
 		return -1;
 
-	*len = hyper_get_be32(buf->data + de->ops->len_offset);
+	*len = hyper_get_be32(buf->data + he->ops->len_offset);
 	return 0;
 }
 
-int hyper_event_read(struct hyper_event *de, int efd)
+int hyper_event_read(struct hyper_event *he, int efd)
 {
-	struct hyper_buf *buf = &de->rbuf;
+	struct hyper_buf *buf = &he->rbuf;
 	uint32_t len = 4;
 	uint8_t data[4];
-	int offset = de->ops->len_offset;
+	int offset = he->ops->len_offset;
 	int end = offset + 4;
 	int size;
 
 	fprintf(stdout, "%s\n", __func__);
 
-	while (hyper_getmsg_len(de, &len) < 0) {
-		size = read(de->fd, buf->data + buf->get, end - buf->get);
+	while (hyper_getmsg_len(he, &len) < 0) {
+		size = read(he->fd, buf->data + buf->get, end - buf->get);
 		if (size > 0) {
 			buf->get += size;
 			fprintf(stdout, "already read %" PRIu32 " bytes data\n",
 				buf->get);
 
-			if (de->ops->ack) {
+			if (he->ops->ack) {
 				/* control channel, need ack */
 				hyper_set_be32(data, size);
-				hyper_send_msg(de->fd, NEXT, 4, data);
+				hyper_send_msg(he->fd, NEXT, 4, data);
 			}
 			continue;
 		}
@@ -151,15 +151,15 @@ int hyper_event_read(struct hyper_event *de, int efd)
 	}
 
 	while (buf->get < len) {
-		size = read(de->fd, buf->data + buf->get, len - buf->get);
+		size = read(he->fd, buf->data + buf->get, len - buf->get);
 		if (size > 0) {
 			buf->get += size;
 			fprintf(stdout, "read %d bytes data, total data %" PRIu32 "\n",
 				size, buf->get);
-			if (de->ops->ack) {
+			if (he->ops->ack) {
 				/* control channel, need ack */
 				hyper_set_be32(data, size);
-				hyper_send_msg(de->fd, NEXT, 4, data);
+				hyper_send_msg(he->fd, NEXT, 4, data);
 			}
 
 			continue;
@@ -178,7 +178,7 @@ int hyper_event_read(struct hyper_event *de, int efd)
 	}
 
 	/* get the whole data */
-	if (de->ops->handle(de, len) != 0)
+	if (he->ops->handle(he, len) != 0)
 		return -1;
 
 	/* len: length of the already get new data */
@@ -188,14 +188,14 @@ int hyper_event_read(struct hyper_event *de, int efd)
 	return 0;
 }
 
-int hyper_event_write(struct hyper_event *de, int efd)
+int hyper_event_write(struct hyper_event *he, int efd)
 {
-	struct hyper_buf *buf = &de->wbuf;
+	struct hyper_buf *buf = &he->wbuf;
 	uint32_t len = 0;
 	int size = 0;
 
 	while (len < buf->get) {
-		size = write(de->fd, buf->data + len, buf->get - len);
+		size = write(he->fd, buf->data + len, buf->get - len);
 		if (size <= 0) {
 			if (errno == EINTR)
 				continue;
@@ -210,50 +210,50 @@ int hyper_event_write(struct hyper_event *de, int efd)
 	memmove(buf->data, buf->data + len, buf->get);
 
 	if (buf->get == 0) {
-		hyper_modify_event(ctl.efd, de, EPOLLIN);
+		hyper_modify_event(ctl.efd, he, EPOLLIN);
 	}
 
 	return 0;
 }
 
-void hyper_event_hup(struct hyper_event *de, int efd)
+void hyper_event_hup(struct hyper_event *he, int efd)
 {
-	if (epoll_ctl(efd, EPOLL_CTL_DEL, de->fd, NULL) < 0)
+	if (epoll_ctl(efd, EPOLL_CTL_DEL, he->fd, NULL) < 0)
 		perror("epoll_ctl del epoll event failed");
-	hyper_reset_event(de);
+	hyper_reset_event(he);
 }
 
 int hyper_handle_event(int efd, struct epoll_event *event)
 {
-	struct hyper_event *de = event->data.ptr;
-	fprintf(stdout, "%s get event %d, de %p, fd %d. ops %p\n",
-			__func__, event->events, de, de->fd, de->ops);
+	struct hyper_event *he = event->data.ptr;
+	fprintf(stdout, "%s get event %d, he %p, fd %d. ops %p\n",
+			__func__, event->events, he, he->fd, he->ops);
 
 	/* do not handle hup event if have in event */
-	if ((event->events & EPOLLIN) && de->ops->read) {
-		fprintf(stdout, "%s event EPOLLIN, de %p, fd %d, %p\n",
-			__func__, de, de->fd, de->ops);
-		if (de->ops->read && de->ops->read(de, efd) < 0)
+	if ((event->events & EPOLLIN) && he->ops->read) {
+		fprintf(stdout, "%s event EPOLLIN, he %p, fd %d, %p\n",
+			__func__, he, he->fd, he->ops);
+		if (he->ops->read && he->ops->read(he, efd) < 0)
 			return -1;
 	} else if (event->events & EPOLLHUP) {
-		fprintf(stdout, "%s event EPOLLHUP, de %p, fd %d, %p\n",
-			__func__, de, de->fd, de->ops);
-		if (de->ops->hup)
-			de->ops->hup(de, efd);
+		fprintf(stdout, "%s event EPOLLHUP, he %p, fd %d, %p\n",
+			__func__, he, he->fd, he->ops);
+		if (he->ops->hup)
+			he->ops->hup(he, efd);
 		return 0;
 	}
 
 	if (event->events & EPOLLOUT) {
-		fprintf(stdout, "%s event EPOLLOUT, de %p, fd %d, %p\n",
-			__func__, de, de->fd, de->ops);
-		if (de->ops->write && de->ops->write(de, efd) < 0)
+		fprintf(stdout, "%s event EPOLLOUT, he %p, fd %d, %p\n",
+			__func__, he, he->fd, he->ops);
+		if (he->ops->write && he->ops->write(he, efd) < 0)
 			return -1;
 	}
 
 	if (event->events & EPOLLERR) {
 		fprintf(stderr, "get epoll err of not epool in event\n");
-		if (de->ops->hup)
-			de->ops->hup(de, efd);
+		if (he->ops->hup)
+			he->ops->hup(he, efd);
 		return 0;
 	}
 
