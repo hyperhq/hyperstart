@@ -126,4 +126,5 @@ void hyper_cleanup_pod(struct hyper_pod *pod);
 
 extern struct hyper_pod global_pod;
 extern struct hyper_ctl ctl;
+extern sigset_t orig_mask;
 #endif

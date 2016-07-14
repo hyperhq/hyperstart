@@ -37,6 +37,8 @@ struct hyper_pod global_pod = {
 
 struct hyper_ctl ctl;
 
+sigset_t orig_mask;
+
 static int hyper_handle_exit(struct hyper_pod *pod);
 static int hyper_stop_pod(struct hyper_pod *pod);
 
@@ -1120,6 +1122,8 @@ static int hyper_loop(void)
 		perror("sigprocmask SIGCHLD failed");
 		return -1;
 	}
+	// need original mask to restore sigmask of child processes
+	orig_mask = omask;
 	sigdelset(&omask, SIGCHLD);
 	signal(SIGCHLD, hyper_init_sigchld);
 
