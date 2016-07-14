@@ -32,7 +32,6 @@ struct hyper_pod global_pod = {
 	.containers	=	LIST_HEAD_INIT(global_pod.containers),
 	.exec_head	=	LIST_HEAD_INIT(global_pod.exec_head),
 };
-struct hyper_exec *global_exec;
 
 #define MAXEVENTS	10
 
