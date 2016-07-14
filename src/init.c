@@ -32,11 +32,12 @@ struct hyper_pod global_pod = {
 	.containers	=	LIST_HEAD_INIT(global_pod.containers),
 	.exec_head	=	LIST_HEAD_INIT(global_pod.exec_head),
 };
-struct hyper_exec *global_exec;
 
 #define MAXEVENTS	10
 
 struct hyper_ctl ctl;
+
+sigset_t orig_mask;
 
 static int hyper_handle_exit(struct hyper_pod *pod);
 static int hyper_stop_pod(struct hyper_pod *pod);
@@ -1121,6 +1122,8 @@ static int hyper_loop(void)
 		perror("sigprocmask SIGCHLD failed");
 		return -1;
 	}
+	// need original mask to restore sigmask of child processes
+	orig_mask = omask;
 	sigdelset(&omask, SIGCHLD);
 	signal(SIGCHLD, hyper_init_sigchld);
 

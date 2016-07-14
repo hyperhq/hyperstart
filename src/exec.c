@@ -590,6 +590,11 @@ out:
 // do the exec, no return
 void hyper_exec_process(struct hyper_exec *exec)
 {
+	if (sigprocmask(SIG_SETMASK, &orig_mask, NULL) < 0) {
+		perror("sigprocmask restore mask failed");
+		goto exit;
+	}
+
 	if (exec->workdir && chdir(exec->workdir) < 0) {
 		perror("change work directory failed");
 		goto exit;
