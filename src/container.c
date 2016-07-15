@@ -50,6 +50,7 @@ static int container_populate_volume(char *src, char *dest)
 }
 
 const char *INIT_VOLUME_FILENAME = ".hyper_file_volume_data_do_not_create_on_your_own";
+const char *INIT_NEW_VOLUME = ".hyper_new_volume_do_not_create_on_your_own";
 
 static int container_check_file_volume(char *hyper_path, const char **filename)
 {
@@ -63,7 +64,7 @@ static int container_check_file_volume(char *hyper_path, const char **filename)
 	if (num < 0) {
 		perror("scan path failed");
 		return -1;
-	} else if (num != 3) {
+	} else if (num != 3 && num != 4) {
 		fprintf(stdout, "%s has %d files/dirs\n", hyper_path, num - 2);
 		return 0;
 	}
@@ -85,6 +86,40 @@ static int container_check_file_volume(char *hyper_path, const char **filename)
 	return 0;
 }
 
+static int volume_need_chowner(struct hyper_exec *exec, const char *mnt)
+{
+	struct stat stbuf;
+	char path[512];
+
+	if (exec->user == NULL || !strcmp(exec->user, "root"))
+		return 0;
+
+	sprintf(path, "%s/_data", mnt);
+	if (stat(path, &stbuf) != 0)
+		return 1;
+	sprintf(path, "%s/_data/%s", mnt, INIT_NEW_VOLUME);
+	if (stat(path, &stbuf) == 0 && S_ISREG(stbuf.st_mode))
+		return 1;
+
+	return 0;
+}
+
+static int container_setup_volume_owner(struct hyper_exec *exec, const char *volume)
+{
+	const char *user, *group;
+	char path[512];
+
+	user = exec->user?:"root";
+	group = exec->group?:"root";
+	if (hyper_chown(volume, user, group, 1) < 0)
+		return -1;
+
+	sprintf(path, "%s/%s", volume, INIT_NEW_VOLUME);
+	unlink(path);
+
+	return 0;
+}
+
 static int container_setup_volume(struct hyper_container *container)
 {
 	int i;
@@ -96,6 +131,7 @@ static int container_setup_volume(struct hyper_container *container)
 		char mountpoint[512];
 		char *options = NULL;
 		const char *filevolume = NULL;
+		int chowner;
 		vol = &container->vols[i];
 
 		if (vol->scsiaddr)
@@ -121,9 +157,16 @@ static int container_setup_volume(struct hyper_container *container)
 			return -1;
 		}
 
+		chowner = volume_need_chowner(&container->exec, path);
+
 		sprintf(volume, "/%s/_data", path);
 		if (hyper_mkdir(volume) < 0) {
 			fprintf(stderr, "fail to create directroy %s\n", volume);
+			return -1;
+		}
+
+		if (chowner > 0 && container_setup_volume_owner(&container->exec, volume) < 0) {
+			fprintf(stderr, "fail to chown volume path %s\n", volume);
 			return -1;
 		}
 

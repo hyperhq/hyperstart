@@ -675,3 +675,16 @@ int hyper_cmd(char *cmd)
 
 	return -1;
 }
+
+
+int hyper_chown(const char *path, const char *user, const char *group, int recursive)
+{
+	char cmd[512];
+
+	if (recursive)
+		snprintf(cmd, sizeof(cmd), "/chown -R %s:%s %s", user, group, path);
+	else
+		snprintf(cmd, sizeof(cmd), "/chown %s:%s %s", user, group, path);
+
+	return hyper_cmd(cmd);
+}
