@@ -1211,6 +1211,7 @@ int main(int argc, char *argv[])
 
 	symlink("/busybox", "/sh");
 	symlink("/busybox", "/tar");
+	symlink("/busybox", "/chown");
 	symlink("/busybox", "/sbin/modprobe");
 	symlink("/busybox", "/sbin/depmod");
 	symlink("/iptables", "/sbin/iptables");

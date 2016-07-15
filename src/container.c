@@ -50,6 +50,7 @@ static int container_populate_volume(char *src, char *dest)
 }
 
 const char *INIT_VOLUME_FILENAME = ".hyper_file_volume_data_do_not_create_on_your_own";
+const char *INIT_NEW_VOLUME = ".hyper_new_volume_do_not_create_on_your_own";
 
 static int container_check_file_volume(char *hyper_path, const char **filename)
 {
@@ -63,7 +64,7 @@ static int container_check_file_volume(char *hyper_path, const char **filename)
 	if (num < 0) {
 		perror("scan path failed");
 		return -1;
-	} else if (num != 3) {
+	} else if (num != 3 && num != 4) {
 		fprintf(stdout, "%s has %d files/dirs\n", hyper_path, num - 2);
 		return 0;
 	}
@@ -85,17 +86,73 @@ static int container_check_file_volume(char *hyper_path, const char **filename)
 	return 0;
 }
 
+static int volume_need_chowner(struct hyper_exec *exec, const char *mnt)
+{
+	struct stat stbuf;
+	char path[512];
+
+	if (exec->user == NULL || !strcmp(exec->user, "root"))
+		return 0;
+
+	sprintf(path, "%s/_data", mnt);
+	if (stat(path, &stbuf) != 0)
+		return 1;
+	sprintf(path, "%s/_data/%s", mnt, INIT_NEW_VOLUME);
+	if (stat(path, &stbuf) == 0 && S_ISREG(stbuf.st_mode))
+		return 1;
+
+	return 0;
+}
+
+static int container_find_out_exec_user(struct hyper_exec *exec, uid_t *uid, gid_t *gid)
+{
+	struct passwd *pwd;
+	struct group *grp = NULL;
+
+	if (*uid != (uid_t)-1 && *gid != (gid_t)-1)
+		return 0;
+
+	pwd = hyper_getpwnam_from(exec->user, "./etc/passwd");
+	if (pwd == NULL)
+		return -1;
+	if (exec->group)
+		grp = hyper_getgrnam_from(exec->group, "./etc/group");
+
+	*uid = pwd->pw_uid;
+	*gid = grp ? grp->gr_gid : pwd->pw_gid;
+	return 0;
+}
+
+static int container_setup_volume_owner(uid_t user, gid_t group, const char *mnt)
+{
+	char path[512];
+
+	if (user == (uid_t)-1 || group == (gid_t)-1)
+		return 0;
+
+	sprintf(path, "/%s/_data/", mnt);
+	if (hyper_chown(path, user, group, 1) < 0)
+		return -1;
+
+	sprintf(path, "/%s/_data/%s", mnt, INIT_NEW_VOLUME);
+	unlink(path);
+	return 0;
+}
+
 static int container_setup_volume(struct hyper_container *container)
 {
-	int i;
+	int i, nomapping = 0;
 	char dev[512], path[512];
 	struct volume *vol;
+	uid_t uid = (uid_t)-1;
+	gid_t gid = (gid_t)-1;
 
 	for (i = 0; i < container->vols_num; i++) {
 		char volume[512];
 		char mountpoint[512];
 		char *options = NULL;
 		const char *filevolume = NULL;
+		int chowner = 0;
 		vol = &container->vols[i];
 
 		if (vol->scsiaddr)
@@ -119,6 +176,16 @@ static int container_setup_volume(struct hyper_container *container)
 		if (mount(dev, path, vol->fstype, 0, options) < 0) {
 			perror("mount volume device failed");
 			return -1;
+		}
+
+		if (nomapping == 0) {
+			chowner = volume_need_chowner(&container->exec, path);
+			if (chowner > 0 && container_find_out_exec_user(&container->exec, &uid, &gid) < 0) {
+				/* Ignore such error to allow container setup to continue */
+				fprintf(stderr, "fail to find exec user mapping, stop chowning\n");
+				nomapping = 1;
+				chowner = 0;
+			}
 		}
 
 		sprintf(volume, "/%s/_data", path);
@@ -148,6 +215,11 @@ static int container_setup_volume(struct hyper_container *container)
 				return -1;
 			}
 			sprintf(volume, "/%s/_data/%s", path, filevolume);
+		}
+
+		if (chowner > 0 && container_setup_volume_owner(uid, gid, path) < 0) {
+			fprintf(stderr, "fail to chown volume: %s\n", path);
+			return -1;
 		}
 
 		if (mount(volume, mountpoint, NULL, MS_BIND, NULL) < 0) {
