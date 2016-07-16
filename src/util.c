@@ -131,13 +131,12 @@ static unsigned long id_or_max(const char *name)
 	return id;
 }
 
-// the same as getpwnam(), but it only parses /etc/passwd and allows name to be id string
-struct passwd *hyper_getpwnam(const char *name)
+struct passwd *hyper_getpwnam_from(const char *name, const char *pwd_file)
 {
 	uid_t uid = (uid_t)id_or_max(name);
-	FILE *file = fopen("/etc/passwd", "r");
+	FILE *file = fopen(pwd_file, "r");
 	if (!file) {
-		perror("faile to open /etc/passwd");
+		perror("faile to open passwd file");
 		return NULL;
 	}
 	for (;;) {
@@ -153,13 +152,18 @@ struct passwd *hyper_getpwnam(const char *name)
 	return NULL;
 }
 
-// the same as getgrnam(), but it only parses /etc/group and allows the name to be id string
-struct group *hyper_getgrnam(const char *name)
+// the same as getpwnam(), but it only parses /etc/passwd and allows name to be id string
+struct passwd *hyper_getpwnam(const char *name)
+{
+	return hyper_getpwnam_from(name, "/etc/passwd");
+}
+
+struct group *hyper_getgrnam_from(const char *name, const char *group_file)
 {
 	gid_t gid = (gid_t)id_or_max(name);
-	FILE *file = fopen("/etc/group", "r");
+	FILE *file = fopen(group_file, "r");
 	if (!file) {
-		perror("faile to open /etc/group");
+		perror("faile to open group file");
 		return NULL;
 	}
 	for (;;) {
@@ -173,6 +177,12 @@ struct group *hyper_getgrnam(const char *name)
 	}
 	fclose(file);
 	return NULL;
+}
+
+// the same as getgrnam(), but it only parses /etc/group and allows the name to be id string
+struct group *hyper_getgrnam(const char *name)
+{
+	return hyper_getgrnam_from(name, "/etc/group");
 }
 
 // the same as getgrouplist(), but it only parses /etc/group
