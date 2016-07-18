@@ -68,37 +68,12 @@ int hyper_list_dir(char *path)
 	return 0;
 }
 
-int hyper_copy_dir(char *src, char *dest) {
-	int pid, status;
+int hyper_copy_dir(char *src, char *dest)
+{
+	char cmd[512];
+	snprintf(cmd, sizeof(cmd), "/tar cf - -C %s . | /tar fx - -C %s", src, dest);
 
-	pid = fork();
-	if (pid < 0) {
-		perror("fail to fork to copy directory");
-		return -1;
-	} else if (pid > 0) {
-		if (waitpid(pid, &status, 0) <= 0) {
-			perror("waiting copy directroy finish failed");
-			return -1;
-		}
-		if (WIFEXITED(status)) {
-			int ret = WEXITSTATUS(status);
-			fprintf(stdout, "copy directroy exit normally, status %" PRIu8 "\n", ret);
-			if (ret == 0)
-				return 0;
-		}
-
-		fprintf(stderr, "copy directroy exit unexpectedly, status %" PRIu8 "\n", status);
-		return -1;
-	} else {
-		char cmd[512];
-		snprintf(cmd, sizeof(cmd), "/tar cf - -C %s . | /tar fx - -C %s", src, dest);
-		fprintf(stdout, "command for copy is %s\n", cmd);
-
-		execlp("/busybox", "sh", "-c", cmd, NULL);
-		perror("exec copy directroy command failed");
-	}
-
-	return -1;
+	return hyper_cmd(cmd);
 }
 
 void hyper_sync_time_hctosys() {
