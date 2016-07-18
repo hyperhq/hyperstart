@@ -228,7 +228,7 @@ int hyper_create_file(const char *hyper_path)
 	return 0;
 }
 
-int hyper_mkdir(char *hyper_path)
+int hyper_mkdir(char *hyper_path, mode_t mode)
 {
 	struct stat st;
 	char *p, *path = strdup(hyper_path);
@@ -257,14 +257,14 @@ int hyper_mkdir(char *hyper_path)
 	if (p != path) {
 		*p = '\0';
 
-		if (hyper_mkdir(path) < 0)
+		if (hyper_mkdir(path, mode) < 0)
 			goto fail;
 
 		*p = '/';
 	}
 
 	fprintf(stdout, "create directory %s\n", path);
-	if (mkdir(path, 0755) < 0 && errno != EEXIST) {
+	if (mkdir(path, mode) < 0 && errno != EEXIST) {
 		perror("failed to create directory");
 		goto fail;
 	}

@@ -385,7 +385,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 		return 0;
 	}
 
-	if (hyper_mkdir("/tmp/hyper/shared") < 0) {
+	if (hyper_mkdir("/tmp/hyper/shared", 0755) < 0) {
 		perror("fail to create /tmp/hyper/shared");
 		return -1;
 	}
@@ -416,7 +416,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 		return 0;
 	}
 
-	if (hyper_mkdir("/tmp/hyper/shared") < 0) {
+	if (hyper_mkdir("/tmp/hyper/shared", 0755) < 0) {
 		perror("fail to create /tmp/hyper/shared");
 		return -1;
 	}
@@ -435,7 +435,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 static int hyper_setup_pod(struct hyper_pod *pod)
 {
 	/* create tmp proc directroy */
-	if (hyper_mkdir("/tmp/hyper/proc") < 0) {
+	if (hyper_mkdir("/tmp/hyper/proc", 0755) < 0) {
 		perror("create tmp proc failed");
 		return -1;
 	}
@@ -1174,10 +1174,10 @@ int main(int argc, char *argv[])
 {
 	char *cmdline, *ctl_serial, *tty_serial;
 
-	if (hyper_mkdir("/dev") < 0 ||
-	    hyper_mkdir("/sys") < 0 ||
-	    hyper_mkdir("/sbin") < 0 ||
-	    hyper_mkdir("/proc") < 0) {
+	if (hyper_mkdir("/dev", 0755) < 0 ||
+	    hyper_mkdir("/sys", 0755) < 0 ||
+	    hyper_mkdir("/sbin", 0755) < 0 ||
+	    hyper_mkdir("/proc", 0755) < 0) {
 		perror("create basic directroy failed");
 		return -1;
 	}
@@ -1199,7 +1199,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	if (hyper_mkdir("/dev/pts") < 0) {
+	if (hyper_mkdir("/dev/pts", 0755) < 0) {
 		perror("create basic directroy failed");
 		return -1;
 	}
