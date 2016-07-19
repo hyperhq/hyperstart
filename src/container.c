@@ -41,7 +41,7 @@ static int container_populate_volume(char *src, char *dest)
 		return -1;
 	}
 
-	if (hyper_mkdir(dest) < 0) {
+	if (hyper_mkdir(dest, 0755) < 0) {
 		fprintf(stderr, "fail to create directroy %s\n", dest);
 		return -1;
 	}
@@ -108,7 +108,7 @@ static int container_setup_volume(struct hyper_container *container)
 		fprintf(stdout, "mount %s to %s, tmp path %s\n",
 			dev, vol->mountpoint, path);
 
-		if (hyper_mkdir(path) < 0) {
+		if (hyper_mkdir(path, 0755) < 0) {
 			perror("create volume dir failed");
 			return -1;
 		}
@@ -122,7 +122,8 @@ static int container_setup_volume(struct hyper_container *container)
 		}
 
 		sprintf(volume, "/%s/_data", path);
-		if (hyper_mkdir(volume) < 0) {
+		/* 0777 so that any user can write to new volumes */
+		if (hyper_mkdir(volume, 0777) < 0) {
 			fprintf(stderr, "fail to create directroy %s\n", volume);
 			return -1;
 		}
@@ -131,7 +132,7 @@ static int container_setup_volume(struct hyper_container *container)
 			return -1;
 
 		if (filevolume == NULL) {
-			if (hyper_mkdir(mountpoint) < 0) {
+			if (hyper_mkdir(mountpoint, 0755) < 0) {
 				perror("create volume dir failed");
 				return -1;
 			}
@@ -178,7 +179,7 @@ static int container_setup_volume(struct hyper_container *container)
 		stat(src, &st);
 
 		if (st.st_mode & S_IFDIR) {
-			if (hyper_mkdir(mountpoint) < 0) {
+			if (hyper_mkdir(mountpoint, 0755) < 0) {
 				perror("create map dir failed");
 				continue;
 			}
@@ -244,7 +245,7 @@ static int container_setup_modules(struct hyper_container *container)
 			return 0;
 		}
 	} else if (errno == ENOENT) {
-		if (hyper_mkdir(dst) < 0)
+		if (hyper_mkdir(dst, 0755) < 0)
 			return -1;
 	} else {
 		return -1;
@@ -263,10 +264,10 @@ static int container_setup_mount(struct hyper_container *container)
 	char src[512];
 
 	// current dir is container rootfs, the operations on "./PATH" are the operations on container's "/PATH"
-	hyper_mkdir("./proc");
-	hyper_mkdir("./sys");
-	hyper_mkdir("./dev");
-	hyper_mkdir("./lib/modules");
+	hyper_mkdir("./proc", 0755);
+	hyper_mkdir("./sys", 0755);
+	hyper_mkdir("./dev", 0755);
+	hyper_mkdir("./lib/modules", 0755);
 
 	// mount proc filesystem when the container init process running in the pidns of podinit
 	if (mount("sysfs", "./sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
@@ -275,7 +276,7 @@ static int container_setup_mount(struct hyper_container *container)
 		return -1;
 	}
 
-	if (hyper_mkdir("./dev/shm") < 0) {
+	if (hyper_mkdir("./dev/shm", 0755) < 0) {
 		fprintf(stderr, "create /dev/shm failed\n");
 		return -1;
 	}
@@ -285,7 +286,7 @@ static int container_setup_mount(struct hyper_container *container)
 		return -1;
 	}
 
-	if (hyper_mkdir("./dev/pts") < 0) {
+	if (hyper_mkdir("./dev/pts", 0755) < 0) {
 		fprintf(stderr, "create /dev/pts failed\n");
 		return -1;
 	}
@@ -352,7 +353,7 @@ static int container_setup_init_layer(struct hyper_container *container,
 	if (!container->initialize)
 		return 0;
 
-	hyper_mkdir("./etc/");
+	hyper_mkdir("./etc/", 0755);
 
 	if (setup_dns && container_recreate_file("./etc/resolv.conf") < 0)
 		return -1;
@@ -424,7 +425,7 @@ static int container_setup_dns(struct hyper_container *container)
 		return -1;
 	}
 
-	hyper_mkdir("./etc");
+	hyper_mkdir("./etc", 0755);
 
 	fd = open("./etc/resolv.conf", O_CREAT| O_WRONLY, 0644);
 	if (fd < 0) {
@@ -445,7 +446,7 @@ static int container_setup_workdir(struct hyper_container *container)
 {
 	if (container->initialize) {
 		// create workdir
-		return hyper_mkdir(container->exec.workdir);
+		return hyper_mkdir(container->exec.workdir, 0755);
 	}
 
 	return 0;
@@ -527,7 +528,7 @@ static int hyper_setup_container_rootfs(void *data)
 	}
 
 	sprintf(root, "/tmp/hyper/%s/root/", container->id);
-	if (hyper_mkdir(root) < 0) {
+	if (hyper_mkdir(root, 0755) < 0) {
 		perror("make root directroy failed");
 		goto fail;
 	}
@@ -646,7 +647,7 @@ static int hyper_setup_pty(struct hyper_container *c)
 
 	sprintf(root, "/tmp/hyper/%s/devpts/", c->id);
 
-	if (hyper_mkdir(root) < 0) {
+	if (hyper_mkdir(root, 0755) < 0) {
 		perror("make container pts directroy failed");
 		return -1;
 	}
