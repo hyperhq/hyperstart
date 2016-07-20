@@ -31,6 +31,12 @@ struct port {
 };
 
 struct hyper_container {
+	struct list_head	list;
+	struct hyper_exec	exec;
+	int			ns;
+	uint32_t		code;
+
+	// configs
 	char			*id;
 	char			*rootfs;
 	char			*image;
@@ -39,16 +45,12 @@ struct hyper_container {
 	struct volume		*vols;
 	struct fsmap		*maps;
 	struct sysctl		*sys;
-	struct port			*ports;
+	struct port		*ports;
 	int			vols_num;
 	int			maps_num;
 	int			sys_num;
-	int 		ports_num;
-	int			ns;
+	int			ports_num;
 	int			initialize;
-	uint32_t		code;
-	struct list_head	list;
-	struct hyper_exec	exec;
 };
 
 struct hyper_pod;
