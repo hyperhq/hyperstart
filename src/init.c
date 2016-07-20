@@ -550,6 +550,7 @@ static int hyper_new_container(char *json, int length)
 		//TODO full grace cleanup
 		hyper_cleanup_container(c, pod);
 	}
+	pod->remains++;
 
 	return ret;
 }
