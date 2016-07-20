@@ -275,7 +275,7 @@ fail:
 	goto out;
 }
 
-int hyper_start_containers(struct hyper_pod *pod)
+static int hyper_start_containers(struct hyper_pod *pod)
 {
 	struct hyper_container *c;
 

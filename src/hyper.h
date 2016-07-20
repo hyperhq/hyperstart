@@ -119,7 +119,6 @@ static inline int hyper_create(char *hyper_path)
 }
 
 int hyper_open_serial(char *tty);
-int hyper_start_containers(struct hyper_pod *pod);
 void hyper_cleanup_pod(struct hyper_pod *pod);
 
 extern struct hyper_pod global_pod;

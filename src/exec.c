@@ -24,6 +24,9 @@
 #include "parse.h"
 #include "syscall.h"
 
+static int hyper_release_exec(struct hyper_exec *, struct hyper_pod *);
+static void hyper_exec_process(struct hyper_exec *exec);
+
 static int send_exec_finishing(uint64_t seq, int len, int code, int block)
 {
 	struct hyper_buf *buf = &ctl.tty.wbuf;
@@ -202,7 +205,7 @@ struct hyper_event_ops err_ops = {
 	/* don't need write buff, the stderr data is one way */
 };
 
-int hyper_setup_exec_user(struct hyper_exec *exec)
+static int hyper_setup_exec_user(struct hyper_exec *exec)
 {
 	char *user = exec->user == NULL || strlen(exec->user) == 0 ? NULL : exec->user;
 	char *group = exec->group == NULL || strlen(exec->group) == 0 ? NULL : exec->group;
@@ -333,7 +336,7 @@ static int hyper_setup_exec_notty(struct hyper_exec *e)
 	return 0;
 }
 
-int hyper_setup_exec_tty(struct hyper_exec *e)
+static int hyper_setup_exec_tty(struct hyper_exec *e)
 {
 	int unlock = 0;
 	int ptymaster;
@@ -410,7 +413,7 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	return 0;
 }
 
-int hyper_dup_exec_tty(struct hyper_exec *e)
+static int hyper_dup_exec_tty(struct hyper_exec *e)
 {
 	int ret = -1;
 
@@ -457,7 +460,7 @@ out:
 	return ret;
 }
 
-int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
+static int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 {
 	fprintf(stdout, "hyper_init_event container pts event %p, ops %p, fd %d\n",
 		&exec->stdinev, &in_ops, exec->stdinev.fd);
@@ -607,7 +610,7 @@ out:
 }
 
 // do the exec, no return
-void hyper_exec_process(struct hyper_exec *exec)
+static void hyper_exec_process(struct hyper_exec *exec)
 {
 	if (sigprocmask(SIG_SETMASK, &orig_mask, NULL) < 0) {
 		perror("sigprocmask restore mask failed");
@@ -773,8 +776,8 @@ out:
 	return ret;
 }
 
-int hyper_release_exec(struct hyper_exec *exec,
-		       struct hyper_pod *pod)
+static int hyper_release_exec(struct hyper_exec *exec,
+			      struct hyper_pod *pod)
 {
 	if (--exec->ref != 0) {
 		fprintf(stdout, "still have %d user of exec\n", exec->ref);
