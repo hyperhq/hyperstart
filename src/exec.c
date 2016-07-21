@@ -476,12 +476,19 @@ int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 }
 
 static int hyper_enter_container(struct hyper_pod *pod,
-			  struct hyper_container *c)
+			  struct hyper_exec *exec)
 {
 	int ipcns, utsns, mntns, ret;
+	struct hyper_container *c;
 	char path[512];
 
 	ret = ipcns = utsns = mntns = -1;
+
+	c = hyper_find_container(pod, exec->id);
+	if (c == NULL) {
+		fprintf(stderr, "can not find container %s\n", exec->id);
+		return -1;
+	}
 
 	sprintf(path, "/proc/%d/ns/uts", pod->init_pid);
 	utsns = open(path, O_RDONLY| O_CLOEXEC);
@@ -519,6 +526,12 @@ static int hyper_enter_container(struct hyper_pod *pod,
 	/* TODO: wait for container finishing setup root */
 	chdir("/");
 
+	/* already in pidns & mntns of container, mount proc filesystem */
+	if (exec->init && mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0) {
+		perror("fail to mount proc filesystem for container");
+		goto out;
+	}
+
 	ret = 0;
 out:
 	close(ipcns);
@@ -527,33 +540,11 @@ out:
 	return ret;
 }
 
-static int hyper_container_final_init(struct hyper_container *c)
-{
-	if (c->finalinit)
-		return 0;
-
-	/* already in pidns & mntns of container, mount proc filesystem */
-	if (mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0) {
-		perror("fail to mount proc filesystem for container");
-		return -1;
-	}
-
-	c->finalinit = 1;
-	return 0;
-}
-
 static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int pipe)
 {
 	int pid = -1, ret = -1;
 	char path[512];
-	struct hyper_container *c;
 	int pidns;
-
-	c = hyper_find_container(pod, exec->id);
-	if (c == NULL) {
-		fprintf(stderr, "can not find container %s\n", exec->id);
-		return -1;
-	}
 
 	sprintf(path, "/proc/%d/ns/pid", pod->init_pid);
 	pidns = open(path, O_RDONLY| O_CLOEXEC);
@@ -580,13 +571,8 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int
 		goto out;
 	}
 
-	if (hyper_enter_container(pod, c) < 0) {
+	if (hyper_enter_container(pod, exec) < 0) {
 		fprintf(stderr, "enter container ns failed\n");
-		goto exit;
-	}
-
-	if (hyper_container_final_init(c)) {
-		fprintf(stderr, "final container intialization failed\n");
 		goto exit;
 	}
 

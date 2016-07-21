@@ -33,7 +33,6 @@ struct port {
 struct hyper_container {
 	struct list_head	list;
 	struct hyper_exec	exec;
-	int			finalinit;
 	int			ns;
 	uint32_t		code;
 
