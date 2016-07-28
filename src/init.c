@@ -931,6 +931,76 @@ static int hyper_setup_tty_channel(char *name)
 	return ret;
 }
 
+static int hyper_ttyfd_write(struct hyper_event *ev, int efd)
+{
+	struct hyper_buf *buf = &ev->wbuf;
+	struct hyper_pod *pod = ev->ptr;
+	struct hyper_exec *exec, *next;
+	uint32_t len = 0;
+
+	hyper_event_write(ev, efd);
+
+	list_for_each_entry_safe(exec, next, &pod->exec_head, list) {
+		struct hyper_buf *out_buf = &exec->stdoutev.rbuf;
+		struct hyper_buf *err_buf = &exec->stderrev.rbuf;
+		uint32_t out_len = out_buf->get;
+		uint32_t err_len = err_buf->get;
+
+		if (!out_len && !err_len) {
+			continue;
+		}
+
+		len = buf->size - buf->get - 12;
+		if (out_len && err_len) {
+			len = buf->size - buf->get - 24;
+			// no space for tty output, check next exec
+			if (len < 2) {
+				continue;
+			} else if (len < (out_len + err_len)) {
+				out_len = (out_len * len)/(out_len + err_len);
+				if (out_len == 0)
+					out_len = 1;
+
+				err_len = len - out_len;
+			}
+		} else if (len < 1) {
+			continue;
+		}
+
+		if (out_len) {
+			if (out_len > len)
+				out_len = len;
+
+			hyper_set_be64(buf->data + buf->get, exec->seq);
+			hyper_set_be32(buf->data + buf->get + 8, out_len + 12);
+			memcpy(buf->data + buf->get + 12, out_buf->data, out_len);
+			buf->get += (out_len + 12);
+			memmove(out_buf->data, out_buf->data + out_len, out_buf->size - out_len);
+			out_buf->get -= out_len;
+		}
+
+		if (err_len) {
+			if (err_len > len)
+				err_len = len;
+
+			hyper_set_be64(buf->data + buf->get, exec->errseq);
+			hyper_set_be32(buf->data + buf->get + 8, err_len + 12);
+			memcpy(buf->data + buf->get + 12, err_buf->data, err_len);
+			buf->get += (err_len + 12);
+			memmove(err_buf->data, err_buf->data + err_len, err_buf->size - err_len);
+			err_buf->get -= err_len;
+		}
+
+		list_move_tail(&exec->list, &pod->exec_head);
+		hyper_event_write(ev, efd);
+		return 0;
+	}
+
+	// no tty data
+	hyper_modify_event(efd, ev, ev->flag & ~EPOLLOUT);
+	return 0;
+}
+
 static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 {
 	struct hyper_buf *rbuf = &de->rbuf;
@@ -1097,7 +1167,7 @@ static struct hyper_event_ops hyper_channel_ops = {
 
 static struct hyper_event_ops hyper_ttyfd_ops = {
 	.read		= hyper_event_read,
-	.write		= hyper_event_write,
+	.write		= hyper_ttyfd_write,
 	.handle		= hyper_ttyfd_handle,
 	.rbuf_size	= 4096,
 	.wbuf_size	= 10240,

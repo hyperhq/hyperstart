@@ -208,11 +208,6 @@ int hyper_event_write(struct hyper_event *he, int efd)
 
 	buf->get -= len;
 	memmove(buf->data, buf->data + len, buf->get);
-
-	if (buf->get == 0) {
-		hyper_modify_event(ctl.efd, he, EPOLLIN);
-	}
-
 	return 0;
 }
 

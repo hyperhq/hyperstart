@@ -106,10 +106,10 @@ static void stderr_hup(struct hyper_event *de, int efd)
 static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_exec *exec)
 {
 	int size = -1;
-	struct hyper_buf *buf = &ctl.tty.wbuf;
+	struct hyper_buf *buf = &de->rbuf;
 
-	while ((buf->get + 12 < buf->size) && size) {
-		size = read(de->fd, buf->data + buf->get + 12, buf->size - buf->get - 12);
+	while ((buf->get < buf->size) && size) {
+		size = read(de->fd, buf->data + buf->get, buf->size - buf->get);
 		fprintf(stdout, "%s: read %d data\n", __func__, size);
 		if (size < 0) {
 			if (errno == EINTR)
@@ -127,12 +127,12 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_
 			break;
 		}
 
-		hyper_set_be64(buf->data + buf->get, seq);
-		hyper_set_be32(buf->data + buf->get + 8, size + 12);
-		buf->get += size + 12;
+		//hyper_set_be64(buf->data + buf->get, seq);
+		//hyper_set_be32(buf->data + buf->get + 8, size + 12);
+		buf->get += size;
 	}
 
-	if (hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT) < 0) {
+	if (hyper_modify_event(ctl.efd, &ctl.tty, ctl.tty.flag | EPOLLOUT) < 0) {
 		fprintf(stderr, "modify ctl tty event to in & out failed\n");
 		return -1;
 	}
@@ -149,6 +149,10 @@ static int write_to_stdin(struct hyper_event *de, int efd)
 
 	if (ret >= 0 && de->wbuf.get == 0 && exec->close_stdin_request)
 		pts_hup(de, efd, exec);
+
+	/* no input data, remove out event */
+	if (ev->wbuf.get == 0)
+		hyper_modify_event(efd, ev, ev->flag & ~EPOLLOUT);
 
 	return ret;
 }
@@ -170,6 +174,7 @@ static int stdout_loop(struct hyper_event *de, int efd)
 struct hyper_event_ops out_ops = {
 	.read		= stdout_loop,
 	.hup		= stdout_hup,
+	.rbuf_size	= 512,
 	/* don't need read buff, the pts data will store in tty buffer */
 	/* don't need write buff, the stdout data is one way */
 };
