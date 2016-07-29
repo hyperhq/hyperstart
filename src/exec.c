@@ -106,9 +106,15 @@ static void stderr_hup(struct hyper_event *de, int efd)
 static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_exec *exec)
 {
 	int size = -1;
+	int flag = de->flag | EPOLLOUT;
 	struct hyper_buf *buf = &ctl.tty.wbuf;
 
-	while ((buf->get + 12 < buf->size) && size) {
+	if (FULL(buf)) {
+		flag |= EPOLLPRI;
+		goto out;
+	}
+
+	do {
 		size = read(de->fd, buf->data + buf->get + 12, buf->size - buf->get - 12);
 		fprintf(stdout, "%s: read %d data\n", __func__, size);
 		if (size < 0) {
@@ -124,16 +130,23 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_
 		}
 		if (size == 0) { // eof
 			pts_hup(de, efd, exec);
-			break;
+			return 0;
 		}
 
 		hyper_set_be64(buf->data + buf->get, seq);
 		hyper_set_be32(buf->data + buf->get + 8, size + 12);
 		buf->get += size + 12;
-	}
+	} while (!FULL(buf));
 
-	if (hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT) < 0) {
-		fprintf(stderr, "modify ctl tty event to in & out failed\n");
+	if (FULL(buf)) {
+		flag |= EPOLLPRI;
+		/* del & add event to move event to tail, this gives
+		 * other event a chance to write data to wbuf of tty. */
+		hyper_requeue_event(ctl.efd, de);
+	}
+out:
+	if (hyper_modify_event(ctl.efd, &ctl.tty, flag) < 0) {
+		fprintf(stderr, "modify ctl tty event to %d failed\n", flag);
 		return -1;
 	}
 
