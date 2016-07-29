@@ -44,13 +44,10 @@ static int hyper_stop_pod(struct hyper_pod *pod);
 
 static int hyper_set_win_size(char *json, int length)
 {
-	struct hyper_win_size ws = {
-		.tty = NULL,
-	};
+	struct hyper_win_size ws;
 	struct winsize size;
 	struct hyper_exec *exec;
-	char path[128];
-	int fd, ret;
+	int ret;
 
 	fprintf(stdout, "call hyper_win_size, json %s, len %d\n", json, length);
 	if (hyper_parse_winsize(&ws, json, length) < 0) {
@@ -58,39 +55,19 @@ static int hyper_set_win_size(char *json, int length)
 		return -1;
 	}
 
-	if (!ws.tty) {
-		exec = hyper_find_exec_by_seq(&global_pod, ws.seq);
-		if (exec == NULL) {
-			fprintf(stdout, "can not find exec whose seq is %" PRIu64"\n", ws.seq);
-			return 0;
-		}
-
-		fprintf(stdout, "find exec %s, pid is %d, seq is %" PRIu64"\n",
-			exec->id ? exec->id : "pod", exec->pid, ws.seq);
-		fd = dup(exec->ptyfd);
-	} else {
-		if (sprintf(path, "/dev/%s", ws.tty) < 0) {
-			fprintf(stderr, "get tty device failed\n");
-			return -1;
-		}
-		fd = hyper_open_serial_dev(path);
-	}
-
-	if (fd < 0) {
-		perror("cannot open pty device to set term size");
-		goto out;
+	exec = hyper_find_exec_by_seq(&global_pod, ws.seq);
+	if (exec == NULL) {
+		fprintf(stdout, "can not find exec whose seq is %" PRIu64"\n", ws.seq);
+		return 0;
 	}
 
 	size.ws_row = ws.row;
 	size.ws_col = ws.column;
 
-	ret = ioctl(fd, TIOCSWINSZ, &size);
+	ret = ioctl(exec->ptyfd, TIOCSWINSZ, &size);
 	if (ret < 0)
 		perror("cannot ioctl to set pty device term size");
 
-	close(fd);
-out:
-	free(ws.tty);
 	return ret;
 }
 

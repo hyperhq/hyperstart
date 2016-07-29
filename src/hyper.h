@@ -74,7 +74,6 @@ struct portmapping_white_list {
 };
 
 struct hyper_win_size {
-	char		*tty;
 	int		row;
 	int		column;
 	uint64_t	seq;
