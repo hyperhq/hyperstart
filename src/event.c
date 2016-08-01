@@ -96,6 +96,26 @@ int hyper_modify_event(int efd, struct hyper_event *he, int flag)
 	return 0;
 }
 
+int hyper_requeue_event(int efd, struct hyper_event *ev)
+{
+	struct epoll_event event = {
+		.events		= ev->flag,
+		.data.ptr	= ev,
+	};
+
+	if (epoll_ctl(efd, EPOLL_CTL_DEL, ev->fd, NULL) < 0) {
+		perror("epoll_ctl del fd failed");
+		return -1;
+	}
+
+	if (epoll_ctl(efd, EPOLL_CTL_ADD, ev->fd, &event) < 0) {
+		perror("epoll_ctl add fd failed");
+		return -1;
+	}
+
+	return 0;
+}
+
 static int hyper_getmsg_len(struct hyper_event *he, uint32_t *len)
 {
 	struct hyper_buf *buf = &he->rbuf;
@@ -210,7 +230,9 @@ int hyper_event_write(struct hyper_event *he, int efd)
 	memmove(buf->data, buf->data + len, buf->get);
 
 	if (buf->get == 0) {
-		hyper_modify_event(ctl.efd, he, EPOLLIN);
+		hyper_modify_event(ctl.efd, he, he->flag & ~(EPOLLOUT| EPOLLPRI));
+	} else if (!FULL(buf)) {
+		hyper_modify_event(ctl.efd, he, he->flag & ~EPOLLPRI);
 	}
 
 	return 0;

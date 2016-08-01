@@ -32,8 +32,12 @@ struct hyper_event {
 	void			*ptr;
 };
 
+#define FULL(buf) \
+	(buf->size - buf->get <= 12)
+
 int hyper_add_event(int efd, struct hyper_event *de, int flag);
 int hyper_modify_event(int efd, struct hyper_event *de, int flag);
+int hyper_requeue_event(int efd, struct hyper_event *ev);
 int hyper_init_event(struct hyper_event *de, struct hyper_event_ops *ops,
 		     void *arg);
 int hyper_handle_event(int efd, struct epoll_event *event);
