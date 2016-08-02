@@ -44,13 +44,10 @@ static int hyper_stop_pod(struct hyper_pod *pod);
 
 static int hyper_set_win_size(char *json, int length)
 {
-	struct hyper_win_size ws = {
-		.tty = NULL,
-	};
+	struct hyper_win_size ws;
 	struct winsize size;
 	struct hyper_exec *exec;
-	char path[128];
-	int fd, ret;
+	int ret;
 
 	fprintf(stdout, "call hyper_win_size, json %s, len %d\n", json, length);
 	if (hyper_parse_winsize(&ws, json, length) < 0) {
@@ -58,39 +55,19 @@ static int hyper_set_win_size(char *json, int length)
 		return -1;
 	}
 
-	if (!ws.tty) {
-		exec = hyper_find_exec_by_seq(&global_pod, ws.seq);
-		if (exec == NULL) {
-			fprintf(stdout, "can not find exec whose seq is %" PRIu64"\n", ws.seq);
-			return 0;
-		}
-
-		fprintf(stdout, "find exec %s, pid is %d, seq is %" PRIu64"\n",
-			exec->id ? exec->id : "pod", exec->pid, ws.seq);
-		fd = dup(exec->ptyfd);
-	} else {
-		if (sprintf(path, "/dev/%s", ws.tty) < 0) {
-			fprintf(stderr, "get tty device failed\n");
-			return -1;
-		}
-		fd = hyper_open_serial_dev(path);
-	}
-
-	if (fd < 0) {
-		perror("cannot open pty device to set term size");
-		goto out;
+	exec = hyper_find_exec_by_seq(&global_pod, ws.seq);
+	if (exec == NULL) {
+		fprintf(stdout, "can not find exec whose seq is %" PRIu64"\n", ws.seq);
+		return 0;
 	}
 
 	size.ws_row = ws.row;
 	size.ws_col = ws.column;
 
-	ret = ioctl(fd, TIOCSWINSZ, &size);
+	ret = ioctl(exec->ptyfd, TIOCSWINSZ, &size);
 	if (ret < 0)
 		perror("cannot ioctl to set pty device term size");
 
-	close(fd);
-out:
-	free(ws.tty);
 	return ret;
 }
 
@@ -275,7 +252,7 @@ fail:
 	goto out;
 }
 
-int hyper_start_containers(struct hyper_pod *pod)
+static int hyper_start_containers(struct hyper_pod *pod)
 {
 	struct hyper_container *c;
 
@@ -346,6 +323,63 @@ out:
 	if (ret < 0) {
 		hyper_stop_pod(pod);
 	}
+	return ret;
+}
+
+// enter the sanbox and pass to the child, shouldn't call from the init process
+int hyper_enter_sandbox(struct hyper_pod *pod, int pidpipe)
+{
+	int ret = -1, pidns = -1, utsns = -1, ipcns = -1;
+	char path[512];
+
+	sprintf(path, "/proc/%d/ns/pid", pod->init_pid);
+	pidns = open(path, O_RDONLY| O_CLOEXEC);
+	if (pidns < 0) {
+		perror("fail to open pidns of pod init");
+		goto out;
+	}
+
+	sprintf(path, "/proc/%d/ns/uts", pod->init_pid);
+	utsns = open(path, O_RDONLY| O_CLOEXEC);
+	if (utsns < 0) {
+		perror("fail to open utsns of pod init");
+		goto out;
+	}
+
+	sprintf(path, "/proc/%d/ns/ipc", pod->init_pid);
+	ipcns = open(path, O_RDONLY| O_CLOEXEC);
+	if (ipcns < 0) {
+		perror("fail to open ipcns of pod init");
+		goto out;
+	}
+
+	if (setns(pidns, CLONE_NEWPID) < 0 ||
+	    setns(utsns, CLONE_NEWUTS) < 0 ||
+	    setns(ipcns, CLONE_NEWIPC) < 0) {
+		perror("fail to enter the sandbox");
+		goto out;
+	}
+
+	/* current process isn't in the pidns even setns(pidns, CLONE_NEWPID)
+	 * was called. fork() is needed, so that the child process will run in
+	 * the pidns, see man 2 setns */
+	ret = fork();
+	if (ret < 0) {
+		perror("fail to fork");
+		goto out;
+	} else if (ret > 0) {
+		fprintf(stdout, "create child process pid=%d in the sandbox\n", ret);
+		if (pidpipe > 0) {
+			hyper_send_type(pidpipe, ret);
+		}
+		_exit(0);
+	}
+
+out:
+	close(pidns);
+	close(ipcns);
+	close(utsns);
+
 	return ret;
 }
 

@@ -8,7 +8,6 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
-#include <sys/mount.h>
 #include <dirent.h>
 #include <sched.h>
 #include <errno.h>
@@ -23,6 +22,9 @@
 #include "util.h"
 #include "parse.h"
 #include "syscall.h"
+
+static int hyper_release_exec(struct hyper_exec *, struct hyper_pod *);
+static void hyper_exec_process(struct hyper_exec *exec);
 
 static int send_exec_finishing(uint64_t seq, int len, int code, int block)
 {
@@ -202,7 +204,7 @@ struct hyper_event_ops err_ops = {
 	/* don't need write buff, the stderr data is one way */
 };
 
-int hyper_setup_exec_user(struct hyper_exec *exec)
+static int hyper_setup_exec_user(struct hyper_exec *exec)
 {
 	char *user = exec->user == NULL || strlen(exec->user) == 0 ? NULL : exec->user;
 	char *group = exec->group == NULL || strlen(exec->group) == 0 ? NULL : exec->group;
@@ -333,7 +335,7 @@ static int hyper_setup_exec_notty(struct hyper_exec *e)
 	return 0;
 }
 
-int hyper_setup_exec_tty(struct hyper_exec *e)
+static int hyper_setup_exec_tty(struct hyper_exec *e)
 {
 	int unlock = 0;
 	int ptymaster;
@@ -410,7 +412,7 @@ int hyper_setup_exec_tty(struct hyper_exec *e)
 	return 0;
 }
 
-int hyper_dup_exec_tty(struct hyper_exec *e)
+static int hyper_dup_exec_tty(struct hyper_exec *e)
 {
 	int ret = -1;
 
@@ -457,7 +459,7 @@ out:
 	return ret;
 }
 
-int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
+static int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 {
 	fprintf(stdout, "hyper_init_event container pts event %p, ops %p, fd %d\n",
 		&exec->stdinev, &in_ops, exec->stdinev.fd);
@@ -488,105 +490,32 @@ int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 	return 0;
 }
 
-static int hyper_enter_container(struct hyper_pod *pod,
-			  struct hyper_exec *exec)
+static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int pipe)
 {
-	int ipcns, utsns, mntns, ret;
 	struct hyper_container *c;
-	char path[512];
 
-	ret = ipcns = utsns = mntns = -1;
+	if (hyper_enter_sandbox(pod, pipe) < 0) {
+		perror("enter pidns of pod init failed");
+		hyper_send_type(pipe, -1);
+		goto out;
+	}
 
 	c = hyper_find_container(pod, exec->id);
 	if (c == NULL) {
 		fprintf(stderr, "can not find container %s\n", exec->id);
-		return -1;
-	}
-
-	sprintf(path, "/proc/%d/ns/uts", pod->init_pid);
-	utsns = open(path, O_RDONLY| O_CLOEXEC);
-	if (utsns < 0) {
-		perror("fail to open utsns of pod init");
 		goto out;
 	}
 
-	sprintf(path, "/proc/%d/ns/ipc", pod->init_pid);
-	ipcns = open(path, O_RDONLY| O_CLOEXEC);
-	if (ipcns < 0) {
-		perror("fail to open ipcns of pod init");
-		goto out;
-	}
-
-	mntns = c->ns;
-	if (mntns < 0) {
-		perror("fail to open mntns of pod init");
-		goto out;
-	}
-
-	if (setns(utsns, CLONE_NEWUTS) < 0 ||
-	    setns(ipcns, CLONE_NEWIPC) <0 ||
-	    setns(mntns, CLONE_NEWNS) < 0) {
+	if (setns(c->ns, CLONE_NEWNS) < 0) {
 		perror("fail to enter container ns");
 		goto out;
 	}
+	chdir("/");
 
 	/* TODO: merge container env to exec env in hyperd */
 	if (hyper_setup_env(c->exec.envs, c->exec.envs_num) < 0) {
 		fprintf(stderr, "setup container envs for exec failed\n");
 		goto out;
-	}
-
-	/* TODO: wait for container finishing setup root */
-	chdir("/");
-
-	/* already in pidns & mntns of container, mount proc filesystem */
-	if (exec->init && mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0) {
-		perror("fail to mount proc filesystem for container");
-		goto out;
-	}
-
-	ret = 0;
-out:
-	close(ipcns);
-	close(utsns);
-
-	return ret;
-}
-
-static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int pipe)
-{
-	int pid = -1, ret = -1;
-	char path[512];
-	int pidns;
-
-	sprintf(path, "/proc/%d/ns/pid", pod->init_pid);
-	pidns = open(path, O_RDONLY| O_CLOEXEC);
-	if (pidns < 0) {
-		perror("fail to open pidns of pod init");
-		goto out;
-	}
-
-	/* enter pidns of pod init, so the children of this process will run in
-	 * pidns of pod init, see man 2 setns */
-	if (setns(pidns, CLONE_NEWPID) < 0) {
-		perror("enter pidns of pod init failed");
-		goto out;
-	}
-	close(pidns);
-
-	pid = fork();
-	if (pid < 0) {
-		perror("fail to fork");
-		goto out;
-	} else if (pid > 0) {
-		fprintf(stdout, "create exec cmd %s pid %d,ref %d\n", exec->argv[0], pid, exec->ref);
-		ret = 0;
-		goto out;
-	}
-
-	if (hyper_enter_container(pod, exec) < 0) {
-		fprintf(stderr, "enter container ns failed\n");
-		goto exit;
 	}
 
 	// set early env. the container env config can overwrite it
@@ -599,15 +528,12 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int
 
 	hyper_exec_process(exec);
 
-exit:
-	_exit(125);
 out:
-	hyper_send_type(pipe, pid);
-	_exit(ret);
+	_exit(125);
 }
 
 // do the exec, no return
-void hyper_exec_process(struct hyper_exec *exec)
+static void hyper_exec_process(struct hyper_exec *exec)
 {
 	if (sigprocmask(SIG_SETMASK, &orig_mask, NULL) < 0) {
 		perror("sigprocmask restore mask failed");
@@ -624,7 +550,7 @@ void hyper_exec_process(struct hyper_exec *exec)
 		goto exit;
 	}
 
-	// set the container env
+	// set the process env
 	if (hyper_setup_env(exec->envs, exec->envs_num) < 0) {
 		fprintf(stderr, "setup env failed\n");
 		goto exit;
@@ -773,8 +699,8 @@ out:
 	return ret;
 }
 
-int hyper_release_exec(struct hyper_exec *exec,
-		       struct hyper_pod *pod)
+static int hyper_release_exec(struct hyper_exec *exec,
+			      struct hyper_pod *pod)
 {
 	if (--exec->ref != 0) {
 		fprintf(stdout, "still have %d user of exec\n", exec->ref);

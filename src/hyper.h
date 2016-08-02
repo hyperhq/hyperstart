@@ -74,7 +74,6 @@ struct portmapping_white_list {
 };
 
 struct hyper_win_size {
-	char		*tty;
 	int		row;
 	int		column;
 	uint64_t	seq;
@@ -119,8 +118,8 @@ static inline int hyper_create(char *hyper_path)
 }
 
 int hyper_open_serial(char *tty);
-int hyper_start_containers(struct hyper_pod *pod);
 void hyper_cleanup_pod(struct hyper_pod *pod);
+int hyper_enter_sandbox(struct hyper_pod *pod, int pidpipe);
 
 extern struct hyper_pod global_pod;
 extern struct hyper_ctl ctl;
