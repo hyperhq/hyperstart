@@ -269,8 +269,8 @@ static int container_setup_mount(struct hyper_container *container)
 	hyper_mkdir("./dev", 0755);
 	hyper_mkdir("./lib/modules", 0755);
 
-	// mount proc filesystem when the container init process running in the pidns of podinit
-	if (mount("sysfs", "./sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
+	if (mount("proc", "./proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
+	    mount("sysfs", "./sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
 	    mount("devtmpfs", "./dev", "devtmpfs", MS_NOSUID, NULL) < 0) {
 		perror("mount basic filesystem for container failed");
 		return -1;
@@ -511,6 +511,11 @@ static int hyper_setup_container_rootfs(void *data)
 	char root[512], rootfs[512];
 	int setup_dns;
 	uint32_t type;
+
+	if (hyper_enter_sandbox(arg->pod, -1) < 0) {
+		perror("enter sandbox failed");
+		goto fail;
+	}
 
 	if (hyper_rescan_scsi() < 0) {
 		fprintf(stdout, "rescan scsi failed\n");

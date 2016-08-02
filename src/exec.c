@@ -8,7 +8,6 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
-#include <sys/mount.h>
 #include <dirent.h>
 #include <sched.h>
 #include <errno.h>
@@ -516,12 +515,6 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int
 	/* TODO: merge container env to exec env in hyperd */
 	if (hyper_setup_env(c->exec.envs, c->exec.envs_num) < 0) {
 		fprintf(stderr, "setup container envs for exec failed\n");
-		goto out;
-	}
-
-	/* already in pidns & mntns of container, mount proc filesystem */
-	if (exec->init && mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0) {
-		perror("fail to mount proc filesystem for container");
 		goto out;
 	}
 
