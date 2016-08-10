@@ -26,6 +26,7 @@ void online_cpu(void);
 void online_memory(void);
 int hyper_cmd(char *cmd);
 int hyper_create_file(const char *hyper_path);
+void hyper_filize(char *hyper_path);
 int hyper_mkdir(char *path, mode_t mode);
 int hyper_open_channel(char *channel, int mode);
 int hyper_open_serial_dev(char *tty);
