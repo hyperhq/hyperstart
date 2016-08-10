@@ -925,53 +925,45 @@ out:
 	return -1;
 }
 
-int hyper_parse_setup_routes(struct hyper_route **routes, uint32_t *r_num, char *json, int length)
-{
-	jsmn_parser p;
-	int toks_num = 10, i, n, ret = -1;
-	jsmntok_t *toks = NULL;
-	int found = 0;
-
-realloc:
-	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
-	if (toks == NULL) {
-		fprintf(stderr, "allocate tokens for setup route failed\n");
-		goto out;
+// replace hyper_parse_routes one day
+int hyper_parse_routes_parson(struct hyper_route **routes, uint32_t *r_num, JSON_Array *array) {
+	JSON_Object *route;
+	struct hyper_route *rts;
+	int i;
+	int num = json_array_get_count(array);
+	rts = calloc(num, sizeof(*rts));
+	if (rts == NULL) {
+		fprintf(stdout, "alloc memory for route failed\n");
+		return -1;
 	}
 
-	jsmn_init(&p);
-	n = jsmn_parse(&p, json, length, toks, toks_num);
-	if (n < 0) {
-		fprintf(stdout, "jsmn parse failed, n is %d\n", n);
-		if (n == JSMN_ERROR_NOMEM) {
-			toks_num *= 2;
-			goto realloc;
-		}
-		goto out;
+	for (i = 0; i < num; i++) {
+		struct hyper_route *rt = &rts[i];
+		route = json_array_get_object(array, i);
+
+		rt->dst = json_object_get_string(route, "dest");
+		fprintf(stdout, "route %d dest is %s\n", i, rt->dst);
+		rt->gw = json_object_get_string(route, "gateway");
+		fprintf(stdout, "route %d gateway is %s\n", i, rt->gw);
+		rt->device = json_object_get_string(route, "device");
+		fprintf(stdout, "route %d device is %s\n", i, rt->device);
 	}
 
-	for (i = 0; i < n; i++) {
-		jsmntok_t *t = &toks[i];
+	*routes = rts;
+	*r_num = num;
 
-		if (t->type != JSMN_STRING)
-			continue;
+	return 0;
+}
 
-		if (i++ == n || !json_token_streq(json, t, "routes")) {
-			fprintf(stderr, "cannot find routes\n");
-			goto out;
-		}
-		found = 1;
-		break;
-	}
+int hyper_parse_setup_routes(struct hyper_route **routes, uint32_t *r_num, char *json, int length) {
+	int ret;
+	JSON_Array *array;
+	JSON_Value *value = hyper_json_parse(json, length);
 
-	if (found && (hyper_parse_routes(routes, r_num, json, &toks[i]) < 0)) {
-		fprintf(stdout, "fail to parse routes\n");
-		goto out;
-	}
+	array = json_object_get_array(json_object(value), "routes");
+	ret = hyper_parse_routes_parson(routes, r_num, array);
 
-	ret = 0;
-out:
-	free(toks);
+	json_value_free(value);
 	return ret;
 }
 
