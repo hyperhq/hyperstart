@@ -144,6 +144,7 @@ static int container_setup_volume(struct hyper_container *container)
 				}
 			}
 		} else {
+			hyper_filize(mountpoint);
 			if (hyper_create_file(mountpoint) < 0) {
 				perror("create volume file failed");
 				return -1;
