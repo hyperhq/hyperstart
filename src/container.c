@@ -41,7 +41,7 @@ static int container_populate_volume(char *src, char *dest)
 		return -1;
 	}
 
-	if (hyper_mkdir(dest, 0755) < 0) {
+	if (hyper_mkdir(dest, 0777) < 0) {
 		fprintf(stderr, "fail to create directroy %s\n", dest);
 		return -1;
 	}
@@ -61,6 +61,10 @@ static int container_check_file_volume(char *hyper_path, const char **filename)
 	*filename = NULL;
 	num = scandir(hyper_path, &list, NULL, NULL);
 	if (num < 0) {
+		/* No data in the volume yet, treat as non-file-volume */
+		if (errno == ENOENT) {
+			return 0;
+		}
 		perror("scan path failed");
 		return -1;
 	} else if (num != 3) {
@@ -122,12 +126,6 @@ static int container_setup_volume(struct hyper_container *container)
 		}
 
 		sprintf(volume, "/%s/_data", path);
-		/* 0777 so that any user can write to new volumes */
-		if (hyper_mkdir(volume, 0777) < 0) {
-			fprintf(stderr, "fail to create directroy %s\n", volume);
-			return -1;
-		}
-
 		if (container_check_file_volume(volume, &filevolume) < 0)
 			return -1;
 
@@ -142,6 +140,10 @@ static int container_setup_volume(struct hyper_container *container)
 					fprintf(stderr, "fail to populate volume %s\n", mountpoint);
 					return -1;
 				}
+			} else if (hyper_mkdir(volume, 0777) < 0) {
+				/* First time mounting an empty volume */
+				perror("create _data dir failed");
+				return -1;
 			}
 		} else {
 			hyper_filize(mountpoint);
@@ -150,6 +152,11 @@ static int container_setup_volume(struct hyper_container *container)
 				return -1;
 			}
 			sprintf(volume, "/%s/_data/%s", path, filevolume);
+			/* 0777 so that any user can read/write the new file volume */
+			if (chmod(volume, 0777) < 0) {
+				fprintf(stderr, "fail to chmod directroy %s\n", volume);
+				return -1;
+			}
 		}
 
 		if (mount(volume, mountpoint, NULL, MS_BIND, NULL) < 0) {
