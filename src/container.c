@@ -69,6 +69,10 @@ static int container_check_file_volume(char *hyper_path, const char **filename)
 		return -1;
 	} else if (num != 3) {
 		fprintf(stdout, "%s has %d files/dirs\n", hyper_path, num - 2);
+		for (i = 0; i < num; i++) {
+			free(list[i]);
+		}
+		free(list);
 		return 0;
 	}
 
