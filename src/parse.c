@@ -792,30 +792,40 @@ fail:
 	return -1;
 }
 
+// replace hyper_parse_interface one day
+int hyper_parse_interface_parson(struct hyper_interface *iface, JSON_Object *interface) {
+	const char *s;
+
+	s = json_object_get_string(interface, "device");
+	if (s != NULL) {
+		iface->device = strdup(s);
+		fprintf(stdout, "interface device is %s\n", iface->device);
+	}
+
+	s = json_object_get_string(interface, "ipAddress");
+	if (s != NULL) {
+		iface->ipaddr = strdup(s);
+		fprintf(stdout, "interface ipAddress is %s\n", iface->ipaddr);
+	}
+
+	s = json_object_get_string(interface, "netMask");
+	if (s != NULL) {
+		iface->mask = strdup(s);
+		fprintf(stdout, "interface netMask is %s\n", iface->mask);
+	}
+
+	return 0;
+}
+
 struct hyper_interface *hyper_parse_setup_interface(char *json, int length)
 {
-	jsmn_parser p;
-	int toks_num = 10, n;
-	jsmntok_t *toks = NULL;
+	JSON_Array *array;
+	JSON_Object *interface;
+	JSON_Value *value = hyper_json_parse(json, length);
 
 	struct hyper_interface *iface = NULL;
-realloc:
-	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
-	if (toks == NULL) {
-		fprintf(stderr, "allocate tokens for setup interface failed\n");
-		goto fail;
-	}
 
-	jsmn_init(&p);
-	n = jsmn_parse(&p, json, length, toks, toks_num);
-	if (n < 0) {
-		fprintf(stdout, "jsmn parse failed, n is %d\n", n);
-		if (n == JSMN_ERROR_NOMEM) {
-			toks_num *= 2;
-			goto realloc;
-		}
-		goto out;
-	}
+	array = json_object_get_array(json_object(value), "interfaces");
 
 	iface = calloc(1, sizeof(*iface));
 	if (iface == NULL) {
@@ -823,12 +833,14 @@ realloc:
 		goto out;
 	}
 
-	if (hyper_parse_interface(iface, json, toks) < 0) {
+	interface = json_array_get_object(array, 0);
+	if (hyper_parse_interface_parson(iface, interface) < 0) {
 		fprintf(stderr, "parse interface failed\n");
 		goto fail;
 	}
+
 out:
-	free(toks);
+	json_value_free(value);
 	return iface;
 fail:
 	free(iface);
