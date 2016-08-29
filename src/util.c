@@ -208,6 +208,29 @@ int hyper_getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroup
 	return ret;
 }
 
+int hyper_write_file(const char *path, const char *value, size_t len)
+{
+	size_t size = 0, l;
+	int fd = open(path, O_WRONLY);
+	if (fd < 0) {
+		perror("open file failed");
+		return -1;
+	}
+
+	while (size < len) {
+		l = write(fd, value + size, len - size);
+		if (l < 0) {
+			perror("fail to write to file");
+			close(fd);
+			return -1;
+		}
+		size += l;
+	}
+
+	close(fd);
+	return 0;
+}
+
 /* Trim all trailing '/' of a hyper_path except for the prefix one. */
 void hyper_filize(char *hyper_path)
 {

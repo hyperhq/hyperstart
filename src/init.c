@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <sched.h>
@@ -1144,6 +1145,8 @@ static int hyper_loop(void)
 	struct epoll_event *events;
 	struct hyper_pod *pod = &global_pod;
 	sigset_t mask, omask;
+	struct rlimit limit;
+	char *filemax = "1000000";
 
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGCHLD);
@@ -1161,6 +1164,31 @@ static int hyper_loop(void)
 	orig_mask = omask;
 	sigdelset(&omask, SIGCHLD);
 	signal(SIGCHLD, hyper_init_sigchld);
+
+	if (hyper_write_file("/proc/sys/fs/file-max", filemax, strlen(filemax)) < 0) {
+		fprintf(stderr, "sysctl: setup default file-max(%s) failed\n", filemax);
+		return -1;
+	}
+
+	// setup open file limit
+	limit.rlim_cur = limit.rlim_max = atoi(filemax);
+	if (setrlimit(RLIMIT_NOFILE, &limit) < 0) {
+		perror("set rlimit for NOFILE failed");
+		return -1;
+	}
+
+	// setup process num limit
+	limit.rlim_cur = limit.rlim_max = 30604;
+	if (setrlimit(RLIMIT_NPROC, &limit) < 0) {
+		perror("set rlimit for NPROC failed");
+		return -1;
+	}
+
+	// setup pending signal limit, same with NRPROC
+	if (setrlimit(RLIMIT_SIGPENDING, &limit) < 0) {
+		perror("set rlimit for SIGPENDING failed");
+		return -1;
+	}
 
 	ctl.efd = epoll_create1(EPOLL_CLOEXEC);
 	if (ctl.efd < 0) {
