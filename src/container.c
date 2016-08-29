@@ -384,41 +384,24 @@ static int container_setup_init_layer(struct hyper_container *container,
 
 static int container_setup_sysctl(struct hyper_container *container)
 {
-	int i, size, len, l, fd;
+	int i;
 	struct sysctl *sys;
 
 	for (i = 0; i < container->sys_num; i++) {
 		char path[256];
 
-		len = 0;
 		sys = &container->sys[i];
-		size = strlen(sys->value);
 
 		sprintf(path, "/proc/sys/%s", sys->path);
 		fprintf(stdout, "sysctl %s value %s\n", sys->path, sys->value);
 
-		fd = open(path, O_WRONLY);
-		if (fd < 0) {
-			perror("open file failed");
-			goto out;
+		if (hyper_write_file(path, sys->value, strlen(sys->value)) < 0) {
+			fprintf(stderr, "sysctl: write %s to %s failed\n", sys->value, path);
+			return -1;
 		}
-
-		while (len < size) {
-			l = write(fd, sys->value + len, size - len);
-			if (l < 0) {
-				perror("fail to write sysctl");
-				close(fd);
-				goto out;
-			}
-			len += l;
-		}
-
-		close(fd);
 	}
 
 	return 0;
-out:
-	return -1;
 }
 
 static int container_setup_dns(struct hyper_container *container)

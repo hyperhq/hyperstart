@@ -1146,6 +1146,7 @@ static int hyper_loop(void)
 	struct hyper_pod *pod = &global_pod;
 	sigset_t mask, omask;
 	struct rlimit limit;
+	char *filemax = "1000000";
 
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGCHLD);
@@ -1164,8 +1165,13 @@ static int hyper_loop(void)
 	sigdelset(&omask, SIGCHLD);
 	signal(SIGCHLD, hyper_init_sigchld);
 
+	if (hyper_write_file("/proc/sys/fs/file-max", filemax, strlen(filemax)) < 0) {
+		fprintf(stderr, "sysctl: setup default file-max(%s) failed\n", filemax);
+		return -1;
+	}
+
 	// setup open file limit
-	limit.rlim_cur = limit.rlim_max = 1000000;
+	limit.rlim_cur = limit.rlim_max = atoi(filemax);
 	if (setrlimit(RLIMIT_NOFILE, &limit) < 0) {
 		perror("set rlimit for NOFILE failed");
 		return -1;

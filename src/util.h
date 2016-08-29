@@ -28,6 +28,7 @@ int hyper_cmd(char *cmd);
 int hyper_create_file(const char *hyper_path);
 void hyper_filize(char *hyper_path);
 int hyper_mkdir(char *path, mode_t mode);
+int hyper_write_file(const char *path, const char *value, size_t len);
 int hyper_open_channel(char *channel, int mode);
 int hyper_open_serial_dev(char *tty);
 int hyper_setfd_cloexec(int fd);
