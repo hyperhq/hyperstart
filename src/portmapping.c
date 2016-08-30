@@ -66,6 +66,9 @@ int hyper_setup_iptables_rule(struct ipt_rule rule)
 // initialize modules and iptables chains
 int hyper_setup_portmapping(struct hyper_pod *pod)
 {
+	const char *connmax = "10485760";
+	const char *timeout = "300";
+
 	if (pod->portmap_white_lists == NULL || (pod->portmap_white_lists->i_num == 0 &&
 			pod->portmap_white_lists->e_num == 0)) {
 		return 0;
@@ -146,6 +149,16 @@ int hyper_setup_portmapping(struct hyper_pod *pod)
 		if (hyper_setup_iptables_rule(rules[i])<0) {
 			return -1;
 		}
+	}
+
+	/* portmapping enables nf_conntrack by default, should blow up nf_conntack_max to make sure
+	 * nf_conntrack is available for connections. */
+	if (hyper_write_file("/proc/sys/net/nf_conntrack_max", connmax, strlen(connmax)) < 0) {
+		fprintf(stderr, "sysctl: setup default nf_conntrack_max(%s) failed\n", connmax);
+	}
+
+	if (hyper_write_file("/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established", timeout, strlen(timeout)) < 0) {
+		fprintf(stderr, "sysctl: setup default nf_conntrack_tcp_timeout_established(%s) failed\n", timeout);
 	}
 
 	return 0;
