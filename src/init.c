@@ -45,30 +45,35 @@ static int hyper_stop_pod(struct hyper_pod *pod);
 
 static int hyper_set_win_size(char *json, int length)
 {
-	struct hyper_win_size ws;
 	struct winsize size;
 	struct hyper_exec *exec;
 	int ret;
 
 	fprintf(stdout, "call hyper_win_size, json %s, len %d\n", json, length);
-	if (hyper_parse_winsize(&ws, json, length) < 0) {
+	JSON_Value *value = hyper_json_parse(json, length);
+	if (value == NULL) {
 		fprintf(stderr, "set term size failed\n");
-		return -1;
+		ret = -1;
+		goto out;
 	}
+	const uint64_t seq = (uint64_t)json_object_get_number(json_object(value), "seq");
 
-	exec = hyper_find_exec_by_seq(&global_pod, ws.seq);
+	exec = hyper_find_exec_by_seq(&global_pod, seq);
 	if (exec == NULL) {
-		fprintf(stdout, "can not find exec whose seq is %" PRIu64"\n", ws.seq);
-		return 0;
+		fprintf(stdout, "can not find exec whose seq is %" PRIu64"\n", seq);
+		ret = 0;
+		goto out;
 	}
 
-	size.ws_row = ws.row;
-	size.ws_col = ws.column;
+	size.ws_row = (int)json_object_get_number(json_object(value), "row");
+	size.ws_col = (int)json_object_get_number(json_object(value), "column");
 
 	ret = ioctl(exec->ptyfd, TIOCSWINSZ, &size);
 	if (ret < 0)
 		perror("cannot ioctl to set pty device term size");
 
+out:
+	json_value_free(value);
 	return ret;
 }
 
