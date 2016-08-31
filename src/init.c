@@ -1059,6 +1059,11 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 
 	pod->type = type;
 	switch (type) {
+	case GETVERSION:
+		data = malloc(4);
+		datalen = 4;
+		hyper_set_be32(data, APIVERSION);
+		break;
 	case STARTPOD:
 		ret = hyper_start_pod((char *)buf->data + 8, len - 8);
 		hyper_print_uptime();

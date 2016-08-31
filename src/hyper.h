@@ -14,8 +14,10 @@
 #include "container.h"
 #include "portmapping.h"
 
+#define APIVERSION 4242
+
 enum {
-	RESERVED,
+	GETVERSION,
 	STARTPOD,
 	GETPOD,
 	STOPPOD,
