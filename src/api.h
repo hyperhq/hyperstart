@@ -31,6 +31,7 @@ enum {
 	REMOVECONTAINER,
 	PROCESSASYNCEVENT,
 	SIGNALPROCESS,
+	DELETEINTERFACE,		// 25
 };
 
 // "hyperstart" is the special container ID for adding processes.

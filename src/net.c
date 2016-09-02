@@ -623,6 +623,70 @@ out:
 	return ret;
 }
 
+static int hyper_remove_nic(char *device)
+{
+	char path[256], real[128];
+	int fd;
+	ssize_t size;
+
+	sprintf(path, "/sys/class/net/%s", device);
+
+	size = readlink(path, real, 128);
+	if (size < 0 || size > 127) {
+		perror("fail to read link directory");
+		return -1;
+	}
+
+	real[size] = '\0';
+	sprintf(path, "/sys/%s/../../../remove", real + 5);
+
+	fprintf(stdout, "get net sys path %s\n", path);
+
+	fd = open(path, O_WRONLY);
+	if (fd < 0) {
+		perror("open file failed");
+		return -1;
+	}
+
+	if (write(fd, "1\n", 2) < 0) {
+		perror("write 1 to file failed");
+		close(fd);
+		return 1;
+	}
+
+	close(fd);
+	return 0;
+}
+int hyper_cmd_delete_interface(char *json, int length)
+{
+	int ret = -1;
+	struct hyper_interface *iface;
+	struct rtnl_handle rth;
+
+	fprintf(stdout, "client demands to remove network interface\n");
+	if (netlink_open(&rth) < 0)
+		return -1;
+
+	iface = hyper_parse_setup_interface(json, length);
+	if (iface == NULL) {
+		fprintf(stderr, "parse interface failed\n");
+		goto out;
+	}
+
+	if (hyper_remove_nic(iface->device) < 0){
+		fprintf(stderr, "remove device %s failed\n", iface->device);
+		goto out1;
+	}
+	fprintf(stdout, "remove device %s successfully\n", iface->device);
+	ret = 0;
+out1:
+	hyper_free_interface(iface);
+	free(iface);
+out:
+	netlink_close(&rth);
+	return ret;
+}
+
 int hyper_cmd_setup_route(char *json, int length, struct hyper_pod *pod)
 {
 	struct hyper_route *rts = NULL;
@@ -780,3 +844,4 @@ out:
 	close(fd);
 	return ret;
 }
+
