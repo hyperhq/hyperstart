@@ -507,6 +507,12 @@ static int hyper_setup_container_rootfs(void *data)
 	int setup_dns;
 	uint32_t type;
 
+	/* wait for ns-opened ready message */
+	if (hyper_get_type(arg->pipens[0], &type) < 0 || type != READY) {
+		fprintf(stderr, "wait for /proc/self/ns/mnt opened failed\n");
+		goto fail;
+	}
+
 	if (hyper_enter_sandbox(arg->pod, -1) < 0) {
 		perror("enter sandbox failed");
 		goto fail;
@@ -623,12 +629,6 @@ static int hyper_setup_container_rootfs(void *data)
 
 	if (container_setup_workdir(container) < 0) {
 		fprintf(stderr, "container sets up work directory failed\n");
-		goto fail;
-	}
-
-	/* wait for ns-opened ready message */
-	if (hyper_get_type(arg->pipens[0], &type) < 0 || type != READY) {
-		fprintf(stderr, "wait for /proc/self/ns/mnt opened failed\n");
 		goto fail;
 	}
 
