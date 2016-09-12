@@ -471,7 +471,7 @@ static int hyper_rescan_scsi(void)
 
 	num = scandir("/sys/class/scsi_host/", &list, NULL, NULL);
 	if (num < 0) {
-		perror("scan /sys/calss/virtio-ports/ failed");
+		perror("scan /sys/class/scsi_host/ failed");
 		return -1;
 	}
 
