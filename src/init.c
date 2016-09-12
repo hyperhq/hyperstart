@@ -1268,7 +1268,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (mount("dev", "/dev", "devtmpfs", MS_NOSUID, NULL) == -1) {
-		perror("mount sysfs failed");
+		perror("mount devtmpfs failed");
 		return -1;
 	}
 
