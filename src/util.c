@@ -512,7 +512,7 @@ int hyper_open_channel(char *channel, int mode)
 
 	num = scandir("/sys/class/virtio-ports/", &list, NULL, NULL);
 	if (num < 0) {
-		perror("scan /sys/calss/virtio-ports/ failed");
+		perror("scan /sys/class/virtio-ports/ failed");
 		return -1;
 	}
 

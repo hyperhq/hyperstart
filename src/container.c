@@ -32,7 +32,7 @@ static int container_populate_volume(char *src, char *dest)
 
 	if (stat(dest, &st) == 0) {
 		if (!S_ISDIR(st.st_mode)) {
-			fprintf(stderr, "the _data in volume %s is not directroy\n", dest);
+			fprintf(stderr, "the _data in volume %s is not directory\n", dest);
 			return -1;
 		}
 
@@ -45,7 +45,7 @@ static int container_populate_volume(char *src, char *dest)
 	}
 
 	if (hyper_mkdir(dest, 0777) < 0) {
-		fprintf(stderr, "fail to create directroy %s\n", dest);
+		fprintf(stderr, "fail to create directory %s\n", dest);
 		return -1;
 	}
 
@@ -173,7 +173,7 @@ static int container_setup_volume(struct hyper_container *container)
 			sprintf(volume, "/%s/_data/%s", path, filevolume);
 			/* 0777 so that any user can read/write the new file volume */
 			if (chmod(volume, 0777) < 0) {
-				fprintf(stderr, "fail to chmod directroy %s\n", volume);
+				fprintf(stderr, "fail to chmod directory %s\n", volume);
 				return -1;
 			}
 		}
@@ -471,7 +471,7 @@ static int hyper_rescan_scsi(void)
 
 	num = scandir("/sys/class/scsi_host/", &list, NULL, NULL);
 	if (num < 0) {
-		perror("scan /sys/calss/virtio-ports/ failed");
+		perror("scan /sys/class/scsi_host/ failed");
 		return -1;
 	}
 
@@ -553,7 +553,7 @@ static int hyper_setup_container_rootfs(void *data)
 
 	sprintf(root, "/tmp/hyper/%s/root/", container->id);
 	if (hyper_mkdir(root, 0755) < 0) {
-		perror("make root directroy failed");
+		perror("make root directory failed");
 		goto fail;
 	}
 
@@ -666,7 +666,7 @@ static int hyper_setup_pty(struct hyper_container *c)
 	sprintf(root, "/tmp/hyper/%s/devpts/", c->id);
 
 	if (hyper_mkdir(root, 0755) < 0) {
-		perror("make container pts directroy failed");
+		perror("make container pts directory failed");
 		return -1;
 	}
 
