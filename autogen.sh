@@ -8,34 +8,34 @@ DIE=0
 
 test -f src/init.c || {
 	echo
-	echo "You must run this script in the top-level hyperint drectory."
+	echo "You must run this script in the top-level hyperstart drectory."
 	echo
 	DIE=1
 }
 
 (autoconf --version) < /dev/null > /dev/null 2>&1 || {
 	echo
-	echo "You must have autoconf installed to generate the hyperinit."
+	echo "You must have autoconf installed to generate the hyperstart."
 	echo
 	DIE=1
 }
 
 (autoheader --version) < /dev/null > /dev/null 2>&1 || {
 	echo
-	echo "You must have autoheader installed to generate the hypernit."
+	echo "You must have autoheader installed to generate the hyperstart."
 	echo
 	DIE=1
 }
 
 (automake --version) < /dev/null > /dev/null 2>&1 || {
 	echo
-	echo "You must have automake installed to generate the hypernit."
+	echo "You must have automake installed to generate the hyperstart."
 	echo
 	DIE=1
 }
 (autoreconf --version) < /dev/null > /dev/null 2>&1 || {
 	echo
-	echo "You must have autoreconf installed to generate the hypernit."
+	echo "You must have autoreconf installed to generate the hyperstart."
 	echo
 	DIE=1
 }
