@@ -421,7 +421,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 	struct vbsf_mount_info_new mntinf;
 
 	if (pod->share_tag == NULL) {
-		fprintf(stdout, "no shared directroy\n");
+		fprintf(stdout, "no shared directory\n");
 		return 0;
 	}
 
@@ -452,7 +452,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 static int hyper_setup_shared(struct hyper_pod *pod)
 {
 	if (pod->share_tag == NULL) {
-		fprintf(stdout, "no shared directroy\n");
+		fprintf(stdout, "no shared directory\n");
 		return 0;
 	}
 
@@ -474,7 +474,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 
 static int hyper_setup_pod(struct hyper_pod *pod)
 {
-	/* create tmp proc directroy */
+	/* create tmp proc directory */
 	if (hyper_mkdir("/tmp/hyper/proc", 0755) < 0) {
 		perror("create tmp proc failed");
 		return -1;
@@ -897,7 +897,7 @@ static void hyper_cleanup_hostname(struct hyper_pod *pod)
 static void hyper_cleanup_shared(struct hyper_pod *pod)
 {
 	if (pod->share_tag == NULL) {
-		fprintf(stdout, "no shared directroy\n");
+		fprintf(stdout, "no shared directory\n");
 		return;
 	}
 
@@ -1251,7 +1251,7 @@ int main(int argc, char *argv[])
 	    hyper_mkdir("/sys", 0755) < 0 ||
 	    hyper_mkdir("/sbin", 0755) < 0 ||
 	    hyper_mkdir("/proc", 0755) < 0) {
-		perror("create basic directroy failed");
+		perror("create basic directory failed");
 		return -1;
 	}
 
@@ -1273,7 +1273,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (hyper_mkdir("/dev/pts", 0755) < 0) {
-		perror("create basic directroy failed");
+		perror("create basic directory failed");
 		return -1;
 	}
 
