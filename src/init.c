@@ -425,8 +425,8 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 		return 0;
 	}
 
-	if (hyper_mkdir("/tmp/hyper/shared", 0755) < 0) {
-		perror("fail to create /tmp/hyper/shared");
+	if (hyper_mkdir(SHARED_DIR, 0755) < 0) {
+		perror("fail to create " SHARED_DIR);
 		return -1;
 	}
 
@@ -440,7 +440,7 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 	mntinf.fmode		= ~0U;
 	strcpy(mntinf.name, pod->share_tag);
 
-	if (mount(NULL, "/tmp/hyper/shared", "vboxsf",
+	if (mount(NULL, SHARED_DIR, "vboxsf",
 		  MS_NODEV, &mntinf) < 0) {
 		perror("fail to mount shared dir");
 		return -1;
@@ -456,12 +456,12 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 		return 0;
 	}
 
-	if (hyper_mkdir("/tmp/hyper/shared", 0755) < 0) {
-		perror("fail to create /tmp/hyper/shared");
+	if (hyper_mkdir(SHARED_DIR, 0755) < 0) {
+		perror("fail to create " SHARED_DIR);
 		return -1;
 	}
 
-	if (mount(pod->share_tag, "/tmp/hyper/shared", "9p",
+	if (mount(pod->share_tag, SHARED_DIR, "9p",
 		  MS_MGC_VAL| MS_NODEV, "trans=virtio") < 0) {
 
 		perror("fail to mount shared dir");
@@ -911,14 +911,14 @@ static void hyper_cleanup_shared(struct hyper_pod *pod)
 
 	free(pod->share_tag);
 	pod->share_tag = NULL;
-	if (umount("/tmp/hyper/shared") < 0 &&
-	    umount2("/tmp/hyper/shared", MNT_DETACH)) {
+	if (umount(SHARED_DIR) < 0 &&
+	    umount2(SHARED_DIR, MNT_DETACH)) {
 		perror("fail to umount shared dir");
 		return;
 	}
 
-	if (rmdir("/tmp/hyper/shared") < 0)
-		perror("fail to delete /tmp/hyper/shared");
+	if (rmdir(SHARED_DIR) < 0)
+		perror("fail to delete " SHARED_DIR);
 
 	sync();
 }

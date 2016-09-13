@@ -15,6 +15,9 @@
 #include "container.h"
 #include "portmapping.h"
 
+/* Path to rootfs shared directory */
+#define SHARED_DIR "/tmp/hyper/shared"
+
 enum {
 	POLICY_NEVER,
 	POLICY_ALWAYS,

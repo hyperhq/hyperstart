@@ -183,7 +183,7 @@ static int container_setup_volume(struct hyper_container *container)
 		struct fsmap *map = &container->maps[i];
 		char mountpoint[512];
 
-		sprintf(path, "/tmp/hyper/shared/%s", map->source);
+		sprintf(path, "%s/%s", SHARED_DIR, map->source);
 		sprintf(mountpoint, "./%s", map->path);
 		fprintf(stdout, "mount %s to %s\n", path, mountpoint);
 
@@ -567,7 +567,7 @@ static int hyper_setup_container_rootfs(void *data)
 	} else {
 		char path[512];
 
-		sprintf(path, "/tmp/hyper/shared/%s/", container->image);
+		sprintf(path, "%s/%s/", SHARED_DIR, container->image);
 		fprintf(stdout, "src directory %s\n", path);
 
 		if (mount(path, root, NULL, MS_BIND, NULL) < 0) {
