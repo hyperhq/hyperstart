@@ -11,6 +11,8 @@ AC_CONFIG_HEADERS([config.h])
 # Checks for programs.
 AC_PROG_CC
 AM_PROG_CC_C_O
+AC_CHECK_PROG(PKG_CONFIG, [pkg-config], [pkg-config], [:])
+
 # Checks for libraries.
 
 # Checks for header files.
@@ -60,10 +62,22 @@ fi
 
 AM_CONDITIONAL([WITH_VBOX], [test "x$with_vbox" != "xno"])
 
+AC_ARG_WITH([systemdsystemunitdir],
+            AS_HELP_STRING([--with-systemdsystemunitdir=SYSTEMD_SYSTEM_UNIT_DIR],
+                           [path to install systemd system service]),
+                           [SYSTEMD_SYSTEMUNIT=${withval}],
+                           [SYSTEMD_SYSTEMUNIT="`$PKG_CONFIG --variable=systemdsystemunitdir systemd 2>/dev/null`"])
+
+AS_IF([test -z "$SYSTEMD_SYSTEMUNIT"],[SYSTEMD_SYSTEMUNIT=no])
+AS_IF([test "x$enable_daemon" = "xno"],[SYSTEMD_SYSTEMUNIT=no])
+AC_SUBST(SYSTEMD_SYSTEMUNIT)
+AM_CONDITIONAL(SYSTEMD, test "x${SYSTEMD_SYSTEMUNIT}" != "xno" )
+
 AC_CONFIG_FILES([
   Makefile
   src/Makefile
   build/Makefile
+  data/hyperstart.service
 ])
 AC_OUTPUT
 
@@ -79,4 +93,5 @@ AC_MSG_RESULT([
 	suid cflags:       ${SUID_CFLAGS}
 	ldflags:           ${LDFLAGS}
 	suid ldflags:      ${SUID_LDFLAGS}
+	systemd unit path: ${SYSTEMD_SYSTEMUNIT}
 ])

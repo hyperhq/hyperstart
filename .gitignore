@@ -12,6 +12,7 @@ tags
 /src/hyperstart
 build/hyper_daemon
 build/hyper-initrd.img
+data/hyperstart.service
 build/cbfs.rom
 build/root/*
 build/*iso
