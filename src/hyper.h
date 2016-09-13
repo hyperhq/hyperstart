@@ -7,40 +7,13 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include "api.h"
 #include "net.h"
 #include "list.h"
 #include "exec.h"
 #include "event.h"
 #include "container.h"
 #include "portmapping.h"
-
-#define APIVERSION 4242
-
-enum {
-	GETVERSION,
-	STARTPOD,
-	GETPOD,
-	STOPPOD,
-	DESTROYPOD,
-	RESTARTCONTAINER,
-	EXECCMD,
-	CMDFINISHED,
-	READY,
-	ACK,
-	ERROR,
-	WINSIZE,
-	PING,
-	PODFINISHED,
-	NEXT,
-	WRITEFILE,
-	READFILE,
-	NEWCONTAINER,
-	KILLCONTAINER,
-	ONLINECPUMEM,
-	SETUPINTERFACE,
-	SETUPROUTE,
-	REMOVECONTAINER,
-};
 
 enum {
 	POLICY_NEVER,
