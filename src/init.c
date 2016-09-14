@@ -1062,6 +1062,8 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	uint8_t *data = NULL;
 	int i, ret = 0;
 
+	// append a null byte to it. hyper_event_read() left this room for us.
+	buf->data[buf->get] = 0;
 	for (i = 0; i < buf->get; i++)
 		fprintf(stdout, "%0x ", buf->data[i]);
 

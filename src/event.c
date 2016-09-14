@@ -166,7 +166,9 @@ int hyper_event_read(struct hyper_event *he, int efd)
 	}
 
 	fprintf(stdout, "get length %" PRIu32"\n", len);
-	if (len > buf->size) {
+	// test it with '>=' to leave at least one byte in handle(),
+	// so that handle() can convert the data to c-string inplace.
+	if (len >= buf->size) {
 		fprintf(stderr, "get length %" PRIu32", too long\n", len);
 		return -1;
 	}
