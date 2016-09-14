@@ -1406,7 +1406,7 @@ fail:
 	goto out;
 }
 
-int hyper_parse_read_file(struct hyper_reader *reader, char *json, int length)
+int hyper_parse_file_command(struct file_command *cmd, char *json, int length)
 {
 	int i, n, ret = -1;
 
@@ -1414,11 +1414,11 @@ int hyper_parse_read_file(struct hyper_reader *reader, char *json, int length)
 	int toks_num = 10;
 	jsmntok_t *toks = NULL;
 
-	memset(reader, 0, sizeof(*reader));
+	memset(cmd, 0, sizeof(*cmd));
 
 	toks = calloc(toks_num, sizeof(jsmntok_t));
 	if (toks == NULL) {
-		fprintf(stderr, "fail to allocate tokens for read file cmd\n");
+		fprintf(stderr, "fail to allocate tokens for file cmd\n");
 		ret = -1;
 		goto fail;
 	}
@@ -1441,20 +1441,20 @@ int hyper_parse_read_file(struct hyper_reader *reader, char *json, int length)
 			goto fail;
 
 		if (json_token_streq(json, t, "container")) {
-			reader->id = (json_token_str(json, &toks[i]));
-			fprintf(stdout, "readfile get container %s\n", reader->id);
+			cmd->id = (json_token_str(json, &toks[i]));
+			fprintf(stdout, "file cmd get container %s\n", cmd->id);
 		} else if (json_token_streq(json, t, "file")) {
-			reader->file = (json_token_str(json, &toks[i]));
-			fprintf(stdout, "readfile get file %s\n", reader->file);
+			cmd->file = (json_token_str(json, &toks[i]));
+			fprintf(stdout, "file cmd get file %s\n", cmd->file);
 		} else {
-			fprintf(stdout, "get unknown section %s in readfile\n",
+			fprintf(stdout, "get unknown section %s in file cmd\n",
 				json_token_str(json, t));
 			goto fail;
 		}
 	}
 
-	if (reader->id == NULL || reader->file == NULL) {
-		fprintf(stderr, "readfile format incorrect\n");
+	if (cmd->id == NULL || cmd->file == NULL) {
+		fprintf(stderr, "file cmd format incorrect\n");
 		goto fail;
 	}
 
@@ -1463,10 +1463,10 @@ out:
 	free(toks);
 	return ret;
 fail:
-	free(reader->id);
-	reader->id = NULL;
-	free(reader->file);
-	reader->file = NULL;
+	free(cmd->id);
+	cmd->id = NULL;
+	free(cmd->file);
+	cmd->file = NULL;
 	goto out;
 }
 

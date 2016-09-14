@@ -805,7 +805,7 @@ err:
 
 static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_t **data)
 {
-	struct hyper_reader reader;
+	struct file_command cmd;
 	struct hyper_container *c;
 	struct hyper_pod *pod = &global_pod;
 	struct hyper_file_arg arg = {
@@ -818,13 +818,13 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 
 	fprintf(stdout, "%s\n", __func__);
 
-	if (hyper_parse_read_file(&reader, json, length) < 0) {
+	if (hyper_parse_file_command(&cmd, json, length) < 0) {
 		goto out;
 	}
 
-	c = hyper_find_container(pod, reader.id);
+	c = hyper_find_container(pod, cmd.id);
 	if (c == NULL) {
-		fprintf(stderr, "can not find container whose id is %s\n", reader.id);
+		fprintf(stderr, "can not find container whose id is %s\n", cmd.id);
 		goto out;
 	}
 
@@ -839,7 +839,7 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 		goto out;
 	}
 
-	arg.file = reader.file;
+	arg.file = cmd.file;
 	arg.datalen = datalen;
 	arg.data = data;
 
@@ -851,7 +851,7 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 
 	pid = clone(hyper_do_cmd_read_file, stack + stacksize, CLONE_VM| SIGQUIT, &arg);
 	if (pid < 0) {
-		perror("fail to fork writter process");
+		perror("fail to fork reader process");
 		goto out;
 	}
 
@@ -869,8 +869,8 @@ static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_
 out:
 	close(arg.pipe[0]);
 	close(arg.pipe[1]);
-	free(reader.id);
-	free(reader.file);
+	free(cmd.id);
+	free(cmd.file);
 	free(stack);
 
 	return ret;
