@@ -653,22 +653,31 @@ out:
 
 static int hyper_cmd_write_file(char *json, int length)
 {
-	struct hyper_writter writter;
+	struct file_command cmd;
 	struct hyper_container *c;
 	struct hyper_pod *pod = &global_pod;
 	int pipe[2] = {-1, -1};
 	int pid, mntns = -1, fd;
-	int len = 0, size, ret = -1;
+	int datalen, len = 0, size, ret = -1;
+	char *data = NULL;
 
 	fprintf(stdout, "%s\n", __func__);
 
-	if (hyper_parse_write_file(&writter, json, length) < 0) {
+	// TODO: send the data via hyperstream rather than append it at the end of the command
+	data = strchr(json, '}');
+	if (data == NULL) {
+		goto out;
+	}
+	data++;
+	datalen = length - (data - json);
+	length = data - json;
+	if (hyper_parse_file_command(&cmd, json, length) < 0) {
 		goto out;
 	}
 
-	c = hyper_find_container(pod, writter.id);
+	c = hyper_find_container(pod, cmd.id);
 	if (c == NULL) {
-		fprintf(stderr, "can not find container whose id is %s\n", writter.id);
+		fprintf(stderr, "can not find container whose id is %s\n", cmd.id);
 		goto out;
 	}
 
@@ -705,16 +714,16 @@ static int hyper_cmd_write_file(char *json, int length)
 		goto exit;
 	}
 
-	fprintf(stdout, "write file %s, data len %d\n", writter.file, writter.len);
+	fprintf(stdout, "write file %s, data len %d\n", cmd.file, datalen);
 
-	fd = open(writter.file, O_CREAT| O_TRUNC| O_WRONLY, 0644);
+	fd = open(cmd.file, O_CREAT| O_TRUNC| O_WRONLY, 0644);
 	if (fd < 0) {
 		perror("fail to open target file");
 		goto exit;
 	}
 
-	while(len < writter.len) {
-		size = write(fd, writter.data + len, writter.len - len);
+	while(len < datalen) {
+		size = write(fd, data + len, datalen - len);
 
 		if (size < 0) {
 			if (errno == EINTR)
@@ -733,9 +742,8 @@ exit:
 out:
 	close(pipe[0]);
 	close(pipe[1]);
-	free(writter.id);
-	free(writter.file);
-	free(writter.data);
+	free(cmd.id);
+	free(cmd.file);
 
 	return 0;
 }
