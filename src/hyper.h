@@ -54,7 +54,7 @@ struct hyper_win_size {
 	uint64_t	seq;
 };
 
-struct hyper_reader {
+struct file_command {
 	char		*id;
 	char		*file;
 };
