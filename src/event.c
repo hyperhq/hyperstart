@@ -197,13 +197,11 @@ int hyper_event_read(struct hyper_event *he, int efd)
 		return 0;
 	}
 
-	/* get the whole data */
+	/* get and consume the whole data */
 	if (he->ops->handle(he, len) != 0)
 		return -1;
 
-	/* len: length of the already get new data */
-	buf->get -= len;
-	memmove(buf->data, buf->data + len, buf->get);
+	buf->get = 0;
 
 	return 0;
 }
