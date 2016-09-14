@@ -20,9 +20,6 @@
 #include "parse.h"
 #include "syscall.h"
 
-const char *INIT_VOLUME_FILENAME = ".hyper_file_volume_data_do_not_create_on_your_own";
-const char *INIT_VOLUME_MOUNTPOINT_FSTYPE= "hyper_volume_mountpoint_init_fstype";
-
 static int container_populate_volume(char *src, char *dest)
 {
 	struct stat st;
@@ -51,6 +48,8 @@ static int container_populate_volume(char *src, char *dest)
 
 	return hyper_copy_dir(src, dest);
 }
+
+const char *INIT_VOLUME_FILENAME = ".hyper_file_volume_data_do_not_create_on_your_own";
 
 static int container_check_file_volume(char *hyper_path, const char **filename)
 {
@@ -107,26 +106,12 @@ static int container_setup_volume(struct hyper_container *container)
 		const char *filevolume = NULL;
 		vol = &container->vols[i];
 
-		sprintf(mountpoint, "./%s", vol->mountpoint);
-		if (!strcmp(vol->fstype, INIT_VOLUME_MOUNTPOINT_FSTYPE)) {
-			fprintf(stdout, "create special mountpoint %s, skip mounting fake device\n", mountpoint);
-			if (hyper_mkdir(mountpoint, 0777) < 0) {
-				perror("create fake device mountpoint failed");
-				return -1;
-			}
-			if (mount(mountpoint, mountpoint, NULL, MS_BIND, NULL) < 0) {
-				perror("mount fake device failed");
-				return -1;
-			}
-			continue;
-		}
-
-		if (vol->scsiaddr) {
+		if (vol->scsiaddr)
 			hyper_find_sd(vol->scsiaddr, &vol->device);
-		}
 
 		sprintf(dev, "/dev/%s", vol->device);
 		sprintf(path, "/tmp/%s", vol->mountpoint);
+		sprintf(mountpoint, "./%s", vol->mountpoint);
 
 		fprintf(stdout, "mount %s to %s, tmp path %s\n",
 			dev, vol->mountpoint, path);
