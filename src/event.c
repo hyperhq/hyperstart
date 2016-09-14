@@ -135,6 +135,7 @@ int hyper_event_read(struct hyper_event *he, int efd)
 	int offset = he->ops->len_offset;
 	int end = offset + 4;
 	int size;
+	int ret;
 
 	fprintf(stdout, "%s\n", __func__);
 
@@ -197,15 +198,11 @@ int hyper_event_read(struct hyper_event *he, int efd)
 		return 0;
 	}
 
-	/* get the whole data */
-	if (he->ops->handle(he, len) != 0)
-		return -1;
+	/* get and consume the whole data */
+	ret = he->ops->handle(he, len);
+	buf->get = 0;
 
-	/* len: length of the already get new data */
-	buf->get -= len;
-	memmove(buf->data, buf->data + len, buf->get);
-
-	return 0;
+	return ret == 0 ? 0 : -1;
 }
 
 int hyper_event_write(struct hyper_event *he, int efd)
