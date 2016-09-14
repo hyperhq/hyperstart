@@ -4,17 +4,17 @@
 AC_PREREQ([2.69])
 AC_INIT([hyperstart], [0.7.0], [www.hyper.sh])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
+AM_PROG_AR
 AM_EXTRA_RECURSIVE_TARGETS([initrd cbfs kernel])
 AC_CONFIG_SRCDIR([src/init.c])
 AC_CONFIG_HEADERS([config.h])
 
-# Checks for programs.
-AC_PROG_CC
-AM_PROG_CC_C_O
-# Checks for libraries.
+# Allow building libraries
+AC_PROG_RANLIB
 
 # Checks for header files.
-AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h stddef.h stdint.h stdlib.h string.h sys/mount.h sys/socket.h unistd.h],
+AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h stddef.h stdint.h stdlib.h \
+				  string.h sys/mount.h sys/socket.h unistd.h],
 [headers_found=yes],
 [headers_found=no])
 
@@ -31,7 +31,9 @@ AC_TYPE_UINT8_T
 
 # Checks for library functions.
 AC_FUNC_FORK
-AC_CHECK_FUNCS([dup2 memmove memset mkdir setenv socket strchr strdup strrchr strtoul], [fail=0], [fail=1])
+AC_CHECK_FUNCS([dup2 memmove memset mkdir setenv socket strchr strdup strrchr \
+				strtoul], 
+				[fail=0], [fail=1])
 AC_CHECK_FUNCS([setns])
 
 if test "$fail" = "1" ; then
@@ -44,7 +46,8 @@ AC_ARG_WITH([aarch64],
             [],[with_aarch64=no])
 
 if test "x$with_aarch64" != "xno" ; then
-    AC_DEFINE_UNQUOTED([WITH_AARCH64], 1, [run hyperstart with 64-bit ARM architecture])
+    AC_DEFINE_UNQUOTED([WITH_AARCH64], 1, 
+    				   [run hyperstart with 64-bit ARM architecture])
 fi
 
 AM_CONDITIONAL([WITH_AARCH64], [test "x$with_aarch64" != "xno"])
@@ -63,6 +66,7 @@ AM_CONDITIONAL([WITH_VBOX], [test "x$with_vbox" != "xno"])
 AC_CONFIG_FILES([
   Makefile
   src/Makefile
+  src/cgroup/Makefile
   build/Makefile
 ])
 AC_OUTPUT

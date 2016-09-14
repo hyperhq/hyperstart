@@ -1,3 +1,4 @@
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +20,8 @@
 #include "hyper.h"
 #include "parse.h"
 #include "syscall.h"
+
+#include "cgroup/cgroup.h"
 
 static int container_populate_volume(char *src, char *dest)
 {
@@ -271,6 +274,67 @@ static int container_setup_modules(struct hyper_container *container)
 	return 0;
 }
 
+static int container_setup_mount_cgroups() {
+	// Expects the current dir to be the container rootfs, and should be called from
+	// container_setup_mount()
+
+	// TODO: should this act like docker and set cgroups RO unless container is
+	// privileged?
+
+	// Mount cgroupfs hierarchy for the container
+	if (mount("none", "./sys/fs/cgroup", "tmpfs", 0, NULL) == -1) {
+		perror("mount ./sys/fs/cgroup failed");
+		return -1;
+	}
+
+	void *handle;
+	struct controller_data item;
+	int ret;
+	ret = cgroup_get_all_controller_begin(&handle, &item);
+	while (ret == 0) {
+		// Allocate enough buffer for the full path
+		size_t size = strlen("./sys/fs/cgroup/") + sizeof(item.name);
+		char *mountpoint = NULL;
+		if ((mountpoint = malloc(size)) == NULL) {
+			perror("error allocating memory for mountpoint path");
+			return -1;
+		}
+
+		int sret = snprintf(mountpoint, size, "./sys/fs/cgroup/%s", item.name);
+		if (sret == (int)size) {
+			perror("output truncated for cgroup path - cgroup name > 4096 chars?");
+			return -1;
+		}
+		if (sret < 0) {
+			perror("cgroup path could not be templated");
+			return -1;
+		}
+
+		// Make the cgroup hierarchy dir
+		if (hyper_mkdir(mountpoint, 0755) < 0) {
+			perror("creating cgroup hierarchy failed");
+			return -1;
+		}
+
+		// Mount the cgroupfs
+		if (mount("cgroup", mountpoint, "cgroup", MS_NOSUID| MS_NODEV| MS_NOEXEC, item.name) == -1) {
+			perror("error mounting cgroupfs");
+			return -1;
+		}
+
+		free(mountpoint);
+
+		// Move to next cgroup controller
+		ret = cgroup_get_all_controller_next(&handle, &item);
+	}
+	if (ret != ECGEOF) {
+		perror("cgroup controller iteration failed");
+		return -1;
+	}
+
+	return 0;
+}
+
 static int container_setup_mount(struct hyper_container *container)
 {
 	char src[512];
@@ -285,6 +349,11 @@ static int container_setup_mount(struct hyper_container *container)
 	    mount("sysfs", "./sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
 	    mount("devtmpfs", "./dev", "devtmpfs", MS_NOSUID, NULL) < 0) {
 		perror("mount basic filesystem for container failed");
+		return -1;
+	}
+
+	if (container_setup_mount_cgroups() < 0) {
+		perror("mount cgroup filesystem for container failed");
 		return -1;
 	}
 
