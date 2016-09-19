@@ -327,9 +327,6 @@ static int hyper_setup_pod_init(struct hyper_pod *pod)
 out:
 	close(arg.ctl_pipe[1]);
 	close(arg.ctl_pipe[0]);
-	if (ret < 0) {
-		hyper_stop_pod(pod);
-	}
 	return ret;
 }
 
