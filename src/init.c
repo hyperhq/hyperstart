@@ -288,7 +288,7 @@ static int hyper_setup_pod_init(struct hyper_pod *pod)
 
 	uint32_t type;
 	void *stack;
-	int ret = -1;
+	int ret = -1, init_pid;
 
 	if (pipe2(arg.ctl_pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between hyper init and pod init failed");
@@ -303,13 +303,13 @@ static int hyper_setup_pod_init(struct hyper_pod *pod)
 
 	arg.pod = pod;
 
-	pod->init_pid = clone(hyper_pod_init, stack + stacksize, flags, &arg);
+	init_pid = clone(hyper_pod_init, stack + stacksize, flags, &arg);
 	free(stack);
-	if (pod->init_pid < 0) {
+	if (init_pid < 0) {
 		perror("create container init process failed");
 		goto out;
 	}
-	fprintf(stdout, "pod init pid %d\n", pod->init_pid);
+	fprintf(stdout, "pod init pid %d\n", init_pid);
 
 	/* Wait for container start */
 	if (hyper_get_type(arg.ctl_pipe[0], &type) < 0) {
@@ -322,6 +322,7 @@ static int hyper_setup_pod_init(struct hyper_pod *pod)
 		goto out;
 	}
 
+	pod->init_pid = init_pid;
 	ret = 0;
 out:
 	close(arg.ctl_pipe[1]);
