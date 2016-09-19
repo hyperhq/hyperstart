@@ -260,7 +260,7 @@ static int rtnl_talk(struct rtnl_handle *rtnl,
 	return 0;
 }
 
-static int hyper_up_nic(struct rtnl_handle *rth, int ifindex)
+static int hyper_up_nic(struct rtnl_handle *rth, int ifindex, unsigned int mtu)
 {
 	struct {
 		struct nlmsghdr n;
@@ -276,6 +276,22 @@ static int hyper_up_nic(struct rtnl_handle *rth, int ifindex)
 	req.i.ifi_change |= IFF_UP;
 	req.i.ifi_flags |= IFF_UP;
 	req.i.ifi_index = ifindex;
+
+
+	// As per Wiki:
+	// https://en.wikipedia.org/wiki/Maximum_transmission_unit#Table_of_MTUs_of_common_media
+	//
+	// The minimum and maximum value of MTU is (68, 2^32-1)
+	if (mtu < 68 || mtu > 4294967295)
+		mtu = 1500;
+
+	// creating a rtnetlink message to set the MTU of the device
+	struct rtattr *rta;
+	rta = (struct rtattr *)(((char *) &req) + NLMSG_ALIGN(req.n.nlmsg_len));
+	rta->rta_type = IFLA_MTU;
+	rta->rta_len = RTA_LENGTH(sizeof(unsigned int));
+	req.n.nlmsg_len = NLMSG_ALIGN(req.n.nlmsg_len) + RTA_LENGTH(sizeof(mtu));
+	memcpy(RTA_DATA(rta), &mtu, sizeof(mtu));
 
 	if (rtnl_talk(rth, &req.n, 0, 0, NULL) < 0)
 		return -1;
@@ -567,8 +583,15 @@ static int hyper_setup_interface(struct rtnl_handle *rth,
 		char buf[256];
 	} req;
 
+	// TODO(HuKeping): We don't check the value of mtu here because
+	// the external caller may not set the MTU. In the meantime, we could
+	// set it to 1500 as default if it was not provided.
+	//
+	// Feel free to dissucss about it if anybody think we should ask for the
+	// MTU value here.
 	if (!(iface->device && iface->ipaddr && iface->mask)) {
-		fprintf(stderr, "interface information incorrect\n");
+		fprintf(stderr, "interface information for setting up is incorrect, device:%s,ipaddr:%s,mask:%s\n",
+				iface->device, iface->ipaddr, iface->mask);
 		return -1;
 	}
 
@@ -604,7 +627,7 @@ static int hyper_setup_interface(struct rtnl_handle *rth,
 		return -1;
 	}
 
-	if (hyper_up_nic(rth, iface->ifindex) < 0) {
+	if (hyper_up_nic(rth, iface->ifindex, iface->mtu) < 0) {
 		fprintf(stderr, "up device %d failed\n", iface->ifindex);
 		return -1;
 	}
@@ -719,7 +742,7 @@ int hyper_setup_network(struct hyper_pod *pod)
 		}
 	}
 
-	ret = hyper_up_nic(&rth, 1);
+	ret = hyper_up_nic(&rth, 1, 1500);
 	if (ret < 0) {
 		fprintf(stderr, "link up lo device failed\n");
 		goto out;

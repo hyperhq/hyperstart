@@ -776,6 +776,9 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 		} else if (json_token_streq(json, &toks[i], "netMask")) {
 			iface->mask = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "net mask is %s\n", iface->mask);
+		} else if (json_token_streq(json, &toks[i], "mtu")) {
+			iface->mtu = (json_token_int(json, &toks[++i]));
+			fprintf(stdout, "net mtu is %u\n", iface->mtu);
 		} else {
 			fprintf(stderr, "get unknown section %s in interfaces\n",
 				json_token_str(json, &toks[i]));

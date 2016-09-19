@@ -31,6 +31,7 @@ struct hyper_interface {
 	int		ifindex;
 	char		*ipaddr;
 	char		*mask;
+	unsigned int	mtu;
 };
 
 struct hyper_route {
