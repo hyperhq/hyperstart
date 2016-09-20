@@ -1066,7 +1066,7 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		ret = hyper_start_pod((char *)buf->data + 8, len - 8);
 		hyper_print_uptime();
 		break;
-	case STOPPOD:
+	case STOPPOD_DEPRECATED:
 		fprintf(stderr, "get abandoned STOPPOD message\n");
 		ret = -1;
 		break;
