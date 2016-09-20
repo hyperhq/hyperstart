@@ -239,7 +239,7 @@ static int hyper_pod_init(void *data)
 	}
 
 	if (hyper_send_type(arg->ctl_pipe[1], READY) < 0) {
-		fprintf(stderr, "container init send ready message failed\n");
+		fprintf(stderr, "pod init send ready message failed\n");
 		goto fail;
 	}
 
@@ -296,7 +296,7 @@ static int hyper_setup_pod_init(struct hyper_pod *pod)
 
 	stack = malloc(stacksize);
 	if (stack == NULL) {
-		perror("fail to allocate stack for container init");
+		perror("fail to allocate stack for pod init");
 		goto out;
 	}
 
@@ -305,14 +305,14 @@ static int hyper_setup_pod_init(struct hyper_pod *pod)
 	init_pid = clone(hyper_pod_init, stack + stacksize, flags, &arg);
 	free(stack);
 	if (init_pid < 0) {
-		perror("create container init process failed");
+		perror("create pod init process failed");
 		goto out;
 	}
 	fprintf(stdout, "pod init pid %d\n", init_pid);
 
-	/* Wait for container start */
+	/* Wait for pod init start */
 	if (hyper_get_type(arg.ctl_pipe[0], &type) < 0) {
-		perror("get container init ready message failed");
+		perror("get pod init ready message failed");
 		goto out;
 	}
 
