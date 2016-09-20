@@ -729,10 +729,7 @@ static int hyper_release_exec(struct hyper_exec *exec,
 		if (--pod->remains > 0)
 			return 0;
 
-		if (pod->type == STOPPOD) {
-			/* stop pod manually, hyper doesn't care the pod finished codes */
-			hyper_send_msg_block(ctl.chan.fd, ACK, 0, NULL);
-		} else if (pod->type == DESTROYPOD) {
+		if (pod->type == DESTROYPOD) {
 			/* shutdown vm manually, hyper doesn't care the pod finished codes */
 			hyper_shutdown(0);
 		} else {
