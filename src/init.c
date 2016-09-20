@@ -1061,7 +1061,6 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	fprintf(stdout, "\n %s, type %" PRIu32 ", len %" PRIu32 "\n",
 		__func__, type, len);
 
-	pod->type = type;
 	switch (type) {
 	case GETVERSION:
 		data = malloc(4);
@@ -1077,6 +1076,7 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		ret = -1;
 		break;
 	case DESTROYPOD:
+		pod->req_destroy = 1;
 		fprintf(stdout, "get DESTROYPOD message\n");
 		hyper_destroy_pod(pod, 0);
 		return 0;
