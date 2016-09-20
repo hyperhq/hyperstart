@@ -519,11 +519,17 @@ static void hyper_print_uptime(void)
 	close(fd);
 }
 
+void hyper_pod_destroyed(int failed)
+{
+	hyper_send_msg_block(ctl.chan.fd, failed?ERROR:ACK, 0, NULL);
+	hyper_shutdown();
+}
+
 static int hyper_destroy_pod(struct hyper_pod *pod, int error)
 {
 	if (pod->init_pid == 0) {
 		/* Pod stopped, just shutdown */
-		hyper_shutdown(error);
+		hyper_pod_destroyed(error);
 	} else {
 		/* Kill pod */
 		hyper_term_all(pod);
