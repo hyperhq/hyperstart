@@ -634,7 +634,6 @@ int hyper_run_process(struct hyper_exec *exec)
 		goto close_tty;
 	}
 
-	list_add_tail(&exec->list, &pod->exec_head);
 	exec->ref++;
 
 	if (pipe2(pipe, O_CLOEXEC) < 0) {
@@ -644,20 +643,21 @@ int hyper_run_process(struct hyper_exec *exec)
 
 	pid = fork();
 	if (pid < 0) {
-		perror("clone hyper_do_exec_cmd failed");
+		perror("fork prerequisite process failed");
 		goto close_tty;
 	} else if (pid == 0) {
 		hyper_do_exec_cmd(exec, pod, pipe[1]);
 	}
-	fprintf(stdout, "do_exec_cmd pid %d\n", pid);
+	fprintf(stdout, "prerequisite process pid %d\n", pid);
 
 	if (hyper_get_type(pipe[0], &type) < 0 || (int)type < 0) {
-		fprintf(stderr, "hyper init doesn't get execcmd ready message\n");
+		fprintf(stderr, "run process failed\n");
 		goto close_tty;
 	}
-	exec->pid = type;
 
-	fprintf(stdout, "%s get ready message %"PRIu32 "\n", __func__, type);
+	exec->pid = type;
+	list_add_tail(&exec->list, &pod->exec_head);
+	fprintf(stdout, "%s process pid %d\n", __func__, exec->pid);
 	ret = 0;
 out:
 	close(pipe[0]);
