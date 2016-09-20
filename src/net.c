@@ -179,7 +179,7 @@ static int addattr_l(struct nlmsghdr *n, int maxlen, int type, void *data, int a
 static int hyper_get_ifindex(char *nic)
 {
 	int fd, ifindex = -1;
-	char path[512], buf[4];
+	char path[512], buf[8];
 
 	fprintf(stdout, "net device %s\n", nic);
 	sprintf(path, "/sys/class/net/%s/ifindex", nic);
@@ -192,7 +192,7 @@ static int hyper_get_ifindex(char *nic)
 	}
 
 	memset(buf, 0, sizeof(buf));
-	if (read(fd, buf, sizeof(buf)) <= 0) {
+	if (read(fd, buf, sizeof(buf) - 1) <= 0) {
 		perror("can read open file");
 		goto out;
 	}
