@@ -41,7 +41,6 @@ struct hyper_ctl ctl;
 sigset_t orig_mask;
 
 static int hyper_handle_exit(struct hyper_pod *pod);
-static int hyper_stop_pod(struct hyper_pod *pod);
 
 static int hyper_set_win_size(char *json, int length)
 {
@@ -327,9 +326,6 @@ static int hyper_setup_pod_init(struct hyper_pod *pod)
 out:
 	close(arg.ctl_pipe[1]);
 	close(arg.ctl_pipe[0]);
-	if (ret < 0) {
-		hyper_stop_pod(pod);
-	}
 	return ret;
 }
 
@@ -938,20 +934,6 @@ void hyper_cleanup_pod(struct hyper_pod *pod)
 	hyper_cleanup_hostname(pod);
 }
 
-static int hyper_stop_pod(struct hyper_pod *pod)
-{
-	fprintf(stdout, "hyper_stop_pod init_pid %d\n", pod->init_pid);
-	if (pod->init_pid == 0) {
-		fprintf(stdout, "container init pid is already exit\n");
-		hyper_send_type(ctl.chan.fd, ACK);
-		return 0;
-	}
-
-	pod->init_pid = 0;
-	hyper_term_all(pod);
-	return 0;
-}
-
 static int hyper_setup_ctl_channel(char *name)
 {
 	int ret = hyper_open_channel(name, 0);
@@ -1084,10 +1066,10 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		ret = hyper_start_pod((char *)buf->data + 8, len - 8);
 		hyper_print_uptime();
 		break;
-	case STOPPOD:
-		hyper_stop_pod(pod);
-		return 0;
-		//break;
+	case STOPPOD_DEPRECATED:
+		fprintf(stderr, "get abandoned STOPPOD message\n");
+		ret = -1;
+		break;
 	case DESTROYPOD:
 		fprintf(stdout, "get DESTROYPOD message\n");
 		hyper_destroy_pod(pod, 0);
