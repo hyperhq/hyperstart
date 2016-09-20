@@ -430,8 +430,13 @@ static int hyper_setup_route(struct rtnl_handle *rth,
 	}
 
 	if (rt->device) {
-		rt->ifindex = hyper_get_ifindex(rt->device);
-		if (addattr_l(&req.n, sizeof(req), RTA_OIF, &rt->ifindex, 4)) {
+		int ifindex = hyper_get_ifindex(rt->device);
+		if (ifindex < 0) {
+			fprintf(stderr, "failed to get the ifindix of %s\n", rt->device);
+			return -1;
+		}
+
+		if (addattr_l(&req.n, sizeof(req), RTA_OIF, &ifindex, 4)) {
 			fprintf(stderr, "setup oif attr failed\n");
 			return -1;
 		}
@@ -513,7 +518,13 @@ static int hyper_cleanup_route(struct rtnl_handle *rth, struct hyper_route *rt)
 	}
 
 	if (rt->device) {
-		if (addattr_l(&req.n, sizeof(req), RTA_OIF, &rt->ifindex, 4)) {
+		int ifindex = hyper_get_ifindex(rt->device);
+		if (ifindex < 0) {
+			fprintf(stderr, "failed to get the ifindix of %s\n", rt->device);
+			return -1;
+		}
+
+		if (addattr_l(&req.n, sizeof(req), RTA_OIF, &ifindex, 4)) {
 			fprintf(stderr, "setup oif attr failed\n");
 			return -1;
 		}
@@ -566,6 +577,7 @@ static int hyper_setup_interface(struct rtnl_handle *rth,
 		struct ifaddrmsg ifa;
 		char buf[256];
 	} req;
+	int ifindex;
 
 	if (!(iface->device && iface->ipaddr && iface->mask)) {
 		fprintf(stderr, "interface information incorrect\n");
@@ -578,8 +590,13 @@ static int hyper_setup_interface(struct rtnl_handle *rth,
 	req.n.nlmsg_type = RTM_NEWADDR;
 	req.ifa.ifa_family = AF_INET;
 
-	iface->ifindex = hyper_get_ifindex(iface->device);
-	req.ifa.ifa_index = iface->ifindex;
+	ifindex = hyper_get_ifindex(iface->device);
+	if (ifindex < 0) {
+		fprintf(stderr, "failed to get the ifindix of %s\n", iface->device);
+		return -1;
+	}
+
+	req.ifa.ifa_index = ifindex;
 	req.ifa.ifa_scope = 0;
 
 	if (get_addr_ipv4((uint8_t *)&data, iface->ipaddr) <= 0) {
@@ -604,8 +621,8 @@ static int hyper_setup_interface(struct rtnl_handle *rth,
 		return -1;
 	}
 
-	if (hyper_up_nic(rth, iface->ifindex) < 0) {
-		fprintf(stderr, "up device %d failed\n", iface->ifindex);
+	if (hyper_up_nic(rth, ifindex) < 0) {
+		fprintf(stderr, "up device %d failed\n", ifindex);
 		return -1;
 	}
 
@@ -622,6 +639,7 @@ static int hyper_cleanup_interface(struct rtnl_handle *rth,
 		struct ifaddrmsg ifa;
 		char buf[256];
 	} req;
+	int ifindex;
 
 	if (!(iface->device && iface->ipaddr && iface->mask)) {
 		fprintf(stderr, "interface information incorrect\n");
@@ -634,7 +652,13 @@ static int hyper_cleanup_interface(struct rtnl_handle *rth,
 	req.n.nlmsg_type = RTM_DELADDR;
 	req.ifa.ifa_family = AF_INET;
 
-	req.ifa.ifa_index = iface->ifindex;
+	ifindex = hyper_get_ifindex(iface->device);
+	if (ifindex < 0) {
+		fprintf(stderr, "failed to get the ifindix of %s\n", iface->device);
+		return -1;
+	}
+
+	req.ifa.ifa_index = ifindex;
 	req.ifa.ifa_scope = 0;
 
 	if (get_addr_ipv4((uint8_t *)&data, iface->ipaddr) <= 0) {
@@ -664,8 +688,8 @@ static int hyper_cleanup_interface(struct rtnl_handle *rth,
 		return 0;
 	}
 
-	if (hyper_down_nic(rth, iface->ifindex) < 0) {
-		fprintf(stderr, "up device %d failed\n", iface->ifindex);
+	if (hyper_down_nic(rth, ifindex) < 0) {
+		fprintf(stderr, "up device %d failed\n", ifindex);
 		return -1;
 	}
 

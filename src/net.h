@@ -28,7 +28,6 @@ typedef struct {
 
 struct hyper_interface {
 	char		*device;
-	int		ifindex;
 	char		*ipaddr;
 	char		*mask;
 };
@@ -37,7 +36,6 @@ struct hyper_route {
 	char		*dst;
 	char		*gw;
 	char		*device;
-	int		ifindex;
 };
 
 struct hyper_pod;
