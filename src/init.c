@@ -1037,6 +1037,58 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 	return 0;
 }
 
+static int hyper_getmsg_len(struct hyper_event *he, uint32_t *len)
+{
+	struct hyper_buf *buf = &he->rbuf;
+
+	if (buf->get < he->ops->len_offset + 4)
+		return -1;
+
+	*len = hyper_get_be32(buf->data + he->ops->len_offset);
+	return 0;
+}
+
+static int hyper_ttyfd_read(struct hyper_event *he, int efd)
+{
+	struct hyper_buf *buf = &he->rbuf;
+	uint32_t len = he->ops->len_offset + 4;
+	int size;
+	int ret;
+
+	if (buf->get < len) {
+		size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
+		if (size < 0) {
+			return size;
+		}
+		buf->get += size;
+		if (buf->get < len) {
+			return 0;
+		}
+	}
+
+	hyper_getmsg_len(he, &len);
+	fprintf(stdout, "%s: get length %" PRIu32"\n", __func__, len);
+	if (len > buf->size) {
+		fprintf(stderr, "get length %" PRIu32", too long\n", len);
+		return -1;
+	}
+
+	size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
+	if (size < 0) {
+		return size;
+	}
+	buf->get += size;
+	if (buf->get < len) {
+		return 0;
+	}
+
+	/* get and consume the whole data */
+	ret = he->ops->handle(he, len);
+	buf->get = 0;
+
+	return ret == 0 ? 0 : -1;
+}
+
 static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 {
 	struct hyper_buf *buf = &de->rbuf;
@@ -1134,7 +1186,7 @@ static struct hyper_event_ops hyper_channel_ops = {
 };
 
 static struct hyper_event_ops hyper_ttyfd_ops = {
-	.read		= hyper_event_read,
+	.read		= hyper_ttyfd_read,
 	.write		= hyper_event_write,
 	.handle		= hyper_ttyfd_handle,
 	.rbuf_size	= 4096,
