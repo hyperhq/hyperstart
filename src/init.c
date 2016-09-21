@@ -1051,22 +1051,22 @@ static int hyper_getmsg_len(struct hyper_event *he, uint32_t *len)
 static int hyper_ttyfd_read(struct hyper_event *he, int efd)
 {
 	struct hyper_buf *buf = &he->rbuf;
-	uint32_t len = he->ops->len_offset + 4;
+	uint32_t len;
 	int size;
 	int ret;
 
-	if (buf->get < len) {
-		size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
+	if (buf->get < STREAM_HEADER_SIZE) {
+		size = nonblock_read(he->fd, buf->data + buf->get, STREAM_HEADER_SIZE - buf->get);
 		if (size < 0) {
 			return size;
 		}
 		buf->get += size;
-		if (buf->get < len) {
+		if (buf->get < STREAM_HEADER_SIZE) {
 			return 0;
 		}
 	}
 
-	hyper_getmsg_len(he, &len);
+	len = hyper_get_be32(buf->data + STREAM_HEADER_LENGTH_OFFSET);
 	fprintf(stdout, "%s: get length %" PRIu32"\n", __func__, len);
 	if (len > buf->size) {
 		fprintf(stderr, "get length %" PRIu32", too long\n", len);

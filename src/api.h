@@ -29,4 +29,13 @@ enum {
 	REMOVECONTAINER,
 };
 
+/*
+ * stream message format
+ * | stream sequence | length  | payload (length-12)     |
+ * | . . . . . . . . | . . . . | . . . . . . . . . . . . |
+ * 0                 8         12                        length
+ */
+#define STREAM_HEADER_SIZE		12
+#define STREAM_HEADER_LENGTH_OFFSET	8
+
 #endif /* _HYPERSTART_API_H_ */
