@@ -1083,7 +1083,7 @@ static int hyper_ttyfd_read(struct hyper_event *he, int efd)
 	}
 
 	/* get and consume the whole data */
-	ret = he->ops->handle(he, len);
+	ret = hyper_ttyfd_handle(he, len);
 	buf->get = 0;
 
 	return ret == 0 ? 0 : -1;
@@ -1188,7 +1188,6 @@ static struct hyper_event_ops hyper_channel_ops = {
 static struct hyper_event_ops hyper_ttyfd_ops = {
 	.read		= hyper_ttyfd_read,
 	.write		= hyper_event_write,
-	.handle		= hyper_ttyfd_handle,
 	.rbuf_size	= 4096,
 	.wbuf_size	= 10240,
 	.len_offset	= 8,
