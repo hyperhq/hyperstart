@@ -18,12 +18,6 @@
 /* Path to rootfs shared directory */
 #define SHARED_DIR "/tmp/hyper/shared"
 
-enum {
-	POLICY_NEVER,
-	POLICY_ALWAYS,
-	POLICY_ONFAILURE,
-};
-
 struct hyper_pod {
 	struct hyper_interface	*iface;
 	struct hyper_route	*rt;
@@ -40,7 +34,6 @@ struct hyper_pod {
 	uint32_t		type;
 	/* how many containers are running */
 	uint32_t		remains;
-	uint8_t			policy;
 	int			efd;
 };
 
