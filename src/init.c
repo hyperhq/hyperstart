@@ -1037,17 +1037,6 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 	return 0;
 }
 
-static int hyper_getmsg_len(struct hyper_event *he, uint32_t *len)
-{
-	struct hyper_buf *buf = &he->rbuf;
-
-	if (buf->get < he->ops->len_offset + 4)
-		return -1;
-
-	*len = hyper_get_be32(buf->data + he->ops->len_offset);
-	return 0;
-}
-
 static int hyper_ttyfd_read(struct hyper_event *he, int efd)
 {
 	struct hyper_buf *buf = &he->rbuf;
@@ -1235,7 +1224,6 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 static struct hyper_event_ops hyper_channel_ops = {
 	.read		= hyper_channel_read,
 	.rbuf_size	= 10240,
-	.len_offset	= 4,
 };
 
 static struct hyper_event_ops hyper_ttyfd_ops = {
@@ -1243,7 +1231,6 @@ static struct hyper_event_ops hyper_ttyfd_ops = {
 	.write		= hyper_event_write,
 	.rbuf_size	= 4096,
 	.wbuf_size	= 10240,
-	.len_offset	= 8,
 };
 
 static int hyper_loop(void)
