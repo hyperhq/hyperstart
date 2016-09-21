@@ -9,7 +9,6 @@ struct hyper_event;
 struct hyper_event_ops {
 	int		(*read)(struct hyper_event *e, int efd);
 	int		(*write)(struct hyper_event *e, int efd);
-	int		(*handle)(struct hyper_event *e, uint32_t len);
 	void		(*hup)(struct hyper_event *e, int efd);
 	int		rbuf_size;
 	int		wbuf_size;
