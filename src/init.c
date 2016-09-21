@@ -1204,8 +1204,8 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 
 	hyper_getmsg_len(he, &len);
 	fprintf(stdout, "get length %" PRIu32"\n", len);
-	// test it with '>=' to leave at least one byte in handle(),
-	// so that handle() can convert the data to c-string inplace.
+	// test it with '>=' to leave at least one byte in hyper_channel_handle(),
+	// so that hyper_channel_handle() can convert the data to c-string inplace.
 	if (len >= buf->size) {
 		fprintf(stderr, "get length %" PRIu32", too long\n", len);
 		return -1;
@@ -1226,7 +1226,7 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 	}
 
 	/* get and consume the whole data */
-	ret = he->ops->handle(he, len);
+	ret = hyper_channel_handle(he, len);
 	buf->get = 0;
 
 	return ret == 0 ? 0 : -1;
@@ -1234,7 +1234,6 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 
 static struct hyper_event_ops hyper_channel_ops = {
 	.read		= hyper_channel_read,
-	.handle		= hyper_channel_handle,
 	.rbuf_size	= 10240,
 	.len_offset	= 4,
 };
