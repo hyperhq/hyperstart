@@ -18,12 +18,6 @@
 /* Path to rootfs shared directory */
 #define SHARED_DIR "/tmp/hyper/shared"
 
-enum {
-	POLICY_NEVER,
-	POLICY_ALWAYS,
-	POLICY_ONFAILURE,
-};
-
 struct hyper_pod {
 	struct hyper_interface	*iface;
 	struct hyper_route	*rt;
@@ -37,10 +31,9 @@ struct hyper_pod {
 	uint32_t		i_num;
 	uint32_t		r_num;
 	uint32_t		d_num;
-	uint32_t		type;
 	/* how many containers are running */
 	uint32_t		remains;
-	uint8_t			policy;
+	int			req_destroy;
 	int			efd;
 };
 
@@ -98,6 +91,7 @@ static inline int hyper_create(char *hyper_path)
 int hyper_open_serial(char *tty);
 void hyper_cleanup_pod(struct hyper_pod *pod);
 int hyper_enter_sandbox(struct hyper_pod *pod, int pidpipe);
+void hyper_pod_destroyed(int failed);
 
 extern struct hyper_pod global_pod;
 extern struct hyper_ctl ctl;

@@ -722,16 +722,16 @@ static int hyper_release_exec(struct hyper_exec *exec,
 
 	fprintf(stdout, "%s exit code %" PRIu8"\n", __func__, exec->code);
 	if (exec->init) {
-		fprintf(stdout, "%s container init exited, type %d, remains %d, policy %d\n",
-			__func__, pod->type, pod->remains, pod->policy);
+		fprintf(stdout, "%s container init exited %s, remains %d\n",
+			__func__, pod->req_destroy?"manually":"automatically", pod->remains);
 
 		// TODO send finish of this container and full cleanup
 		if (--pod->remains > 0)
 			return 0;
 
-		if (pod->type == DESTROYPOD) {
+		if (pod->req_destroy) {
 			/* shutdown vm manually, hyper doesn't care the pod finished codes */
-			hyper_shutdown(0);
+			hyper_pod_destroyed(0);
 		} else {
 			/* send out pod finish message, hyper will decide if restart pod or not */
 			hyper_send_pod_finished(pod);

@@ -519,11 +519,17 @@ static void hyper_print_uptime(void)
 	close(fd);
 }
 
+void hyper_pod_destroyed(int failed)
+{
+	hyper_send_msg_block(ctl.chan.fd, failed?ERROR:ACK, 0, NULL);
+	hyper_shutdown();
+}
+
 static int hyper_destroy_pod(struct hyper_pod *pod, int error)
 {
 	if (pod->init_pid == 0) {
 		/* Pod stopped, just shutdown */
-		hyper_shutdown(error);
+		hyper_pod_destroyed(error);
 	} else {
 		/* Kill pod */
 		hyper_term_all(pod);
@@ -1055,7 +1061,6 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	fprintf(stdout, "\n %s, type %" PRIu32 ", len %" PRIu32 "\n",
 		__func__, type, len);
 
-	pod->type = type;
 	switch (type) {
 	case GETVERSION:
 		data = malloc(4);
@@ -1071,6 +1076,7 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		ret = -1;
 		break;
 	case DESTROYPOD:
+		pod->req_destroy = 1;
 		fprintf(stdout, "get DESTROYPOD message\n");
 		hyper_destroy_pod(pod, 0);
 		return 0;

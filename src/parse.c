@@ -1146,8 +1146,6 @@ realloc:
 		goto out;
 	}
 
-	pod->policy = POLICY_NEVER;
-
 	fprintf(stdout, "jsmn parse successed, n is %d\n", n);
 	next = 0;
 	for (i = 0; i < n;) {
@@ -1193,13 +1191,8 @@ realloc:
 			fprintf(stdout, "hostname is %s\n", pod->hostname);
 			i++;
 		} else if (json_token_streq(json, t, "restartPolicy") && t->size == 1) {
-			i++;
-			if (json_token_streq(json, &toks[i], "always") && toks[i].size == 1)
-				pod->policy = POLICY_ALWAYS;
-			else if (json_token_streq(json, &toks[i], "onFailure") && toks[i].size == 1)
-				pod->policy = POLICY_ONFAILURE;
-			fprintf(stdout, "restartPolicy is %" PRIu8 "\n", pod->policy);
-			i++;
+			i += 2;
+			fprintf(stdout, "restartPolicy is deprecated\n");
 		} else if (json_token_streq(json, t, "portmappingWhiteLists") && t->size == 1) {
 			next = hyper_parse_portmapping_whitelist(pod, json, &toks[++i]);
 			if (next < 0)
