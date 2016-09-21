@@ -1237,8 +1237,6 @@ static struct hyper_event_ops hyper_channel_ops = {
 	.handle		= hyper_channel_handle,
 	.rbuf_size	= 10240,
 	.len_offset	= 4,
-	/* TODO: vbox hyper should support channel ack */
-	.ack		= 1,
 };
 
 static struct hyper_event_ops hyper_ttyfd_ops = {

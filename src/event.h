@@ -14,7 +14,6 @@ struct hyper_event_ops {
 	int		rbuf_size;
 	int		wbuf_size;
 	int		len_offset;
-	int		ack;
 };
 
 struct hyper_buf {
