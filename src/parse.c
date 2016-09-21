@@ -153,6 +153,28 @@ static int container_parse_additional_groups(struct hyper_exec *exec, char *json
 	return i;
 }
 
+static int container_parse_additional_groups_parson(struct hyper_exec *exec, JSON_Array *groups)
+{
+	int i;
+	const char *s;
+	exec->nr_additional_groups = json_array_get_count(groups);
+	exec->additional_groups = calloc(exec->nr_additional_groups, sizeof(*exec->additional_groups));
+	if (exec->additional_groups == NULL) {
+		fprintf(stderr, "allocate memory for additional groups failed\n");
+		return -1;
+	}
+
+	for (i = 0; i < exec->nr_additional_groups; i++) {
+		s = json_array_get_string(groups, i);
+		if (s != NULL) {
+			exec->additional_groups[i] = strdup(s);
+			fprintf(stdout, "container process additional group %d %s\n", i, exec->additional_groups[i]);
+		}
+	}
+
+	return 0;
+}
+
 static int container_parse_argv(struct hyper_exec *exec, char *json, jsmntok_t *toks)
 {
 	int i = 0, j;
@@ -178,6 +200,31 @@ static int container_parse_argv(struct hyper_exec *exec, char *json, jsmntok_t *
 	}
 
 	return i;
+}
+
+static int container_parse_argv_parson(struct hyper_exec *exec, JSON_Array *args)
+{
+	int i;
+	const char *s;
+	exec->argc = json_array_get_count(args);
+	fprintf(stdout, "args num %d\n", exec->argc);
+
+	exec->argv = calloc(exec->argc + 1, sizeof(*exec->argv));
+	if (exec->argv == NULL) {
+		fprintf(stderr, "allocate memory for exec argv failed\n");
+		return -1;
+	}
+
+	exec->argv[exec->argc] = NULL;
+	for (i = 0; i < exec->argc; i++) {
+		s = json_array_get_string(args, i);
+		if (s != NULL) {
+			exec->argv[i] = strdup(s);
+			fprintf(stdout, "container init arg %d %s\n", i, exec->argv[i]);
+		}
+	}
+
+	return 0;
 }
 
 static void container_cleanup_exec(struct hyper_exec *exec)
@@ -365,6 +412,40 @@ static int container_parse_fsmap(struct hyper_container *c, char *json, jsmntok_
 	return i;
 }
 
+static int container_parse_envs_parson(struct hyper_exec *exec, JSON_Array *envs) {
+        int i;
+        JSON_Object *env;
+        const char *s;
+
+        exec->envs_num = json_array_get_count(envs);
+        fprintf(stdout, "envs num %d\n", exec->envs_num);
+
+        exec->envs = calloc(exec->envs_num, sizeof(*exec->envs));
+        if (exec->envs == NULL) {
+                fprintf(stderr, "allocate memory for env failed\n");
+                return -1;
+        }
+
+        for (i = 0; i < exec->envs_num; i++) {
+                env = json_array_get_object(envs, i);
+
+                s = json_object_get_string(env, "env");
+                if (s != NULL) {
+                	exec->envs[i].env = strdup(s);
+                	fprintf(stdout, "envs %d env %s\n", i, exec->envs[i].env);
+                }
+
+                s = json_object_get_string(env, "value");
+                if (s != NULL) {
+                	exec->envs[i].value = strdup(s);
+                	fprintf(stdout, "envs %d value %s\n", i, exec->envs[i].value);
+                }
+        }
+
+        return 0;
+}
+
+
 static int container_parse_envs(struct hyper_exec *exec, char *json, jsmntok_t *toks)
 {
 	int i = 0, j;
@@ -456,6 +537,48 @@ static int container_parse_sysctl(struct hyper_container *c, char *json, jsmntok
 		fprintf(stdout, "sysctl %s:%s\n", c->sys[j].path, c->sys[j].value);
 	}
 	return i;
+}
+
+static int hyper_parse_process_parson(struct hyper_exec *exec, JSON_Object *process) 
+{
+	const char *s;
+	JSON_Array *array;
+
+	s = json_object_get_string(process, "user");
+	if (s != NULL) {
+		exec->user = strdup(s);
+		fprintf(stdout, "container process user %s\n", exec->user);
+	}
+	s = json_object_get_string(process, "group");
+	if (s != NULL) {
+		exec->group = strdup(s);
+		fprintf(stdout, "container process group %s\n", exec->group);
+	}
+	array = json_object_get_array(process, "additionalGroups");
+	if (array != NULL) {
+		container_parse_additional_groups_parson(exec, array);
+	}
+	exec->tty = json_object_get_boolean(process, "terminal");
+	fprintf(stdout, "container process terminal %d\n", exec->tty);
+	exec->seq = (uint64_t)json_object_get_number(process, "stdio");
+	fprintf(stdout, "container process stdio %lu\n", exec->seq);
+	exec->errseq = (uint64_t)json_object_get_number(process, "stderr");
+	fprintf(stdout, "container process stderr %lu\n", exec->errseq);
+	array = json_object_get_array(process, "args");
+	if (array != NULL) {
+		container_parse_argv_parson(exec, array);
+	}
+	array = json_object_get_array(process, "envs");
+	if (array != NULL) {
+		container_parse_envs_parson(exec, array);
+	}
+	s = json_object_get_string(process, "workdir");
+	if (s != NULL) {
+		exec->workdir = strdup(s);
+		fprintf(stdout, "container process workdir %s\n", exec->workdir);
+	}
+
+	return 0;
 }
 
 static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *toks)
@@ -1259,30 +1382,9 @@ fail:
 
 struct hyper_exec *hyper_parse_execcmd(char *json, int length)
 {
-	int i, j, n;
 	struct hyper_exec *exec = NULL;
-
-	jsmn_parser p;
-	int toks_num = 10;
-	jsmntok_t *toks = NULL;
-
-realloc:
-	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
-	if (toks == NULL) {
-		fprintf(stderr, "allocate tokens for execcmd failed\n");
-		goto fail;
-	}
-
-	jsmn_init(&p);
-	n = jsmn_parse(&p, json, length,  toks, toks_num);
-	if (n < 0) {
-		fprintf(stdout, "jsmn parse failed, n is %d\n", n);
-		if (n == JSMN_ERROR_NOMEM) {
-			toks_num *= 2;
-			goto realloc;
-		}
-		goto out;
-	}
+	JSON_Value *value = hyper_json_parse(json, length);
+	const char *s;
 
 	exec = calloc(1, sizeof(*exec));
 	if (exec == NULL) {
@@ -1299,18 +1401,13 @@ realloc:
 	exec->stderrev.fd = -1;
 	INIT_LIST_HEAD(&exec->list);
 
-	for (i = 0; i < n; i++) {
-		jsmntok_t *t = &toks[i];
+	s = json_object_get_string(json_object(value), "container");
+	exec->id = strdup(s);
+	fprintf(stdout, "get container %s\n", exec->id);
 
-		if (json_token_streq(json, t, "container")) {
-			exec->id = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "get container %s\n", exec->id);
-		} else if (json_token_streq(json, t, "process") && t->size == 1) {
-			j = hyper_parse_process(exec, json, &toks[++i]);
-			if (j < 0)
-				goto fail;
-			i += j;
-		}
+	JSON_Object *process = json_object_get_object(json_object(value), "process");
+	if (hyper_parse_process_parson(exec, process) < 0) {
+		goto fail;
 	}
 
 	if (exec->id == NULL || strlen(exec->id) == 0) {
@@ -1324,7 +1421,7 @@ realloc:
 	}
 
 out:
-	free(toks);
+	json_value_free(value);
 	return exec;
 fail:
 	container_cleanup_exec(exec);
