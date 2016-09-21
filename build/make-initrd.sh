@@ -30,7 +30,6 @@ fi
 
 ( cd /tmp/hyperstart-rootfs && find . | cpio -H newc -o | gzip -9 ) > ./hyper-initrd.img
 
-cd ../
 rm -rf /tmp/hyperstart-rootfs
 
 if [ "$1"x = "cbfs"x ]; then
