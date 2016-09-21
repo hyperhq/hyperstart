@@ -3,6 +3,7 @@
 
 #define APIVERSION 4242
 
+// control command id
 enum {
 	GETVERSION,
 	STARTPOD,
@@ -28,6 +29,15 @@ enum {
 	SETUPROUTE,
 	REMOVECONTAINER,
 };
+
+/*
+ * control message format
+ * | ctrl id | length  | payload (length-8)      |
+ * | . . . . | . . . . | . . . . . . . . . . . . |
+ * 0         4         8                         length
+ */
+#define CONTROL_HEADER_SIZE		8
+#define CONTROL_HEADER_LENGTH_OFFSET	4
 
 /*
  * stream message format

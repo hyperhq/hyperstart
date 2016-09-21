@@ -1179,15 +1179,15 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 static int hyper_channel_read(struct hyper_event *he, int efd)
 {
 	struct hyper_buf *buf = &he->rbuf;
-	uint32_t len = he->ops->len_offset + 4;
+	uint32_t len;
 	uint8_t data[4];
 	int size;
 	int ret;
 
 	fprintf(stdout, "%s\n", __func__);
 
-	if (buf->get < len) {
-		size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
+	if (buf->get < CONTROL_HEADER_SIZE) {
+		size = nonblock_read(he->fd, buf->data + buf->get, CONTROL_HEADER_SIZE - buf->get);
 		if (size < 0) {
 			return size;
 		}
@@ -1197,12 +1197,12 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 			hyper_send_msg(he->fd, NEXT, 4, data);
 		}
 		buf->get += size;
-		if (buf->get < len) {
+		if (buf->get < CONTROL_HEADER_SIZE) {
 			return 0;
 		}
 	}
 
-	hyper_getmsg_len(he, &len);
+	len = hyper_get_be32(buf->data + CONTROL_HEADER_LENGTH_OFFSET);
 	fprintf(stdout, "get length %" PRIu32"\n", len);
 	// test it with '>=' to leave at least one byte in hyper_channel_handle(),
 	// so that hyper_channel_handle() can convert the data to c-string inplace.
