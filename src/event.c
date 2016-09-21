@@ -130,41 +130,30 @@ static int hyper_getmsg_len(struct hyper_event *he, uint32_t *len)
 int hyper_event_read(struct hyper_event *he, int efd)
 {
 	struct hyper_buf *buf = &he->rbuf;
-	uint32_t len = 4;
+	uint32_t len = he->ops->len_offset + 4;
 	uint8_t data[4];
-	int offset = he->ops->len_offset;
-	int end = offset + 4;
 	int size;
 	int ret;
 
 	fprintf(stdout, "%s\n", __func__);
 
-	while (hyper_getmsg_len(he, &len) < 0) {
-		size = read(he->fd, buf->data + buf->get, end - buf->get);
-		if (size > 0) {
-			buf->get += size;
-			fprintf(stdout, "already read %" PRIu32 " bytes data\n",
-				buf->get);
-
-			if (he->ops->ack) {
-				/* control channel, need ack */
-				hyper_set_be32(data, size);
-				hyper_send_msg(he->fd, NEXT, 4, data);
-			}
-			continue;
+	if (buf->get < len) {
+		size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
+		if (size < 0) {
+			return size;
 		}
-
-		if (errno == EINTR)
-			continue;
-
-		if (errno != EAGAIN && size != 0) {
-			perror("fail to read");
-			return -1;
+		if (size > 0 && he->ops->ack) {
+			/* control channel, need ack */
+			hyper_set_be32(data, size);
+			hyper_send_msg(he->fd, NEXT, 4, data);
 		}
-
-		return 0;
+		buf->get += size;
+		if (buf->get < len) {
+			return 0;
+		}
 	}
 
+	hyper_getmsg_len(he, &len);
 	fprintf(stdout, "get length %" PRIu32"\n", len);
 	// test it with '>=' to leave at least one byte in handle(),
 	// so that handle() can convert the data to c-string inplace.
@@ -173,30 +162,17 @@ int hyper_event_read(struct hyper_event *he, int efd)
 		return -1;
 	}
 
-	while (buf->get < len) {
-		size = read(he->fd, buf->data + buf->get, len - buf->get);
-		if (size > 0) {
-			buf->get += size;
-			fprintf(stdout, "read %d bytes data, total data %" PRIu32 "\n",
-				size, buf->get);
-			if (he->ops->ack) {
-				/* control channel, need ack */
-				hyper_set_be32(data, size);
-				hyper_send_msg(he->fd, NEXT, 4, data);
-			}
-
-			continue;
-		}
-
-		if (errno == EINTR)
-			continue;
-
-		if (errno != EAGAIN && size != 0) {
-			perror("fail to read");
-			return -1;
-		}
-
-		/* size == 0 : No one connect to qemu socket */
+	size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
+	if (size < 0) {
+		return size;
+	}
+	if (size > 0 && he->ops->ack) {
+		/* control channel, need ack */
+		hyper_set_be32(data, size);
+		hyper_send_msg(he->fd, NEXT, 4, data);
+	}
+	buf->get += size;
+	if (buf->get < len) {
 		return 0;
 	}
 

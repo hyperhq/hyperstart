@@ -709,3 +709,25 @@ int hyper_cmd(char *cmd)
 
 	return -1;
 }
+
+ssize_t nonblock_read(int fd, void *buf, size_t count)
+{
+	ssize_t len = 0, ret = 0;
+
+	while (len < count) {
+		ret = read(fd, buf + len, count - len);
+		if (ret <= 0) {
+			if (errno == EINTR) {
+				continue;
+			}
+			if (errno == EAGAIN) {
+				ret = 0;
+			}
+			break;
+		}
+
+		len += ret;
+	}
+
+	return len > 0 ? len : ret;
+}
