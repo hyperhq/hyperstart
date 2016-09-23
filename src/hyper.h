@@ -57,6 +57,7 @@ struct file_command {
 
 struct hyper_ctl {
 	int			efd;
+	int			vsock;
 	struct hyper_event	tty;
 	struct hyper_event	chan;
 };
