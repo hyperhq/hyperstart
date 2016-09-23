@@ -527,7 +527,7 @@ void hyper_pod_destroyed(int failed)
 
 static int hyper_destroy_pod(struct hyper_pod *pod, int error)
 {
-	if (pod->init_pid == 0) {
+	if (pod->init_pid == 0 || pod->remains == 0) {
 		/* Pod stopped, just shutdown */
 		hyper_pod_destroyed(error);
 	} else {
@@ -589,11 +589,13 @@ static int hyper_new_container(char *json, int length)
 	ret = hyper_setup_container(c, pod);
 	if (ret >= 0)
 		ret = hyper_run_process(&c->exec);
+
 	if (ret < 0) {
 		//TODO full grace cleanup
 		hyper_cleanup_container(c, pod);
+	} else {
+		pod->remains++;
 	}
-	pod->remains++;
 
 	return ret;
 }
