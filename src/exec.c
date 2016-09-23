@@ -413,7 +413,6 @@ static int hyper_install_process_stdio(struct hyper_exec *e)
 	int ret = -1;
 
 	fprintf(stdout, "%s\n", __func__);
-	setsid();
 
 	if (e->tty) {
 		char ptmx[512];
@@ -556,6 +555,8 @@ static void hyper_exec_process(struct hyper_exec *exec)
 		fprintf(stderr, "setup env failed\n");
 		goto exit;
 	}
+
+	setsid();
 
 	if (hyper_install_process_stdio(exec) < 0) {
 		fprintf(stderr, "dup pts to exec stdio failed\n");
