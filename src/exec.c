@@ -386,11 +386,13 @@ static int hyper_setup_exec_tty(struct hyper_exec *e)
 
 	if (ioctl(ptymaster, TIOCSPTLCK, &unlock) < 0) {
 		perror("ioctl unlock ptmx device failed");
+		close(ptymaster);
 		return -1;
 	}
 
 	if (ioctl(ptymaster, TIOCGPTN, &e->ptyno) < 0) {
 		perror("ioctl get execcmd pty device failed");
+		close(ptymaster);
 		return -1;
 	}
 
