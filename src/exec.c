@@ -417,17 +417,18 @@ static int hyper_dup_exec_tty(struct hyper_exec *e)
 
 	if (e->tty) {
 		char ptmx[512];
+		int ptyslave;
+
 		sprintf(ptmx, "/dev/pts/%d", e->ptyno);
-		// reopen slave ptyfd for correcting the symlink path of the /dev/fd/1
-		e->ptyfd = open(ptmx, O_RDWR | O_CLOEXEC);
-		if (e->ptyfd < 0 || ioctl(e->ptyfd, TIOCSCTTY, NULL) < 0) {
+		ptyslave = open(ptmx, O_RDWR | O_CLOEXEC);
+		if (ptyslave < 0 || ioctl(ptyslave, TIOCSCTTY, NULL) < 0) {
 			perror("ioctl pty device for execcmd failed");
 			goto out;
 		}
-		e->stdinfd = e->ptyfd;
-		e->stdoutfd = e->ptyfd;
+		e->stdinfd = ptyslave;
+		e->stdoutfd = ptyslave;
 		if (e->errseq == 0)
-			e->stderrfd = e->ptyfd;
+			e->stderrfd = ptyslave;
 		close(e->stdinev.fd);
 		close(e->stdoutev.fd);
 		close(e->stderrev.fd);
@@ -450,6 +451,10 @@ static int hyper_dup_exec_tty(struct hyper_exec *e)
 		goto out;
 	}
 
+	/*
+	 * we are going to execvp(), all of the e->stdinfd, e->stdoutfd and
+	 * e->stderrfd are O_CLOEXEC, we don't need to close them explicitly
+	 */
 	ret = 0;
 out:
 	return ret;
