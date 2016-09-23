@@ -171,7 +171,7 @@ static int write_to_stdin(struct hyper_event *de, int efd)
 struct hyper_event_ops in_ops = {
 	.hup		= stdin_hup,
 	.write		= write_to_stdin,
-	.wbuf_size	= 512,
+	.wbuf_size	= 4096,
 };
 
 static int stdout_loop(struct hyper_event *de, int efd)
