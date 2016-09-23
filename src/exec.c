@@ -408,7 +408,7 @@ static int hyper_setup_exec_tty(struct hyper_exec *e)
 	return 0;
 }
 
-static int hyper_dup_exec_tty(struct hyper_exec *e)
+static int hyper_install_process_stdio(struct hyper_exec *e)
 {
 	int ret = -1;
 
@@ -557,7 +557,7 @@ static void hyper_exec_process(struct hyper_exec *exec)
 		goto exit;
 	}
 
-	if (hyper_dup_exec_tty(exec) < 0) {
+	if (hyper_install_process_stdio(exec) < 0) {
 		fprintf(stderr, "dup pts to exec stdio failed\n");
 		goto exit;
 	}
