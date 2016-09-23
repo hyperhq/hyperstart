@@ -394,21 +394,15 @@ static int hyper_setup_exec_tty(struct hyper_exec *e)
 		return -1;
 	}
 
-	if (sprintf(ptmx, "%s/%d", path, e->ptyno) < 0) {
-		fprintf(stderr, "get ptmx path failed\n");
-		return -1;
-	}
+	e->ptyfd = ptymaster;
 
-	e->ptyfd = open(ptmx, O_RDWR | O_NOCTTY | O_CLOEXEC);
-	fprintf(stdout, "get pty device for exec %s\n", ptmx);
-
-	e->stdinev.fd = ptymaster;
+	e->stdinev.fd = dup(ptymaster);
 	e->stdoutev.fd = dup(ptymaster);
 	if (e->errseq == 0) {
 		e->stderrev.fd = dup(e->stdoutev.fd);
 	}
 	fprintf(stdout, "%s pts event %p, fd %d %d\n",
-		__func__, &e->stdinev, ptymaster, e->ptyfd);
+		__func__, &e->stdinev, e->stdinev.fd, e->ptyfd);
 	return 0;
 }
 
