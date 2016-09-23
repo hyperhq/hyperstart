@@ -1010,17 +1010,7 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 		return 0;
 	}
 
-	wbuf = &exec->stdinev.wbuf;
-
-	size = wbuf->size - wbuf->get;
-	if (size == 0)
-		return 0;
-
-	/* Data may lost since pts buffer is full. do not allow one exec pts occupy all
-	 * of the tty buff. */
-	if (size > (len - 12))
-		size = (len - 12);
-
+	size = len - STREAM_HEADER_SIZE;
 	/* size == 0 means we had received eof */
 	if (size == 0 && !exec->tty) {
 		exec->close_stdin_request = 1;
@@ -1031,6 +1021,12 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 		}
 	}
 
+	wbuf = &exec->stdinev.wbuf;
+	if (size > (wbuf->size - wbuf->get)) {
+		/* buffer is full, discard the data */
+		/* TODO: properly handle the discard data */
+		size = wbuf->size - wbuf->get;
+	}
 	if (size > 0) {
 		memcpy(wbuf->data + wbuf->get, rbuf->data + 12, size);
 		wbuf->get += size;
