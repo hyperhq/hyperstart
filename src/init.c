@@ -28,6 +28,7 @@
 #include "parse.h"
 #include "container.h"
 #include "syscall.h"
+#include "vsock.h"
 
 struct hyper_pod global_pod = {
 	.containers	=	LIST_HEAD_INIT(global_pod.containers),
@@ -1301,6 +1302,8 @@ int main(int argc, char *argv[])
 
 	ioctl(STDIN_FILENO, TIOCSCTTY, 1);
 
+	setenv("PATH", "/bin:/sbin/:/usr/bin/:/usr/sbin/", 1);
+
 #ifdef WITH_VBOX
 	ctl_serial = "/dev/ttyS0";
 	tty_serial = "/dev/ttyS1";
@@ -1313,9 +1316,14 @@ int main(int argc, char *argv[])
 #else
 	ctl_serial = "sh.hyper.channel.0";
 	tty_serial = "sh.hyper.channel.1";
+	if (probe_vsock_device() <= 0) {
+		fprintf(stderr, "cannot find vsock device\n");
+	} else if (hyper_cmd("modprobe vmw_vsock_virtio_transport") < 0) {
+		fprintf(stderr, "fail to load vmw_vsock_virtio_transport.ko\n");
+	} else {
+		ctl.vsock = 1;
+	}
 #endif
-
-	setenv("PATH", "/bin:/sbin/:/usr/bin/:/usr/sbin/", 1);
 
 	ctl.chan.fd = hyper_setup_ctl_channel(ctl_serial);
 	if (ctl.chan.fd < 0) {
