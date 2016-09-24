@@ -386,52 +386,48 @@ static int hyper_setup_exec_tty(struct hyper_exec *e)
 
 	if (ioctl(ptymaster, TIOCSPTLCK, &unlock) < 0) {
 		perror("ioctl unlock ptmx device failed");
+		close(ptymaster);
 		return -1;
 	}
 
 	if (ioctl(ptymaster, TIOCGPTN, &e->ptyno) < 0) {
 		perror("ioctl get execcmd pty device failed");
+		close(ptymaster);
 		return -1;
 	}
 
-	if (sprintf(ptmx, "%s/%d", path, e->ptyno) < 0) {
-		fprintf(stderr, "get ptmx path failed\n");
-		return -1;
-	}
+	e->ptyfd = ptymaster;
 
-	e->ptyfd = open(ptmx, O_RDWR | O_NOCTTY | O_CLOEXEC);
-	fprintf(stdout, "get pty device for exec %s\n", ptmx);
-
-	e->stdinev.fd = ptymaster;
+	e->stdinev.fd = dup(ptymaster);
 	e->stdoutev.fd = dup(ptymaster);
 	if (e->errseq == 0) {
 		e->stderrev.fd = dup(e->stdoutev.fd);
 	}
 	fprintf(stdout, "%s pts event %p, fd %d %d\n",
-		__func__, &e->stdinev, ptymaster, e->ptyfd);
+		__func__, &e->stdinev, e->stdinev.fd, e->ptyfd);
 	return 0;
 }
 
-static int hyper_dup_exec_tty(struct hyper_exec *e)
+static int hyper_install_process_stdio(struct hyper_exec *e)
 {
 	int ret = -1;
 
 	fprintf(stdout, "%s\n", __func__);
-	setsid();
 
 	if (e->tty) {
 		char ptmx[512];
+		int ptyslave;
+
 		sprintf(ptmx, "/dev/pts/%d", e->ptyno);
-		// reopen slave ptyfd for correcting the symlink path of the /dev/fd/1
-		e->ptyfd = open(ptmx, O_RDWR | O_CLOEXEC);
-		if (e->ptyfd < 0 || ioctl(e->ptyfd, TIOCSCTTY, NULL) < 0) {
+		ptyslave = open(ptmx, O_RDWR | O_CLOEXEC);
+		if (ptyslave < 0 || ioctl(ptyslave, TIOCSCTTY, NULL) < 0) {
 			perror("ioctl pty device for execcmd failed");
 			goto out;
 		}
-		e->stdinfd = e->ptyfd;
-		e->stdoutfd = e->ptyfd;
+		e->stdinfd = ptyslave;
+		e->stdoutfd = ptyslave;
 		if (e->errseq == 0)
-			e->stderrfd = e->ptyfd;
+			e->stderrfd = ptyslave;
 		close(e->stdinev.fd);
 		close(e->stdoutev.fd);
 		close(e->stderrev.fd);
@@ -454,6 +450,10 @@ static int hyper_dup_exec_tty(struct hyper_exec *e)
 		goto out;
 	}
 
+	/*
+	 * we are going to execvp(), all of the e->stdinfd, e->stdoutfd and
+	 * e->stderrfd are O_CLOEXEC, we don't need to close them explicitly
+	 */
 	ret = 0;
 out:
 	return ret;
@@ -556,7 +556,9 @@ static void hyper_exec_process(struct hyper_exec *exec)
 		goto exit;
 	}
 
-	if (hyper_dup_exec_tty(exec) < 0) {
+	setsid();
+
+	if (hyper_install_process_stdio(exec) < 0) {
 		fprintf(stderr, "dup pts to exec stdio failed\n");
 		goto exit;
 	}
