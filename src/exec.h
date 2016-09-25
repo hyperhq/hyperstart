@@ -27,7 +27,7 @@ struct hyper_exec {
 	uint8_t			ref;
 
 	// configs
-	char			*id;
+	char			*container_id;
 	char			*user;
 	char			*group;
 	char			**additional_groups;

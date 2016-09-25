@@ -356,7 +356,7 @@ static int hyper_setup_exec_tty(struct hyper_exec *e)
 		e->stderrfd = errpipe[1];
 	}
 
-	if (sprintf(ptmx, "/tmp/hyper/%s/devpts/ptmx", e->id) < 0) {
+	if (sprintf(ptmx, "/tmp/hyper/%s/devpts/ptmx", e->container_id) < 0) {
 		fprintf(stderr, "get ptmx path failed\n");
 		return -1;
 	}
@@ -480,9 +480,9 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int
 		goto out;
 	}
 
-	c = hyper_find_container(pod, exec->id);
+	c = hyper_find_container(pod, exec->container_id);
 	if (c == NULL) {
-		fprintf(stderr, "can not find container %s\n", exec->id);
+		fprintf(stderr, "can not find container %s\n", exec->container_id);
 		goto out;
 	}
 
@@ -563,7 +563,7 @@ static void hyper_free_exec(struct hyper_exec *exec)
 {
 	int i;
 
-	free(exec->id);
+	free(exec->container_id);
 
 	for (i = 0; i < exec->argc; i++) {
 		//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
@@ -600,9 +600,9 @@ int hyper_run_process(struct hyper_exec *exec)
 	int pid, ret = -1;
 	uint32_t type;
 
-	if (exec->argv == NULL || exec->seq == 0 || exec->id == NULL || strlen(exec->id) == 0) {
+	if (exec->argv == NULL || exec->seq == 0 || exec->container_id == NULL || strlen(exec->container_id) == 0) {
 		fprintf(stderr, "cmd is %p, seq %" PRIu64 ", container %s\n",
-			exec->argv, exec->seq, exec->id);
+			exec->argv, exec->seq, exec->container_id);
 		goto out;
 	}
 
@@ -822,7 +822,7 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 	}
 
 	fprintf(stdout, "%s exec exit pid %d, seq %" PRIu64 ", container %s\n",
-		__func__, exec->pid, exec->seq, exec->id);
+		__func__, exec->pid, exec->seq, exec->container_id);
 
 	exec->code = code;
 	exec->exit = 1;
