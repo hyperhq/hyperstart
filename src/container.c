@@ -313,15 +313,22 @@ static int container_setup_mount(struct hyper_container *container)
 		return -1;
 	}
 
-	if (unlink("./dev/ptmx") < 0)
+	if (unlink("./dev/ptmx") < 0) {
 		perror("remove /dev/ptmx failed");
-	if (symlink("/dev/pts/ptmx", "./dev/ptmx") < 0)
+		return -1;
+	}
+	if (symlink("/dev/pts/ptmx", "./dev/ptmx") < 0) {
 		perror("link /dev/pts/ptmx to /dev/ptmx failed");
+		return -1;
+	}
 
-	symlink("/proc/self/fd", "./dev/fd");
-	symlink("/proc/self/fd/0", "./dev/stdin");
-	symlink("/proc/self/fd/1", "./dev/stdout");
-	symlink("/proc/self/fd/2", "./dev/stderr");
+	if (symlink("/proc/self/fd", "./dev/fd") < 0 ||
+	    symlink("/proc/self/fd/0", "./dev/stdin") < 0 ||
+	    symlink("/proc/self/fd/1", "./dev/stdout") < 0 ||
+	    symlink("/proc/self/fd/2", "./dev/stderr") < 0) {
+		perror("failed to symlink for /dev/fd, /dev/stdin, /dev/stdout or /dev/stderr");
+		return -1;
+	}
 
 	return 0;
 }
@@ -584,7 +591,10 @@ static int hyper_setup_container_rootfs(void *data)
 		perror("failed to bind rootfs");
 		goto fail;
 	}
-	chdir(rootfs);
+	if (chdir(rootfs) < 0) {
+		perror("failed to change the root to path of the container root(before manipulating)");
+		goto fail;
+	}
 
 	/*
 	 * Recreate dns resolver iif configured by pod spec. Other cases
@@ -621,9 +631,15 @@ static int hyper_setup_container_rootfs(void *data)
 	}
 	/* pivot_root won't work, see
 	 * Documention/filesystem/ramfs-rootfs-initramfs.txt */
-	chroot(".");
+	if (chroot(".") < 0) {
+		perror("failed to setup the root for the mount namepsace");
+		goto fail;
+	}
 
-	chdir("/");
+	if (chdir("/") < 0) {
+		perror("failed chdir to the new root");
+		goto fail;
+	}
 
 	if (container_setup_sysctl(container) < 0) {
 		fprintf(stderr, "container sets up sysctl failed\n");

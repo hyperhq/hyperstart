@@ -271,7 +271,10 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 	if (exec->tty) {
 		char ptmx[512];
 		sprintf(ptmx, "/dev/pts/%d", exec->ptyno);
-		chown(ptmx, uid, gid);
+		if (chown(ptmx, uid, gid) < 0) {
+			perror("failed to change the owner for the slave pty file");
+			goto fail;
+		}
 	}
 
 	// apply
@@ -510,7 +513,10 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int
 		perror("fail to enter container ns");
 		goto out;
 	}
-	chdir("/");
+	if (chdir("/") < 0) {
+		perror("fail to change to the root of the rootfs");
+		goto out;
+	}
 
 	/* TODO: merge container env to exec env in hyperd */
 	if (hyper_setup_env(c->exec.envs, c->exec.envs_num) < 0) {
