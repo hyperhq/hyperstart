@@ -11,6 +11,8 @@ struct env {
 
 struct hyper_exec {
 	struct list_head	list;
+	struct hyper_pod	*pod;
+
 	struct hyper_event	stdinev;
 	struct hyper_event	stdoutev;
 	struct hyper_event	stderrev;

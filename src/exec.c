@@ -23,7 +23,7 @@
 #include "parse.h"
 #include "syscall.h"
 
-static int hyper_release_exec(struct hyper_exec *, struct hyper_pod *);
+static int hyper_release_exec(struct hyper_exec *);
 static void hyper_exec_process(struct hyper_exec *exec);
 
 static int send_exec_finishing(uint64_t seq, int len, int code, int block)
@@ -75,13 +75,11 @@ static int hyper_send_exec_code(struct hyper_exec *exec, int block) {
 
 static void pts_hup(struct hyper_event *de, int efd, struct hyper_exec *exec)
 {
-	struct hyper_pod *pod = de->ptr;
-
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
 
 	hyper_event_hup(de, efd);
 
-	hyper_release_exec(exec, pod);
+	hyper_release_exec(exec);
 }
 
 static void stdin_hup(struct hyper_event *de, int efd)
@@ -445,26 +443,26 @@ out:
 	return ret;
 }
 
-static int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
+static int hyper_watch_exec_pty(struct hyper_exec *exec)
 {
 	fprintf(stdout, "hyper_init_event container pts event %p, ops %p, fd %d\n",
 		&exec->stdinev, &in_ops, exec->stdinev.fd);
 
-	if (hyper_init_event(&exec->stdinev, &in_ops, pod) < 0 ||
+	if (hyper_init_event(&exec->stdinev, &in_ops, NULL) < 0 ||
 	    hyper_add_event(ctl.efd, &exec->stdinev, EPOLLOUT) < 0) {
 		fprintf(stderr, "add container stdin event failed\n");
 		return -1;
 	}
 	exec->ref++;
 
-	if (hyper_init_event(&exec->stdoutev, &out_ops, pod) < 0 ||
+	if (hyper_init_event(&exec->stdoutev, &out_ops, NULL) < 0 ||
 	    hyper_add_event(ctl.efd, &exec->stdoutev, EPOLLIN) < 0) {
 		fprintf(stderr, "add container stdout event failed\n");
 		return -1;
 	}
 	exec->ref++;
 
-	if (hyper_init_event(&exec->stderrev, &err_ops, pod) < 0 ||
+	if (hyper_init_event(&exec->stderrev, &err_ops, NULL) < 0 ||
 	    hyper_add_event(ctl.efd, &exec->stderrev, EPOLLIN) < 0) {
 		fprintf(stderr, "add container stderr event failed\n");
 		return -1;
@@ -473,17 +471,17 @@ static int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 	return 0;
 }
 
-static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int pipe)
+static int hyper_do_exec_cmd(struct hyper_exec *exec, int pipe)
 {
 	struct hyper_container *c;
 
-	if (hyper_enter_sandbox(pod, pipe) < 0) {
+	if (hyper_enter_sandbox(exec->pod, pipe) < 0) {
 		perror("enter pidns of pod init failed");
 		hyper_send_type(pipe, -1);
 		goto out;
 	}
 
-	c = hyper_find_container(pod, exec->container_id);
+	c = hyper_find_container(exec->pod, exec->container_id);
 	if (c == NULL) {
 		fprintf(stderr, "can not find container %s\n", exec->container_id);
 		goto out;
@@ -506,7 +504,7 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int
 
 	// set early env. the container env config can overwrite it
 	setenv("HOME", "/root", 1);
-	setenv("HOSTNAME", pod->hostname, 1);
+	setenv("HOSTNAME", exec->pod->hostname, 1);
 	if (exec->tty)
 		setenv("TERM", "xterm", 1);
 	else
@@ -592,6 +590,7 @@ int hyper_exec_cmd(char *json, int length)
 		return -1;
 	}
 
+	exec->pod = &global_pod;
 	int ret = hyper_run_process(exec);
 	if (ret < 0) {
 		hyper_free_exec(exec);
@@ -601,7 +600,6 @@ int hyper_exec_cmd(char *json, int length)
 
 int hyper_run_process(struct hyper_exec *exec)
 {
-	struct hyper_pod *pod = &global_pod;
 	int pipe[2] = {-1, -1};
 	int pid, ret = -1;
 	uint32_t type;
@@ -617,7 +615,7 @@ int hyper_run_process(struct hyper_exec *exec)
 		goto out;
 	}
 
-	if (hyper_watch_exec_pty(exec, pod) < 0) {
+	if (hyper_watch_exec_pty(exec) < 0) {
 		fprintf(stderr, "add pts master event failed\n");
 		goto close_tty;
 	}
@@ -634,7 +632,7 @@ int hyper_run_process(struct hyper_exec *exec)
 		perror("fork prerequisite process failed");
 		goto close_tty;
 	} else if (pid == 0) {
-		hyper_do_exec_cmd(exec, pod, pipe[1]);
+		hyper_do_exec_cmd(exec, pipe[1]);
 	}
 	fprintf(stdout, "prerequisite process pid %d\n", pid);
 
@@ -644,7 +642,7 @@ int hyper_run_process(struct hyper_exec *exec)
 	}
 
 	exec->pid = type;
-	list_add_tail(&exec->list, &pod->exec_head);
+	list_add_tail(&exec->list, &exec->pod->exec_head);
 	fprintf(stdout, "%s process pid %d\n", __func__, exec->pid);
 	ret = 0;
 out:
@@ -687,8 +685,7 @@ out:
 	return ret;
 }
 
-static int hyper_release_exec(struct hyper_exec *exec,
-			      struct hyper_pod *pod)
+static int hyper_release_exec(struct hyper_exec *exec)
 {
 	if (--exec->ref != 0) {
 		fprintf(stdout, "still have %d user of exec\n", exec->ref);
@@ -711,21 +708,21 @@ static int hyper_release_exec(struct hyper_exec *exec,
 	fprintf(stdout, "%s exit code %" PRIu8"\n", __func__, exec->code);
 	if (exec->init) {
 		fprintf(stdout, "%s container init exited %s, remains %d\n",
-			__func__, pod->req_destroy?"manually":"automatically", pod->remains);
+			__func__, exec->pod->req_destroy?"manually":"automatically", exec->pod->remains);
 
 		// TODO send finish of this container and full cleanup
-		if (--pod->remains > 0)
+		if (--exec->pod->remains > 0)
 			return 0;
 
-		if (pod->req_destroy) {
+		if (exec->pod->req_destroy) {
 			/* shutdown vm manually, hyper doesn't care the pod finished codes */
 			hyper_pod_destroyed(0);
 		} else {
 			/* send out pod finish message, hyper will decide if restart pod or not */
-			hyper_send_pod_finished(pod);
+			hyper_send_pod_finished(exec->pod);
 		}
 
-		hyper_cleanup_pod(pod);
+		hyper_cleanup_pod(exec->pod);
 		return 0;
 	}
 
@@ -842,7 +839,7 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 	close(exec->stderrfd);
 	exec->stderrfd = -1;
 
-	hyper_release_exec(exec, pod);
+	hyper_release_exec(exec);
 
 	if (exec->init)
 		hyper_kill_container_processes(container_of(exec, struct hyper_container, exec));
