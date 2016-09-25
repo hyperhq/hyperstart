@@ -339,7 +339,7 @@ static int hyper_setup_exec_tty(struct hyper_exec *e)
 {
 	int unlock = 0;
 	int ptymaster;
-	char ptmx[512], path[512];
+	char ptmx[512];
 
 	if (!e->tty) { // don't use tty for stdio
 		return hyper_setup_exec_notty(e);
@@ -356,12 +356,7 @@ static int hyper_setup_exec_tty(struct hyper_exec *e)
 		e->stderrfd = errpipe[1];
 	}
 
-	if (sprintf(path, "/tmp/hyper/%s/devpts/", e->id) < 0) {
-		fprintf(stderr, "get ptmx path failed\n");
-		return -1;
-	}
-
-	if (sprintf(ptmx, "%s/ptmx", path) < 0) {
+	if (sprintf(ptmx, "/tmp/hyper/%s/devpts/ptmx", e->id) < 0) {
 		fprintf(stderr, "get ptmx path failed\n");
 		return -1;
 	}
