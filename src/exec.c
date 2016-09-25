@@ -341,11 +341,6 @@ static int hyper_setup_exec_tty(struct hyper_exec *e)
 	int ptymaster;
 	char ptmx[512], path[512];
 
-	if (e->seq == 0) {
-		fprintf(stderr, "e->seq should be set\n");
-		return -1;
-	}
-
 	if (!e->tty) { // don't use tty for stdio
 		return hyper_setup_exec_notty(e);
 	}
@@ -361,16 +356,9 @@ static int hyper_setup_exec_tty(struct hyper_exec *e)
 		e->stderrfd = errpipe[1];
 	}
 
-	if (e->id) {
-		if (sprintf(path, "/tmp/hyper/%s/devpts/", e->id) < 0) {
-			fprintf(stderr, "get ptmx path failed\n");
-			return -1;
-		}
-	} else {
-		if (sprintf(path, "/dev/pts/") < 0) {
-			fprintf(stderr, "get ptmx path failed\n");
-			return -1;
-		}
+	if (sprintf(path, "/tmp/hyper/%s/devpts/", e->id) < 0) {
+		fprintf(stderr, "get ptmx path failed\n");
+		return -1;
 	}
 
 	if (sprintf(ptmx, "%s/ptmx", path) < 0) {
@@ -463,9 +451,6 @@ static int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 {
 	fprintf(stdout, "hyper_init_event container pts event %p, ops %p, fd %d\n",
 		&exec->stdinev, &in_ops, exec->stdinev.fd);
-
-	if (exec->seq == 0)
-		return 0;
 
 	if (hyper_init_event(&exec->stdinev, &in_ops, pod) < 0 ||
 	    hyper_add_event(ctl.efd, &exec->stdinev, EPOLLOUT) < 0) {
@@ -620,7 +605,7 @@ int hyper_run_process(struct hyper_exec *exec)
 	int pid, ret = -1;
 	uint32_t type;
 
-	if (exec->argv == NULL) {
+	if (exec->argv == NULL || exec->seq == 0 || exec->id == NULL || strlen(exec->id) == 0) {
 		fprintf(stderr, "cmd is %p, seq %" PRIu64 ", container %s\n",
 			exec->argv, exec->seq, exec->id);
 		goto out;
