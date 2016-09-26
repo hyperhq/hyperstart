@@ -184,8 +184,8 @@ static void container_cleanup_exec(struct hyper_exec *exec)
 {
 	int i;
 
-	free(exec->id);
-	exec->id = NULL;
+	free(exec->container_id);
+	exec->container_id = NULL;
 
 	free(exec->user);
 	exec->user = NULL;
@@ -653,7 +653,7 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 		fprintf(stdout, "%d name %s\n", i, json_token_str(json, t));
 		if (json_token_streq(json, t, "id") && t->size == 1) {
 			c->id = (json_token_str(json, &toks[++i]));
-			c->exec.id = strdup(c->id);
+			c->exec.container_id = strdup(c->id);
 			fprintf(stdout, "container id %s\n", c->id);
 			i++;
 		} else if (json_token_streq(json, t, "rootfs") && t->size == 1) {
@@ -1296,8 +1296,8 @@ realloc:
 		jsmntok_t *t = &toks[i];
 
 		if (json_token_streq(json, t, "container")) {
-			exec->id = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "get container %s\n", exec->id);
+			exec->container_id = (json_token_str(json, &toks[++i]));
+			fprintf(stdout, "get container %s\n", exec->container_id);
 		} else if (json_token_streq(json, t, "process") && t->size == 1) {
 			j = hyper_parse_process(exec, json, &toks[++i]);
 			if (j < 0)
@@ -1306,7 +1306,7 @@ realloc:
 		}
 	}
 
-	if (exec->id == NULL || strlen(exec->id) == 0) {
+	if (exec->container_id == NULL || strlen(exec->container_id) == 0) {
 		fprintf(stderr, "execcmd format error, has no container id\n");
 		goto fail;
 	}

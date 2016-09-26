@@ -339,12 +339,7 @@ static int hyper_setup_exec_tty(struct hyper_exec *e)
 {
 	int unlock = 0;
 	int ptymaster;
-	char ptmx[512], path[512];
-
-	if (e->seq == 0) {
-		fprintf(stderr, "e->seq should be set\n");
-		return -1;
-	}
+	char ptmx[512];
 
 	if (!e->tty) { // don't use tty for stdio
 		return hyper_setup_exec_notty(e);
@@ -361,19 +356,7 @@ static int hyper_setup_exec_tty(struct hyper_exec *e)
 		e->stderrfd = errpipe[1];
 	}
 
-	if (e->id) {
-		if (sprintf(path, "/tmp/hyper/%s/devpts/", e->id) < 0) {
-			fprintf(stderr, "get ptmx path failed\n");
-			return -1;
-		}
-	} else {
-		if (sprintf(path, "/dev/pts/") < 0) {
-			fprintf(stderr, "get ptmx path failed\n");
-			return -1;
-		}
-	}
-
-	if (sprintf(ptmx, "%s/ptmx", path) < 0) {
+	if (sprintf(ptmx, "/tmp/hyper/%s/devpts/ptmx", e->container_id) < 0) {
 		fprintf(stderr, "get ptmx path failed\n");
 		return -1;
 	}
@@ -464,9 +447,6 @@ static int hyper_watch_exec_pty(struct hyper_exec *exec, struct hyper_pod *pod)
 	fprintf(stdout, "hyper_init_event container pts event %p, ops %p, fd %d\n",
 		&exec->stdinev, &in_ops, exec->stdinev.fd);
 
-	if (exec->seq == 0)
-		return 0;
-
 	if (hyper_init_event(&exec->stdinev, &in_ops, pod) < 0 ||
 	    hyper_add_event(ctl.efd, &exec->stdinev, EPOLLOUT) < 0) {
 		fprintf(stderr, "add container stdin event failed\n");
@@ -500,9 +480,9 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, struct hyper_pod *pod, int
 		goto out;
 	}
 
-	c = hyper_find_container(pod, exec->id);
+	c = hyper_find_container(pod, exec->container_id);
 	if (c == NULL) {
-		fprintf(stderr, "can not find container %s\n", exec->id);
+		fprintf(stderr, "can not find container %s\n", exec->container_id);
 		goto out;
 	}
 
@@ -583,7 +563,7 @@ static void hyper_free_exec(struct hyper_exec *exec)
 {
 	int i;
 
-	free(exec->id);
+	free(exec->container_id);
 
 	for (i = 0; i < exec->argc; i++) {
 		//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
@@ -620,9 +600,9 @@ int hyper_run_process(struct hyper_exec *exec)
 	int pid, ret = -1;
 	uint32_t type;
 
-	if (exec->argv == NULL) {
+	if (exec->argv == NULL || exec->seq == 0 || exec->container_id == NULL || strlen(exec->container_id) == 0) {
 		fprintf(stderr, "cmd is %p, seq %" PRIu64 ", container %s\n",
-			exec->argv, exec->seq, exec->id);
+			exec->argv, exec->seq, exec->container_id);
 		goto out;
 	}
 
@@ -842,7 +822,7 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 	}
 
 	fprintf(stdout, "%s exec exit pid %d, seq %" PRIu64 ", container %s\n",
-		__func__, exec->pid, exec->seq, exec->id);
+		__func__, exec->pid, exec->seq, exec->container_id);
 
 	exec->code = code;
 	exec->exit = 1;
