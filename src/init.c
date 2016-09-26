@@ -1370,13 +1370,20 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	symlink("/busybox", "/sh");
-	symlink("/busybox", "/tar");
-	symlink("/busybox", "/sbin/modprobe");
-	symlink("/busybox", "/sbin/depmod");
-	symlink("/iptables", "/sbin/iptables");
-	symlink("/iptables", "/sbin/iptables-restore");
-	symlink("/iptables", "/sbin/iptables-save");
+	if (symlink("/busybox", "/sh") < 0 ||
+	    symlink("/busybox", "/tar") < 0 ||
+	    symlink("/busybox", "/sbin/modprobe") < 0 ||
+	    symlink("/busybox", "/sbin/depmod") < 0) {
+		perror("failed to symlink tools to /busybox");
+		return -1;
+	}
+
+	if (symlink("/iptables", "/sbin/iptables") < 0 ||
+	    symlink("/iptables", "/sbin/iptables-restore") < 0 ||
+	    symlink("/iptables", "/sbin/iptables-save") < 0) {
+		perror("failed to symlink tools to /iptables");
+		/* TODO disable portmapping */
+	}
 
 	cmdline = read_cmdline();
 
