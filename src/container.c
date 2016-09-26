@@ -322,10 +322,11 @@ static int container_setup_mount(struct hyper_container *container)
 		return -1;
 	}
 
-	if (symlink("/proc/self/fd", "./dev/fd") < 0 ||
-	    symlink("/proc/self/fd/0", "./dev/stdin") < 0 ||
-	    symlink("/proc/self/fd/1", "./dev/stdout") < 0 ||
-	    symlink("/proc/self/fd/2", "./dev/stderr") < 0) {
+	/* all containers share the same devtmpfs, so we need to ignore the errno EEXIST */
+	if ((symlink("/proc/self/fd", "./dev/fd") < 0 && errno != EEXIST) ||
+	    (symlink("/proc/self/fd/0", "./dev/stdin") < 0 && errno != EEXIST) ||
+	    (symlink("/proc/self/fd/1", "./dev/stdout") < 0 && errno != EEXIST) ||
+	    (symlink("/proc/self/fd/2", "./dev/stderr") < 0 && errno != EEXIST)) {
 		perror("failed to symlink for /dev/fd, /dev/stdin, /dev/stdout or /dev/stderr");
 		return -1;
 	}
