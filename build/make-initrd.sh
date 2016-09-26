@@ -1,13 +1,35 @@
 #!/bin/bash
 
 rm -rf /tmp/hyperstart-rootfs
-mkdir -p /tmp/hyperstart-rootfs/lib /tmp/hyperstart-rootfs/lib64 /tmp/hyperstart-rootfs/lib/modules
+mkdir -p /tmp/hyperstart-rootfs/lib \
+	  /tmp/hyperstart-rootfs/lib64 \
+	  /tmp/hyperstart-rootfs/lib/modules
+
+mkdir -m 0755 -p /tmp/hyperstart-rootfs/dev \
+	  /tmp/hyperstart-rootfs/sys \
+	  /tmp/hyperstart-rootfs/sbin \
+	  /tmp/hyperstart-rootfs/bin \
+	  /tmp/hyperstart-rootfs/proc
 
 cp ../src/init /tmp/hyperstart-rootfs
 cp busybox /tmp/hyperstart-rootfs
 cp iptables /tmp/hyperstart-rootfs
 cp libm.so.6 /tmp/hyperstart-rootfs/lib64/
 tar -xf modules.tar -C /tmp/hyperstart-rootfs/lib/modules
+
+# create symlinks to busybox and iptables
+BUSYBOX_BINARIES=(/bin/sh /bin/tar /bin/hwclock /sbin/modprobe /sbin/depmod)
+for bin in ${BUSYBOX_BINARIES[@]}
+do
+	mkdir -p /tmp/hyperstart-rootfs/`dirname ${bin}`
+	ln -sf /busybox /tmp/hyperstart-rootfs/${bin}
+done
+IPTABLES_BINARIES=(/sbin/iptables /sbin/iptables-restore /sbin/iptables-save)
+for bin in ${IPTABLES_BINARIES[@]}
+do
+	mkdir -p /tmp/hyperstart-rootfs/`dirname ${bin}`
+	ln -sf /iptables /tmp/hyperstart-rootfs/${bin}
+done
 
 ldd /tmp/hyperstart-rootfs/init | while read line
 do
