@@ -696,6 +696,8 @@ int hyper_setup_container(struct hyper_container *container, struct hyper_pod *p
 	uint32_t type;
 	int pid;
 
+	container->exec.pod = pod;
+
 	if (pipe2(arg.pipe, O_CLOEXEC) < 0 || pipe2(arg.pipens, O_CLOEXEC) < 0) {
 		perror("create pipe between pod init execcmd failed");
 		goto fail;
