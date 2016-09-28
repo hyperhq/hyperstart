@@ -138,9 +138,7 @@ int hyper_event_write(struct hyper_event *he, int efd)
 	memmove(buf->data, buf->data + len, buf->get);
 
 	if (buf->get == 0) {
-		hyper_modify_event(ctl.efd, he, he->flag & ~(EPOLLOUT| EPOLLPRI));
-	} else if (!FULL(buf)) {
-		hyper_modify_event(ctl.efd, he, he->flag & ~EPOLLPRI);
+		hyper_modify_event(ctl.efd, he, he->flag & ~EPOLLOUT);
 	}
 
 	return 0;

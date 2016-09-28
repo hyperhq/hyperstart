@@ -110,7 +110,6 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_
 	struct hyper_buf *buf = &ctl.tty.wbuf;
 
 	if (FULL(buf)) {
-		flag |= EPOLLPRI;
 		goto out;
 	}
 
@@ -139,7 +138,6 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_
 	} while (!FULL(buf));
 
 	if (FULL(buf)) {
-		flag |= EPOLLPRI;
 		/* del & add event to move event to tail, this gives
 		 * other event a chance to write data to wbuf of tty. */
 		hyper_requeue_event(ctl.efd, de);
