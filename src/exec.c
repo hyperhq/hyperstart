@@ -846,15 +846,3 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 
 	return 0;
 }
-
-void hyper_cleanup_exec(struct hyper_pod *pod)
-{
-	struct hyper_exec *exec, *next;
-
-	list_for_each_entry_safe(exec, next, &pod->exec_head, list) {
-		fprintf(stdout, "send eof for exec seq %" PRIu64 "\n", exec->seq);
-		if (hyper_send_exec_eof(exec, 1) < 0 ||
-		    hyper_send_exec_code(exec, 1) < 0)
-			fprintf(stderr, "send eof failed\n");
-	}
-}
