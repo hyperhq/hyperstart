@@ -603,13 +603,6 @@ int hyper_run_process(struct hyper_exec *exec)
 		goto out;
 	}
 
-	if (hyper_watch_exec_pty(exec) < 0) {
-		fprintf(stderr, "add pts master event failed\n");
-		goto close_tty;
-	}
-
-	exec->ref++;
-
 	if (pipe2(pipe, O_CLOEXEC) < 0) {
 		perror("create pipe between pod init execcmd failed");
 		goto close_tty;
@@ -629,8 +622,14 @@ int hyper_run_process(struct hyper_exec *exec)
 		goto close_tty;
 	}
 
+	if (hyper_watch_exec_pty(exec) < 0) {
+		fprintf(stderr, "add pts master event failed\n");
+		goto close_tty;
+	}
+
 	exec->pid = type;
 	list_add_tail(&exec->list, &exec->pod->exec_head);
+	exec->ref++;
 	fprintf(stdout, "%s process pid %d\n", __func__, exec->pid);
 	ret = 0;
 out:
