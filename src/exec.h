@@ -51,6 +51,5 @@ int hyper_run_process(struct hyper_exec *e);
 struct hyper_exec *hyper_find_exec_by_pid(struct list_head *head, int pid);
 struct hyper_exec *hyper_find_exec_by_seq(struct hyper_pod *pod, uint64_t seq);
 int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code);
-void hyper_cleanup_exec(struct hyper_pod *pod);
 
 #endif

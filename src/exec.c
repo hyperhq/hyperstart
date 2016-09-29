@@ -26,7 +26,7 @@
 static int hyper_release_exec(struct hyper_exec *);
 static void hyper_exec_process(struct hyper_exec *exec);
 
-static int send_exec_finishing(uint64_t seq, int len, int code, int block)
+static int send_exec_finishing(uint64_t seq, int len, int code)
 {
 	struct hyper_buf *buf = &ctl.tty.wbuf;
 
@@ -50,27 +50,17 @@ static int send_exec_finishing(uint64_t seq, int len, int code, int block)
 		buf->data[buf->get + 12] = code;
 
 	buf->get += len;
-	if (!block) {
-		hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT);
-		return 0;
-	}
-
-	if (hyper_setfd_block(ctl.tty.fd) < 0 ||
-	    hyper_send_data(ctl.tty.fd, buf->data, buf->get) < 0 ||
-	    hyper_setfd_nonblock(ctl.tty.fd) < 0) {
-		fprintf(stderr, "send eof failed\n");
-		return -1;
-	}
+	hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT);
 
 	return 0;
 }
 
-static int hyper_send_exec_eof(struct hyper_exec *exec, int block) {
-	return send_exec_finishing(exec->seq, 12, -1, block);
+static int hyper_send_exec_eof(struct hyper_exec *exec) {
+	return send_exec_finishing(exec->seq, 12, -1);
 }
 
-static int hyper_send_exec_code(struct hyper_exec *exec, int block) {
-	return send_exec_finishing(exec->seq, 13, exec->code, block);
+static int hyper_send_exec_code(struct hyper_exec *exec) {
+	return send_exec_finishing(exec->seq, 13, exec->code);
 }
 
 static void pts_hup(struct hyper_event *de, int efd, struct hyper_exec *exec)
@@ -699,9 +689,9 @@ static int hyper_release_exec(struct hyper_exec *exec)
 
 	list_del_init(&exec->list);
 
-	hyper_send_exec_eof(exec, 0);
+	hyper_send_exec_eof(exec);
 
-	hyper_send_exec_code(exec, 0);
+	hyper_send_exec_code(exec);
 
 	fprintf(stdout, "%s exit code %" PRIu8"\n", __func__, exec->code);
 	if (exec->init) {
@@ -843,16 +833,4 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 		hyper_kill_container_processes(container_of(exec, struct hyper_container, exec));
 
 	return 0;
-}
-
-void hyper_cleanup_exec(struct hyper_pod *pod)
-{
-	struct hyper_exec *exec, *next;
-
-	list_for_each_entry_safe(exec, next, &pod->exec_head, list) {
-		fprintf(stdout, "send eof for exec seq %" PRIu64 "\n", exec->seq);
-		if (hyper_send_exec_eof(exec, 1) < 0 ||
-		    hyper_send_exec_code(exec, 1) < 0)
-			fprintf(stderr, "send eof failed\n");
-	}
 }
