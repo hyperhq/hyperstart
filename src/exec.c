@@ -294,7 +294,7 @@ fail:
 	return -1;
 }
 
-static int hyper_setup_exec_notty(struct hyper_exec *e, struct stdio_config *io)
+static int hyper_setup_stdio_notty(struct hyper_exec *e, struct stdio_config *io)
 {
 	if (e->errseq == 0)
 		return -1;
@@ -329,14 +329,14 @@ static int hyper_setup_exec_notty(struct hyper_exec *e, struct stdio_config *io)
 	return 0;
 }
 
-static int hyper_setup_exec_tty(struct hyper_exec *e, struct stdio_config *io)
+static int hyper_setup_stdio(struct hyper_exec *e, struct stdio_config *io)
 {
 	int unlock = 0;
 	int ptymaster;
 	char ptmx[512];
 
 	if (!e->tty) { // don't use tty for stdio
-		return hyper_setup_exec_notty(e, io);
+		return hyper_setup_stdio_notty(e, io);
 	}
 
 	if (e->errseq > 0) {
@@ -425,7 +425,7 @@ out:
 	return ret;
 }
 
-static int hyper_watch_exec_pty(struct hyper_exec *exec, struct stdio_config *io)
+static int hyper_setup_stdio_events(struct hyper_exec *exec, struct stdio_config *io)
 {
 	if (exec->tty) {
 		io->stdinevfd = dup(exec->ptyfd);
@@ -604,7 +604,7 @@ int hyper_run_process(struct hyper_exec *exec)
 		goto out;
 	}
 
-	if (hyper_setup_exec_tty(exec, &io) < 0) {
+	if (hyper_setup_stdio(exec, &io) < 0) {
 		fprintf(stderr, "setup exec tty failed\n");
 		goto out;
 	}
@@ -628,7 +628,7 @@ int hyper_run_process(struct hyper_exec *exec)
 		goto close_tty;
 	}
 
-	if (hyper_watch_exec_pty(exec, &io) < 0) {
+	if (hyper_setup_stdio_events(exec, &io) < 0) {
 		fprintf(stderr, "add pts master event failed\n");
 		goto close_tty;
 	}
