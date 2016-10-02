@@ -829,10 +829,10 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 	close(exec->ptyfd);
 	exec->ptyfd = -1;
 
-	hyper_release_exec(exec);
-
 	if (exec->init)
 		hyper_kill_container_processes(container_of(exec, struct hyper_container, exec));
+
+	hyper_release_exec(exec);
 
 	return 0;
 }
