@@ -529,7 +529,7 @@ static int hyper_setup_container_rootfs(void *data)
 	/* To create files/directories accessible for all users. */
 	umask(0);
 
-	if (hyper_rescan_scsi() < 0) {
+	if (container->fstype && hyper_rescan_scsi() < 0) {
 		fprintf(stdout, "rescan scsi failed\n");
 		goto fail;
 	}
