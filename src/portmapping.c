@@ -271,12 +271,28 @@ int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_po
 		return 0;
 	}
 
+	// only allow network request from internal white list
+	int i = 0, j = 0;
+	char rule[128] = {0};
+	for (j=0; j<pod->portmap_white_lists->i_num; j++) {
+		sprintf(rule, "-s %s -j ACCEPT",
+			pod->portmap_white_lists->internal_networks[j]);
+		struct ipt_rule accept_rule = {
+			.table = "filter",
+			.op = "-I",
+			.chain = "hyperstart-INPUT",
+			.rule = rule,
+		};
+		if (hyper_setup_iptables_rule(accept_rule)<0) {
+			fprintf(stderr, "setup accept_rule '%s' failed\n", rule);
+			return -1;
+		}
+	}
+
 	if (c->ports_num == 0) {
 		return 0;
 	}
 
-	int i = 0, j = 0;
-	char rule[128] = {0};
 	char *network = NULL;
 	for (i=0; i<c->ports_num; i++) {
 		// setup port mapping only if host_port is set
@@ -322,25 +338,6 @@ int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_po
 				}
 			}
 		}
-
-		// only allow network request from white list
-		for (j=0; j<pod->portmap_white_lists->i_num; j++) {
-			sprintf(rule, "-s %s -p %s -m %s --dport %d -j ACCEPT",
-				pod->portmap_white_lists->internal_networks[j],
-				c->ports[i].protocol,
-				c->ports[i].protocol,
-				c->ports[i].container_port);
-			struct ipt_rule accept_rule = {
-				.table = "filter",
-				.op = "-I",
-				.chain = "hyperstart-INPUT",
-				.rule = rule,
-			};
-			if (hyper_setup_iptables_rule(accept_rule)<0) {
-				fprintf(stderr, "setup accept_rule '%s' failed\n", rule);
-				return -1;
-			}
-		}
 	}
 
 	return 0;
@@ -353,12 +350,26 @@ void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper
 		return;
 	}
 
+	int i = 0, j = 0;
+	char rule[128] = {0};
+	for (j=0; j<pod->portmap_white_lists->i_num; j++) {
+		sprintf(rule, "-s %s -j ACCEPT",
+			pod->portmap_white_lists->internal_networks[j]);
+		struct ipt_rule accept_rule = {
+			.table = "filter",
+			.op = "-D",
+			.chain = "hyperstart-INPUT",
+			.rule = rule,
+		};
+		if (hyper_setup_iptables_rule(accept_rule)<0) {
+			fprintf(stderr, "cleanup accept_rule '%s' failed\n", rule);
+		}
+	}
+
 	if (c->ports_num == 0) {
 		return;
 	}
 
-	int i = 0, j = 0;
-	char rule[128] = {0};
 	char *network = NULL;
 	for (i=0; i<c->ports_num; i++) {
 		// clean up port mapping only if host_port is set
@@ -400,23 +411,6 @@ void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper
 				if (hyper_setup_iptables_rule(accept_rule)<0) {
 					fprintf(stderr, "cleanup accept_rule '%s' failed\n", rule);
 				}
-			}
-		}
-
-		for (j=0; j<pod->portmap_white_lists->i_num; j++) {
-			sprintf(rule, "-s %s -p %s -m %s --dport %d -j ACCEPT",
-				pod->portmap_white_lists->internal_networks[j],
-				c->ports[i].protocol,
-				c->ports[i].protocol,
-				c->ports[i].container_port);
-			struct ipt_rule accept_rule = {
-				.table = "filter",
-				.op = "-D",
-				.chain = "hyperstart-INPUT",
-				.rule = rule,
-			};
-			if (hyper_setup_iptables_rule(accept_rule)<0) {
-				fprintf(stderr, "cleanup accept_rule '%s' failed\n", rule);
 			}
 		}
 	}
