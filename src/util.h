@@ -41,4 +41,6 @@ struct passwd *hyper_getpwnam(const char *name);
 struct group *hyper_getgrnam(const char *name);
 int hyper_getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroups);
 ssize_t nonblock_read(int fd, void *buf, size_t count);
+int hyper_send_fd(int fd, int fd_to_send);
+int hyper_recv_fd(int fd, int *fd_to_recv);
 #endif

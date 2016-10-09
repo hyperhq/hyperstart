@@ -656,26 +656,29 @@ out:
 	return ret;
 }
 
-static int hyper_cmd_write_file(char *json, int length)
+static int hyper_cmd_rw_file(char *json, int length, uint32_t *rdatalen, uint8_t **rdata, int rw)
 {
 	struct file_command cmd;
 	struct hyper_container *c;
 	struct hyper_pod *pod = &global_pod;
-	int pipe[2] = {-1, -1};
-	int pid, mntns = -1, fd;
+	int pid, mntns = -1, fd = -1;
 	int datalen, len = 0, size, ret = -1;
 	char *data = NULL;
+	int sockpair[2] = {-1, -1};
 
-	fprintf(stdout, "%s\n", __func__);
+	fprintf(stdout, "%s: %s\n", __func__, rw == WRITEFILE ? "write" : "read");
 
-	// TODO: send the data via hyperstream rather than append it at the end of the command
-	data = strchr(json, '}');
-	if (data == NULL) {
-		goto out;
+	if (rw == WRITEFILE) {
+		// TODO: send the data via hyperstream rather than append it at the end of the command	
+		data = strchr(json, '}');
+		if (data == NULL) {
+			goto out;
+		}
+		data++;
+		datalen = length - (data - json);
+		length = data - json;
 	}
-	data++;
-	datalen = length - (data - json);
-	length = data - json;
+
 	if (hyper_parse_file_command(&cmd, json, length) < 0) {
 		goto out;
 	}
@@ -683,11 +686,6 @@ static int hyper_cmd_write_file(char *json, int length)
 	c = hyper_find_container(pod, cmd.id);
 	if (c == NULL) {
 		fprintf(stderr, "can not find container whose id is %s\n", cmd.id);
-		goto out;
-	}
-
-	if (pipe2(pipe, O_CLOEXEC) < 0) {
-		perror("create writter pipe failed");
 		goto out;
 	}
 
@@ -697,195 +695,85 @@ static int hyper_cmd_write_file(char *json, int length)
 		goto out;
 	}
 
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockpair) < 0) {
+		perror("fail to set socket pair");
+		goto out;
+	}
+
 	pid = fork();
 	if (pid < 0) {
-		perror("fail to fork writter process");
-		goto out;
-	} else if (pid > 0) {
-		uint32_t type;
-
-		if (hyper_get_type(pipe[0], &type) < 0 || type != READY) {
-			fprintf(stderr, "get incorrect message type %d, expect READY\n", type);
-			goto out;
+		perror("fail to fork child process");
+		goto out;		
+	} else if (pid == 0) {
+		/* TODO: wait for container finishing setup root */
+		if (setns(mntns, CLONE_NEWNS) < 0) {
+			perror("fail to enter container ns");
+			exit(-1);
 		}
 
-		ret = 0;
+		if (rw == WRITEFILE) {
+			fd = open(cmd.file, O_CREAT| O_TRUNC| O_WRONLY, 0644);
+		} else {
+			fd = open(cmd.file, O_RDONLY);
+		}
+		if (fd < 0) {
+			perror("fail to open target file");
+			exit(-1);
+		}
+		if (hyper_send_fd(sockpair[0], fd) < 0) {
+			perror("fail to send fd");
+			exit(-1);
+		}
+		close(fd);
+		
+		exit(0);
+	}
+
+	if (hyper_recv_fd(sockpair[1], &fd) < 0) {
+		perror("fail to recv fd");
 		goto out;
 	}
 
-	/* TODO: wait for container finishing setup root */
-	if (setns(mntns, CLONE_NEWNS) < 0) {
-		perror("fail to enter container ns");
-		goto exit;
-	}
-
-	fprintf(stdout, "write file %s, data len %d\n", cmd.file, datalen);
-
-	fd = open(cmd.file, O_CREAT| O_TRUNC| O_WRONLY, 0644);
-	if (fd < 0) {
-		perror("fail to open target file");
-		goto exit;
+	if (rw == READFILE) {
+		struct stat st;
+		if(fstat(fd, &st) < 0) {
+			perror("fail to state file");
+			goto out;
+		}
+		*rdatalen = datalen = st.st_size;
+		*rdata = data = malloc(datalen);
+		if (*rdata == NULL) {
+			fprintf(stderr, "allocate memory for reading file failed\n");
+			goto out;
+		}
+		fprintf(stdout, "file length %d\n", *rdatalen);
 	}
 
 	while(len < datalen) {
-		size = write(fd, data + len, datalen - len);
+		if (rw == WRITEFILE) {
+			size = write(fd, data + len, datalen - len);
+		} else {
+			size = read(fd, data + len, datalen - len);
+		}
 
 		if (size < 0) {
 			if (errno == EINTR)
 				continue;
 
-			perror("fail to write data to file");
-			goto exit;
+			perror("fail to operate data to file");
+			goto out;
 		}
 
 		len += size;
 	}
 	ret = 0;
-exit:
-	hyper_send_type(pipe[1], ret ? ERROR : READY);
-	_exit(0);
+
 out:
-	close(pipe[0]);
-	close(pipe[1]);
+	close(fd);
+	close(sockpair[0]);
+	close(sockpair[1]);
 	free(cmd.id);
 	free(cmd.file);
-
-	return 0;
-}
-
-struct hyper_file_arg {
-	int		mntns;
-	int		pipe[2];
-	char		*file;
-	char		root[128];
-	uint32_t	*datalen;
-	uint8_t		**data;
-};
-
-static int hyper_do_cmd_read_file(void *data)
-{
-	struct stat st;
-	int len = 0, size, fd, ret = -1;
-	struct hyper_file_arg *arg = data;
-
-	/* TODO: wait for container finishing setup root */
-	if (setns(arg->mntns, CLONE_NEWNS) < 0) {
-		perror("fail to enter container ns");
-		goto err;
-	}
-
-	fprintf(stdout, "read file %s\n", arg->file);
-
-	if (stat(arg->file, &st) < 0) {
-		perror("fail to state file");
-		goto err;
-	}
-
-	*arg->datalen = st.st_size;
-	*arg->data = malloc(*arg->datalen);
-	if (*arg->data == NULL) {
-		fprintf(stderr, "allocate memory for reading file failed\n");
-		goto err;
-	}
-
-	fd = open(arg->file, O_RDONLY);
-	if (fd < 0) {
-		perror("fail to open target file");
-		goto err;
-	}
-
-	fprintf(stdout, "file length %d\n", *arg->datalen);
-	while(len < *arg->datalen) {
-		size = read(fd, *arg->data + len, *arg->datalen - len);
-
-		if (size < 0) {
-			if (errno == EINTR)
-				continue;
-
-			perror("fail to read data from file");
-			goto err;
-		}
-
-		len += size;
-	}
-
-	fprintf(stdout, "read data %s\n", *arg->data);
-	ret = 0;
-err:
-	hyper_send_type(arg->pipe[1], ret ? ERROR : READY);
-	_exit(ret);
-}
-
-static int hyper_cmd_read_file(char *json, int length, uint32_t *datalen, uint8_t **data)
-{
-	struct file_command cmd;
-	struct hyper_container *c;
-	struct hyper_pod *pod = &global_pod;
-	struct hyper_file_arg arg = {
-		.pipe = {-1, -1},
-	};
-	int stacksize = getpagesize() * 4;
-	void *stack = NULL;
-	int pid, ret = -1, status;
-	uint32_t type;
-
-	fprintf(stdout, "%s\n", __func__);
-
-	if (hyper_parse_file_command(&cmd, json, length) < 0) {
-		goto out;
-	}
-
-	c = hyper_find_container(pod, cmd.id);
-	if (c == NULL) {
-		fprintf(stderr, "can not find container whose id is %s\n", cmd.id);
-		goto out;
-	}
-
-	if (pipe2(arg.pipe, O_CLOEXEC) < 0) {
-		perror("create reader pipe failed");
-		goto out;
-	}
-
-	arg.mntns = c->ns;
-	if (arg.mntns < 0) {
-		perror("fail to open mnt ns");
-		goto out;
-	}
-
-	arg.file = cmd.file;
-	arg.datalen = datalen;
-	arg.data = data;
-
-	stack = malloc(stacksize);
-	if (stack == NULL) {
-		perror("fail to allocate stack for container init");
-		goto out;
-	}
-
-	pid = clone(hyper_do_cmd_read_file, stack + stacksize, CLONE_VM| SIGQUIT, &arg);
-	if (pid < 0) {
-		perror("fail to fork reader process");
-		goto out;
-	}
-
-	if (waitpid(pid, &status, __WCLONE) <= 0) {
-		perror("waiting hyper_do_cmd_read_file finish failed");
-		goto out;
-	}
-
-	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
-		fprintf(stderr, "%s to incorrect type %" PRIu32 "\n", __func__, type);
-		goto out;
-	}
-
-	ret = 0;
-out:
-	close(arg.pipe[0]);
-	close(arg.pipe[1]);
-	free(cmd.id);
-	free(cmd.file);
-	free(stack);
-
 	return ret;
 }
 
@@ -1123,10 +1011,10 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		ret = hyper_exec_cmd((char *)buf->data + 8, len - 8);
 		break;
 	case WRITEFILE:
-		ret = hyper_cmd_write_file((char *)buf->data + 8, len - 8);
+		ret = hyper_cmd_rw_file((char *)buf->data + 8, len - 8, NULL, NULL, WRITEFILE);
 		break;
 	case READFILE:
-		ret = hyper_cmd_read_file((char *)buf->data + 8, len - 8, &datalen, &data);
+		ret = hyper_cmd_rw_file((char *)buf->data + 8, len - 8, &datalen, &data, READFILE);
 		break;
 	case PING:
 	case GETPOD:

@@ -730,3 +730,67 @@ ssize_t nonblock_read(int fd, void *buf, size_t count)
 
 	return len > 0 ? len : ret;
 }
+
+int hyper_send_fd(int sock, int fd) {
+	struct iovec	iov[1];
+	struct msghdr	msg;
+	char   buf[1];
+	union {
+		struct cmsghdr cm;
+		char control[CMSG_SPACE(sizeof(int))];
+	} control_un;
+	struct cmsghdr *cmptr;
+
+	msg.msg_name	= NULL;
+	msg.msg_namelen	= 0;
+	iov[0].iov_base = buf;
+	iov[0].iov_len	= 1;
+	msg.msg_iov	= iov;
+	msg.msg_iovlen	= 1;
+
+	msg.msg_control = control_un.control;
+	msg.msg_controllen = sizeof(control_un.control);
+	cmptr = CMSG_FIRSTHDR(&msg);
+	cmptr->cmsg_level = SOL_SOCKET;
+	cmptr->cmsg_type  = SCM_RIGHTS;
+	cmptr->cmsg_len	  = CMSG_LEN(sizeof(int));
+	*(int*)CMSG_DATA(cmptr) = fd;
+	
+	if (sendmsg(sock, &msg, 0) != 1) {
+		return -1;
+	}
+
+	return 0;
+}
+
+int hyper_recv_fd(int sock, int *fd) {
+	char	buf[1];
+	struct iovec	iov[1];
+	struct msghdr	msg;
+	union {
+		struct cmsghdr cm;
+		char control[CMSG_SPACE(sizeof(int))];
+	} control_un;
+	struct cmsghdr	*cmptr;
+
+	msg.msg_control = control_un.control;
+	msg.msg_controllen = sizeof(control_un.control);
+	
+	msg.msg_name	= NULL;
+	msg.msg_namelen	= 0;
+	iov[0].iov_base = buf;
+	iov[0].iov_len	= 1;
+	msg.msg_iov	= iov;
+	msg.msg_iovlen	= 1;
+
+	if (recvmsg(sock, &msg, 0) != 1) {
+		return -1;
+	}
+
+	if ((cmptr = CMSG_FIRSTHDR(&msg)) == NULL || cmptr->cmsg_len != CMSG_LEN(sizeof(int))) {
+		return -1;
+	}
+	
+	*fd = *(int*)CMSG_DATA(cmptr);
+	return 0;
+}
