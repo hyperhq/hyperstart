@@ -1200,8 +1200,15 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 	// test it with '>=' to leave at least one byte in hyper_channel_handle(),
 	// so that hyper_channel_handle() can convert the data to c-string inplace.
 	if (len >= buf->size) {
-		fprintf(stderr, "get length %" PRIu32", too long\n", len);
-		return -1;
+		uint8_t *new_data;
+		fprintf(stderr, "get length %" PRIu32", too long, extend buffer\n", len);
+		new_data = realloc(buf->data, len + 1);
+		if (!new_data) {
+			perror("realloc channel read buffer failed");
+			return -1;
+		}
+		buf->data = new_data;
+		buf->size = len + 1;
 	}
 
 	size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
