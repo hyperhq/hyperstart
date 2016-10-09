@@ -1048,38 +1048,34 @@ static int hyper_ttyfd_read(struct hyper_event *he, int efd)
 	int size;
 	int ret;
 
-	if (buf->get < STREAM_HEADER_SIZE) {
-		size = nonblock_read(he->fd, buf->data + buf->get, STREAM_HEADER_SIZE - buf->get);
-		if (size < 0) {
-			return size;
-		}
-		buf->get += size;
-		if (buf->get < STREAM_HEADER_SIZE) {
-			return 0;
-		}
-	}
-
-	len = hyper_get_be32(buf->data + STREAM_HEADER_LENGTH_OFFSET);
-	fprintf(stdout, "%s: get length %" PRIu32"\n", __func__, len);
-	if (len > buf->size) {
-		fprintf(stderr, "get length %" PRIu32", too long\n", len);
-		return -1;
-	}
-
-	size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
+	size = nonblock_read(he->fd, buf->data + buf->get, buf->size - buf->get);
 	if (size < 0) {
 		return size;
 	}
 	buf->get += size;
-	if (buf->get < len) {
-		return 0;
+
+	for (;;) {
+		if (buf->get < STREAM_HEADER_SIZE) {
+			return 0;
+		}
+		len = hyper_get_be32(buf->data + STREAM_HEADER_LENGTH_OFFSET);
+		fprintf(stdout, "%s: get length %" PRIu32"\n", __func__, len);
+		if (len > buf->size) {
+			fprintf(stderr, "get length %" PRIu32", too long\n", len);
+			return -1;
+		}
+		if (buf->get < len) {
+			return 0;
+		}
+
+		/* get and consume the data */
+		ret = hyper_ttyfd_handle(he, len);
+		memmove(buf->data, buf->data + len, buf->get - len);
+		buf->get -= len;
+		if (ret < 0) {
+			return -1;
+		}
 	}
-
-	/* get and consume the whole data */
-	ret = hyper_ttyfd_handle(he, len);
-	buf->get = 0;
-
-	return ret == 0 ? 0 : -1;
 }
 
 static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
@@ -1090,8 +1086,6 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 	uint8_t *data = NULL;
 	int i, ret = 0;
 
-	// append a null byte to it. hyper_channel_read() left this room for us.
-	buf->data[buf->get] = 0;
 	for (i = 0; i < buf->get; i++)
 		fprintf(stdout, "%0x ", buf->data[i]);
 
@@ -1177,34 +1171,7 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 	int size;
 	int ret;
 
-	fprintf(stdout, "%s\n", __func__);
-
-	if (buf->get < CONTROL_HEADER_SIZE) {
-		size = nonblock_read(he->fd, buf->data + buf->get, CONTROL_HEADER_SIZE - buf->get);
-		if (size < 0) {
-			return size;
-		}
-		if (size > 0) {
-			/* control channel, need ack */
-			hyper_set_be32(data, size);
-			hyper_send_msg(he->fd, NEXT, 4, data);
-		}
-		buf->get += size;
-		if (buf->get < CONTROL_HEADER_SIZE) {
-			return 0;
-		}
-	}
-
-	len = hyper_get_be32(buf->data + CONTROL_HEADER_LENGTH_OFFSET);
-	fprintf(stdout, "get length %" PRIu32"\n", len);
-	// test it with '>=' to leave at least one byte in hyper_channel_handle(),
-	// so that hyper_channel_handle() can convert the data to c-string inplace.
-	if (len >= buf->size) {
-		fprintf(stderr, "get length %" PRIu32", too long\n", len);
-		return -1;
-	}
-
-	size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
+	size = nonblock_read(he->fd, buf->data + buf->get, buf->size - buf->get);
 	if (size < 0) {
 		return size;
 	}
@@ -1214,15 +1181,29 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 		hyper_send_msg(he->fd, NEXT, 4, data);
 	}
 	buf->get += size;
-	if (buf->get < len) {
-		return 0;
+
+	for (;;) {
+		if (buf->get < CONTROL_HEADER_SIZE) {
+			return 0;
+		}
+		len = hyper_get_be32(buf->data + CONTROL_HEADER_LENGTH_OFFSET);
+		fprintf(stdout, "%s get length %" PRIu32"\n", __func__, len);
+		if (len > buf->size) {
+			fprintf(stderr, "get length %" PRIu32", too long\n", len);
+			return -1;
+		}
+		if (buf->get < len) {
+			return 0;
+		}
+
+		/* get and consume the data */
+		ret = hyper_channel_handle(he, len);
+		memmove(buf->data, buf->data + len, buf->get - len);
+		buf->get -= len;
+		if (ret < 0) {
+			return -1;
+		}
 	}
-
-	/* get and consume the whole data */
-	ret = hyper_channel_handle(he, len);
-	buf->get = 0;
-
-	return ret == 0 ? 0 : -1;
 }
 
 static struct hyper_event_ops hyper_channel_ops = {
