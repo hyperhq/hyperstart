@@ -30,6 +30,7 @@ struct hyper_interface {
 	char		*device;
 	char		*ipaddr;
 	char		*mask;
+	char            *new_device_name;
 };
 
 struct hyper_route {

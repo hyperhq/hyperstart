@@ -773,6 +773,9 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 		} else if (json_token_streq(json, &toks[i], "netMask")) {
 			iface->mask = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "net mask is %s\n", iface->mask);
+		} else if (json_token_streq(json, &toks[i], "newDeviceName")) {
+			iface->new_device_name = (json_token_str(json, &toks[++i]));
+			fprintf(stdout, "new interface name is %s\n", iface->new_device_name);
 		} else {
 			fprintf(stderr, "get unknown section %s in interfaces\n",
 				json_token_str(json, &toks[i]));
@@ -786,6 +789,7 @@ fail:
 	free(iface->device);
 	free(iface->ipaddr);
 	free(iface->mask);
+	free(iface->new_device_name);
 	return -1;
 }
 
