@@ -1342,14 +1342,6 @@ int main(int argc, char *argv[])
 {
 	char *cmdline, *ctl_serial, *tty_serial;
 
-	if (hyper_mkdir("/dev", 0755) < 0 ||
-	    hyper_mkdir("/sys", 0755) < 0 ||
-	    hyper_mkdir("/sbin", 0755) < 0 ||
-	    hyper_mkdir("/proc", 0755) < 0) {
-		perror("create basic directory failed");
-		return -1;
-	}
-
 	if (mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) == -1) {
 		perror("mount proc failed");
 		return -1;
@@ -1375,21 +1367,6 @@ int main(int argc, char *argv[])
 	if (mount("devpts", "/dev/pts", "devpts", MS_NOSUID| MS_NOEXEC, NULL) == -1) {
 		perror("mount devpts failed");
 		return -1;
-	}
-
-	if (symlink("/busybox", "/sh") < 0 ||
-	    symlink("/busybox", "/tar") < 0 ||
-	    symlink("/busybox", "/sbin/modprobe") < 0 ||
-	    symlink("/busybox", "/sbin/depmod") < 0) {
-		perror("failed to symlink tools to /busybox");
-		return -1;
-	}
-
-	if (symlink("/iptables", "/sbin/iptables") < 0 ||
-	    symlink("/iptables", "/sbin/iptables-restore") < 0 ||
-	    symlink("/iptables", "/sbin/iptables-save") < 0) {
-		perror("failed to symlink tools to /iptables");
-		/* TODO disable portmapping */
 	}
 
 	cmdline = read_cmdline();

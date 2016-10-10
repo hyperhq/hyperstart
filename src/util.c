@@ -71,7 +71,7 @@ int hyper_list_dir(char *path)
 int hyper_copy_dir(char *src, char *dest)
 {
 	char cmd[512];
-	snprintf(cmd, sizeof(cmd), "/tar cf - -C %s . | /tar fx - -C %s", src, dest);
+	snprintf(cmd, sizeof(cmd), "tar cf - -C %s . | tar fx - -C %s", src, dest);
 
 	return hyper_cmd(cmd);
 }
@@ -82,7 +82,7 @@ void hyper_sync_time_hctosys() {
 	if (pid < 0) {
 		perror("fail to fork to copy directory");
 	} else if (pid == 0) {
-		execlp("/busybox", "hwclock", "-s", NULL);
+		execlp("hwclock", "hwclock", "-s", NULL);
 		perror("exec hwclock -s command failed");
 		exit(-1);
 	}
@@ -703,7 +703,7 @@ int hyper_cmd(char *cmd)
 		return -1;
 	} else {
 		fprintf(stdout, "executing cmd %s\n", cmd);
-		execlp("/busybox", "sh", "-c", cmd, NULL);
+		execlp("sh", "sh", "-c", cmd, NULL);
 	}
 
 	return -1;

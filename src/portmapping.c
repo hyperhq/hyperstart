@@ -16,7 +16,7 @@
 
 int hyper_init_modules() 
 {
-	int status = hyper_cmd("/sbin/depmod");
+	int status = hyper_cmd("depmod");
 	if (status != 0) {
 		fprintf(stderr, "depmod failed, status: %d\n", status);
 		return -1;
@@ -32,10 +32,10 @@ int hyper_setup_iptables_rule(struct ipt_rule rule)
 	int check = -1;
 
 	if (rule.rule != NULL) {
-		sprintf(check_cmd, "/sbin/iptables -t %s -C %s %s", rule.table, rule.chain, rule.rule);
-		sprintf(cmd, "/sbin/iptables -t %s %s %s %s", rule.table, rule.op, rule.chain, rule.rule);
+		sprintf(check_cmd, "iptables -t %s -C %s %s", rule.table, rule.chain, rule.rule);
+		sprintf(cmd, "iptables -t %s %s %s %s", rule.table, rule.op, rule.chain, rule.rule);
 	} else {
-		sprintf(cmd, "/sbin/iptables -t %s %s %s", rule.table, rule.op, rule.chain);
+		sprintf(cmd, "iptables -t %s %s %s", rule.table, rule.op, rule.chain);
 	}
 
 	if (strlen(check_cmd) > 0) {
