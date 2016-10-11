@@ -538,7 +538,6 @@ int hyper_open_channel(char *channel, int mode)
 		fd = -1;
 
 		if (strncmp(name, channel, strlen(channel))) {
-			fprintf(stderr, "channel %s, directory %s\n", channel, name);
 			continue;
 		}
 

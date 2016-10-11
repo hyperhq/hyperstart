@@ -915,6 +915,9 @@ void hyper_cleanup_dns(struct hyper_pod *pod)
 {
 	int fd, i;
 
+	if (pod->dns == NULL)
+		return;
+
 	for (i = 0; i < pod->d_num; i++) {
 		free(pod->dns[i]);
 	}
