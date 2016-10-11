@@ -18,14 +18,6 @@ struct rtnl_handle {
 	__u32 dump;
 };
 
-typedef struct {
-	__u8 family;
-	__u8 bytelen;
-	__s16 bitlen;
-	__u32 flags;
-	__u32 data[8];
-} inet_prefix;
-
 struct hyper_interface {
 	char		*device;
 	char		*ipaddr;
