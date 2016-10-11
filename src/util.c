@@ -565,16 +565,6 @@ int hyper_insmod(char *module)
 }
 #endif
 
-int hyper_open_serial_dev(char *tty)
-{
-	int fd = open(tty, O_RDWR | O_CLOEXEC | O_NOCTTY);
-
-	if (fd < 0)
-		perror("fail to open tty device");
-
-	return fd;
-}
-
 int hyper_setfd_cloexec(int fd)
 {
 	int flags = fcntl(fd, F_GETFD);

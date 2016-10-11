@@ -55,13 +55,6 @@ struct file_command {
 	char		*file;
 };
 
-struct hyper_writter {
-	char		*id;
-	char		*file;
-	uint8_t		*data;
-	int		len;
-};
-
 struct hyper_ctl {
 	int			efd;
 	struct hyper_event	tty;
