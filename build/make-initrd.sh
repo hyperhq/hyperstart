@@ -15,7 +15,13 @@ cp ../src/init /tmp/hyperstart-rootfs
 cp busybox /tmp/hyperstart-rootfs
 cp iptables /tmp/hyperstart-rootfs
 cp libm.so.6 /tmp/hyperstart-rootfs/lib64/
-tar -xf modules.tar -C /tmp/hyperstart-rootfs/lib/modules
+
+if [ "$1"x = "aarch64"x ]; then
+	echo "build hyperstart for aarch64"
+	tar -xf modules_aarch64.tar -C /tmp/hyperstart-rootfs/lib/modules
+else
+	tar -xf modules.tar -C /tmp/hyperstart-rootfs/lib/modules
+fi
 
 # create symlinks to busybox and iptables
 BUSYBOX_BINARIES=(/bin/sh /bin/tar /bin/hwclock /sbin/modprobe /sbin/depmod)

@@ -38,6 +38,17 @@ if test "$fail" = "1" ; then
     AC_MSG_ERROR(Unable to find necessary functions)
 fi
 
+AC_ARG_WITH([aarch64],
+            [AS_HELP_STRING([--with-aarch64],
+                            [run hyperstart with 64-bit ARM architecture])],
+            [],[with_aarch64=no])
+
+if test "x$with_aarch64" != "xno" ; then
+    AC_DEFINE_UNQUOTED([WITH_AARCH64], 1, [run hyperstart with 64-bit ARM architecture])
+fi
+
+AM_CONDITIONAL([WITH_AARCH64], [test "x$with_aarch64" != "xno"])
+
 AC_ARG_WITH([vbox],
             [AS_HELP_STRING([--with-vbox],
                             [run hyperstart on Virtualbox])],
@@ -61,6 +72,7 @@ AC_MSG_RESULT([
 	prefix:		${prefix}
 
 	with-vbox:	${with_vbox}
+	with-aarch64:	${with_aarch64}
 
 	compiler:          ${CC}
 	cflags:            ${CFLAGS}
