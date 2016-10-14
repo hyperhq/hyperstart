@@ -12,6 +12,11 @@ clone this repo, and make sure you have build-essentials installed. Go into the 
 
 Then you can find `hyper-initrd.img` in the build directory, together with a pre-built kernel.
 
+If you want to run hyperstart with 64-bit ARM architecture, please reconfigure with flag --with-aarch64,
+
+    > ./configure --with-aarch64
+    > make
+
 If you want to get the boot disk file for VirtualBox, please reconfigure with flag --with-vbox,
 
     > ./configure --with-vbox
