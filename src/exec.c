@@ -435,9 +435,8 @@ static int hyper_setup_stdio_events(struct hyper_exec *exec, struct stdio_config
 		}
 	}
 
-	fprintf(stdout, "hyper_init_event container pts event %p, ops %p, fd %d\n",
-		&exec->stdinev, &in_ops, exec->stdinev.fd);
-
+	fprintf(stdout, "hyper_init_event exec stdin event %p, ops %p, fd %d\n",
+		&exec->stdinev, &in_ops, io->stdinevfd);
 	exec->stdinev.fd = io->stdinevfd;
 	if (hyper_init_event(&exec->stdinev, &in_ops, NULL) < 0 ||
 	    hyper_add_event(ctl.efd, &exec->stdinev, EPOLLOUT) < 0) {
@@ -446,6 +445,8 @@ static int hyper_setup_stdio_events(struct hyper_exec *exec, struct stdio_config
 	}
 	exec->ref++;
 
+	fprintf(stdout, "hyper_init_event exec stdout event %p, ops %p, fd %d\n",
+		&exec->stdoutev, &out_ops, io->stdoutevfd);
 	exec->stdoutev.fd = io->stdoutevfd;
 	if (hyper_init_event(&exec->stdoutev, &out_ops, NULL) < 0 ||
 	    hyper_add_event(ctl.efd, &exec->stdoutev, EPOLLIN) < 0) {
@@ -454,6 +455,8 @@ static int hyper_setup_stdio_events(struct hyper_exec *exec, struct stdio_config
 	}
 	exec->ref++;
 
+	fprintf(stdout, "hyper_init_event exec stderr event %p, ops %p, fd %d\n",
+		&exec->stderrev, &err_ops, io->stderrevfd);
 	exec->stderrev.fd = io->stderrevfd;
 	if (hyper_init_event(&exec->stderrev, &err_ops, NULL) < 0 ||
 	    hyper_add_event(ctl.efd, &exec->stderrev, EPOLLIN) < 0) {
