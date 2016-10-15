@@ -930,8 +930,9 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 
 	fprintf(stdout, "find exec %s pid %d, seq is %" PRIu64 "\n",
 		exec->container_id ? exec->container_id : "pod", exec->pid, exec->seq);
-	// if exec is exited, the event fd of exec is invalid. don't accept any input.
-	if (exec->exit || exec->close_stdin_request) {
+	// if exec is exited or stdin is closed by process, the event fd of exec is invalid.
+	// don't accept any input.
+	if (exec->exit || exec->close_stdin_request || exec->stdinev.fd < 0) {
 		fprintf(stdout, "exec seq %" PRIu64 " exited, don't accept any input\n", exec->seq);
 		return 0;
 	}
