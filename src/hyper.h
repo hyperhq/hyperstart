@@ -57,9 +57,10 @@ struct file_command {
 
 struct hyper_ctl {
 	int			efd;
-	int			vsock;
 	struct hyper_event	tty;
 	struct hyper_event	chan;
+	struct hyper_event	vsock_ctl_listener;
+	struct hyper_event	vsock_msg_listener;
 };
 
 static inline int hyper_symlink(char *oldpath, char *newpath)
