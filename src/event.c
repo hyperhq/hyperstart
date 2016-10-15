@@ -179,7 +179,7 @@ int hyper_handle_event(int efd, struct epoll_event *event)
 	}
 
 	if (event->events & EPOLLERR) {
-		fprintf(stderr, "get epoll err of not epool in event\n");
+		fprintf(stdout, "get epoll err on event: %p\n", he);
 		if (he->ops->hup)
 			he->ops->hup(he, efd);
 		return 0;
