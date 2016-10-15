@@ -905,7 +905,7 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 
 	seq = hyper_get_be64(rbuf->data);
 
-	dprintf(stdout, "\n%s seq %" PRIu64", len %" PRIu32"\n", __func__, seq, len - 12);
+	fprintf(stdout, "\n%s seq %" PRIu64", len %" PRIu32"\n", __func__, seq, len - 12);
 
 	exec = hyper_find_exec_by_seq(pod, seq);
 	if (exec == NULL) {
@@ -928,8 +928,8 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 		return 0;
 	}
 
-	dprintf(stdout, "find exec %s pid %d, seq is %" PRIu64 "\n",
-		exec->id ? exec->id : "pod", exec->pid, exec->seq);
+	fprintf(stdout, "find exec %s pid %d, seq is %" PRIu64 "\n",
+		exec->container_id ? exec->container_id : "pod", exec->pid, exec->seq);
 	// if exec is exited, the event fd of exec is invalid. don't accept any input.
 	if (exec->exit || exec->close_stdin_request) {
 		fprintf(stdout, "exec seq %" PRIu64 " exited, don't accept any input\n", exec->seq);
@@ -940,6 +940,7 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 	/* size == 0 means we had received eof */
 	if (size == 0 && !exec->tty) {
 		exec->close_stdin_request = 1;
+		fprintf(stdout, "get close stdin request\n");
 		/* we can't hup the stdinev here, force hup on next write */
 		if (hyper_modify_event(ctl.efd, &exec->stdinev, EPOLLOUT) < 0) {
 			fprintf(stderr, "modify exec pts event to in & out failed\n");
