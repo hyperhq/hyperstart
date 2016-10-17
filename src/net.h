@@ -10,6 +10,8 @@
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 
+#include "list.h"
+
 struct rtnl_handle {
 	int fd;
 	struct sockaddr_nl local;
@@ -18,11 +20,16 @@ struct rtnl_handle {
 	__u32 dump;
 };
 
+struct hyper_ipaddress {
+	struct list_head list;
+	char *addr;
+	char *mask;
+};
+
 struct hyper_interface {
-	char		*device;
-	char		*ipaddr;
-	char		*mask;
-	char            *new_device_name;
+	char		 *device;
+	struct list_head  ipaddresses;
+	char             *new_device_name;
 };
 
 struct hyper_route {

@@ -750,16 +750,32 @@ fail:
 	return -1;
 }
 
+void hyper_free_interface(struct hyper_interface *iface)
+{
+        struct hyper_ipaddress *ip, *tmp;
+
+        list_for_each_entry_safe(ip, tmp, &iface->ipaddresses , list) {
+                free(ip->addr);
+                free(ip->mask);
+                list_del_init(&ip->list);
+        }
+        free(iface->device);
+        free(iface->new_device_name);
+}
+
 static int hyper_parse_interface(struct hyper_interface *iface,
 				 char *json, jsmntok_t *toks)
 {
-	int i = 0, j, next_if;
+	int i = 0, j, next_if, k, l, num_ipaddr, ipaddr_size;
+	struct hyper_ipaddress *ipaddr = NULL;
+	struct hyper_ipaddress *ipaddr_oldf = NULL;
 
 	if (toks[i].type != JSMN_OBJECT) {
 		fprintf(stdout, "network array need object\n");
 		return -1;
 	}
 
+	INIT_LIST_HEAD(&iface->ipaddresses);
 	next_if = toks[i].size;
 
 	i++;
@@ -767,15 +783,63 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 		if (json_token_streq(json, &toks[i], "device")) {
 			iface->device = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "net device is %s\n", iface->device);
-		} else if (json_token_streq(json, &toks[i], "ipAddress")) {
-			iface->ipaddr = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "net ipaddress is %s\n", iface->ipaddr);
-		} else if (json_token_streq(json, &toks[i], "netMask")) {
-			iface->mask = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "net mask is %s\n", iface->mask);
+		} else if (json_token_streq(json, &toks[i], "ipAddresses")) {
+			if (toks[++i].type != JSMN_ARRAY) {
+				fprintf(stdout, "interface object needs ipAddresses array\n");
+				goto fail;
+			}
+
+			num_ipaddr = toks[i].size;
+			fprintf(stdout, "Number of ip addresses:%d\n", num_ipaddr);
+
+			for (k = 0; k < num_ipaddr; k++) {
+				if (toks[++i].type != JSMN_OBJECT) {
+					fprintf(stderr, "ipaddress is not an object\n");
+					goto fail;
+				}
+				ipaddr = calloc(1, sizeof(*ipaddr));
+				if (ipaddr == NULL) {
+					fprintf(stderr, "Alloc memory for ipaddress failed\n");
+					goto fail;
+				}
+
+				ipaddr_size = toks[i].size;
+
+				for (l = 0; l < ipaddr_size; l++) {
+					i++;
+					if (json_token_streq(json, &toks[i], "ipAddress")) {
+						ipaddr->addr = (json_token_str(json, &toks[++i]));
+						fprintf(stdout, "net ipaddress for device %s is %s\n",
+							iface->device, ipaddr->addr);
+					} else if (json_token_streq(json, &toks[i], "netMask")) {
+						ipaddr->mask = (json_token_str(json, &toks[++i]));
+						fprintf(stdout, "net mask for device %s is %s\n",
+							iface->device, ipaddr->mask);
+					} else {
+						fprintf(stderr, "get unknown section %s in interfaces\n",
+						json_token_str(json, &toks[i]));
+						free(ipaddr);
+						goto fail;
+					}
+				}
+				INIT_LIST_HEAD(&ipaddr->list);
+				list_add_tail(&ipaddr->list, &iface->ipaddresses);
+			}
 		} else if (json_token_streq(json, &toks[i], "newDeviceName")) {
 			iface->new_device_name = (json_token_str(json, &toks[++i]));
 			fprintf(stdout, "new interface name is %s\n", iface->new_device_name);
+		} else if (json_token_streq(json, &toks[i], "ipAddress")) {
+			if (ipaddr_oldf == NULL) {
+				ipaddr_oldf = calloc(1, sizeof(*ipaddr));
+			}
+			ipaddr_oldf->addr = (json_token_str(json, &toks[++i]));
+			fprintf(stdout, "net ipaddress is %s\n", ipaddr_oldf->addr);
+		} else if (json_token_streq(json, &toks[i], "netMask")) {
+			if (ipaddr_oldf == NULL) {
+				ipaddr_oldf = calloc(1, sizeof(*ipaddr));
+			}
+			ipaddr_oldf->mask = (json_token_str(json, &toks[++i]));
+			fprintf(stdout, "net mask is %s\n", ipaddr_oldf->mask);
 		} else {
 			fprintf(stderr, "get unknown section %s in interfaces\n",
 				json_token_str(json, &toks[i]));
@@ -783,13 +847,16 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 		}
 	}
 
+	if (ipaddr_oldf) {
+		INIT_LIST_HEAD(&ipaddr_oldf->list);
+		list_add_tail(&ipaddr_oldf->list, &iface->ipaddresses);
+	}
+
 	return i;
 
 fail:
-	free(iface->device);
-	free(iface->ipaddr);
-	free(iface->mask);
-	free(iface->new_device_name);
+	free(ipaddr_oldf);
+	hyper_free_interface(iface);
 	return -1;
 }
 
