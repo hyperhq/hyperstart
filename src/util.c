@@ -415,13 +415,12 @@ int hyper_open_channel(char *channel, int mode)
 {
 	struct termios term;
 	int fd = open(channel, O_RDWR | O_CLOEXEC | mode);
-	fprintf(stdout, "open %s get %d\n", channel, fd);
-
 	if (fd < 0) {
 		perror("fail to open channel device");
 		return -1;
 	}
 
+	fprintf(stdout, "open %s get %d\n", channel, fd);
 	bzero(&term, sizeof(term));
 
 	cfmakeraw(&term);

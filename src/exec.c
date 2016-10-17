@@ -110,7 +110,6 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_
 
 	do {
 		size = read(de->fd, buf->data + buf->get + 12, buf->size - buf->get - 12);
-		fprintf(stdout, "%s: read %d data\n", __func__, size);
 		if (size < 0) {
 			if (errno == EINTR)
 				continue;
@@ -122,6 +121,8 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_
 
 			break;
 		}
+		fprintf(stdout, "%s: read %d data\n", __func__, size);
+
 		if (size == 0) { // eof
 			pts_hup(de, efd, exec);
 			return 0;
@@ -544,13 +545,14 @@ static void hyper_exec_process(struct hyper_exec *exec, struct stdio_config *io)
 	}
 
 	if (execvp(exec->argv[0], exec->argv) < 0) {
+		// perror possibly changes the errno.
+		int err = errno;
 		perror("exec failed");
-
 		 /* the exit codes follow the `chroot` standard,
 		    see docker/docs/reference/run.md#exit-status */
-		if (errno == ENOENT)
+		if (err == ENOENT)
 			_exit(127);
-		else if (errno == EACCES)
+		else if (err == EACCES)
 			_exit(126);
 	}
 
