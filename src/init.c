@@ -1184,6 +1184,10 @@ static struct hyper_event_ops hyper_ttyfd_ops = {
 	.wbuf_size	= 10240,
 };
 
+static struct hyper_event_ops hyper_vsock_listen_ops = {
+	.read		= hyper_vsock_accept,
+};
+
 static int hyper_loop(void)
 {
 	int i, n;
@@ -1253,6 +1257,21 @@ static int hyper_loop(void)
 	if (hyper_init_event(&ctl.tty, &hyper_ttyfd_ops, pod) < 0 ||
 	    hyper_add_event(ctl.efd, &ctl.tty, EPOLLIN) < 0) {
 		return -1;
+	}
+
+	if (ctl.vsock_ctl_listener.fd > 0) {
+		fprintf(stdout, "hyper_init_event hyper vsock control channel listener event %p, ops %p, fd %d\n",
+			&ctl.vsock_ctl_listener, &hyper_vsock_listen_ops, ctl.vsock_ctl_listener.fd);
+		if (hyper_init_event(&ctl.vsock_ctl_listener, &hyper_vsock_listen_ops, pod) < 0 ||
+		    hyper_add_event(ctl.efd, &ctl.vsock_ctl_listener, EPOLLIN) < 0) {
+			return -1;
+		}
+		fprintf(stdout, "hyper_init_event hyper vsock message channel listener event %p, ops %p, fd %d\n",
+			&ctl.vsock_msg_listener, &hyper_vsock_listen_ops, ctl.vsock_msg_listener.fd);
+		if (hyper_init_event(&ctl.vsock_msg_listener, &hyper_vsock_listen_ops, pod) < 0 ||
+		    hyper_add_event(ctl.efd, &ctl.vsock_msg_listener, EPOLLIN) < 0) {
+			return -1;
+		}
 	}
 
 	events = calloc(MAXEVENTS, sizeof(*events));
