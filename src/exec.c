@@ -400,7 +400,7 @@ static int hyper_install_process_stdio(struct hyper_exec *e, struct stdio_config
 			io->stderrfd = ptyslave;
 	}
 
-	fflush(stdout);
+	fflush(NULL);
 
 	if (dup2(io->stdinfd, STDIN_FILENO) < 0) {
 		perror("dup tty device to stdin failed");
@@ -557,7 +557,7 @@ static void hyper_exec_process(struct hyper_exec *exec, struct stdio_config *io)
 	}
 
 exit:
-	fflush(stdout);
+	fflush(NULL);
 	_exit(125);
 }
 
