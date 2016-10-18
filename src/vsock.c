@@ -4,12 +4,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <linux/pci_regs.h>
 #include <linux/virtio_ids.h>
 #include <linux/vm_sockets.h>
+
+#include "event.h"
 
 /* for pre-vsock kernels. */
 #ifndef VIRTIO_ID_VSOCK
@@ -110,4 +113,32 @@ int hyper_create_vsock_listener(unsigned short port)
 	}
 
 	return fd;
+}
+
+int hyper_vsock_accept(struct hyper_event *he, int efd, int events)
+{
+	int ret = 0;
+
+	while(1) {
+		struct sockaddr_vm sa_client;
+		socklen_t sa_len = sizeof(sa_client);
+		int fd;
+
+		fd = accept(he->fd, (struct sockaddr*)&sa_client, &sa_len);
+		if (fd < 0) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				/* We have processed all incoming connections. */
+				break;
+			} else {
+				perror ("fail to accept vsock connection");
+				ret = -1;
+				break;
+			}
+		}
+		fprintf(stdout, "vsock connection from cid %u port %u\n",
+			sa_client.svm_cid, sa_client.svm_port);
+		close(fd);
+	}
+
+	return ret;
 }
