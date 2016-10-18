@@ -1245,14 +1245,14 @@ static int hyper_loop(void)
 
 	while (1) {
 		n = epoll_pwait(ctl.efd, events, MAXEVENTS, -1, &omask);
-		fprintf(stdout, "%s epoll_wait %d\n", __func__, n);
-
 		if (n < 0) {
 			if (errno == EINTR)
 				continue;
 			perror("hyper wait event failed");
 			return -1;
 		}
+		fprintf(stdout, "%s epoll_wait %d\n", __func__, n);
+
 		for (i = 0; i < n; i++) {
 			if (hyper_handle_event(ctl.efd, &events[i]) < 0)
 				return -1;

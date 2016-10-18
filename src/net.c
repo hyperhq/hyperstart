@@ -48,7 +48,6 @@ int hyper_send_data(int fd, uint8_t *data, uint32_t len)
 
 	while (length < len) {
 		size = write(fd, data + length, len - length);
-
 		if (size <= 0) {
 			if (errno == EINTR)
 				continue;
@@ -99,7 +98,6 @@ int hyper_get_type(int fd, uint32_t *type)
 
 	while (len < 8) {
 		size = read(fd, buf + len, 8 - len);
-
 		if (size <= 0) {
 			if (errno == EINTR)
 				continue;
