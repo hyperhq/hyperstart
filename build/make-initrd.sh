@@ -11,7 +11,7 @@ mkdir -m 0755 -p /tmp/hyperstart-rootfs/dev \
 	  /tmp/hyperstart-rootfs/bin \
 	  /tmp/hyperstart-rootfs/proc
 
-cp ../src/init /tmp/hyperstart-rootfs/
+cp ../src/hyperstart /tmp/hyperstart-rootfs/init
 cp busybox /tmp/hyperstart-rootfs/sbin/
 cp iptables /tmp/hyperstart-rootfs/sbin/
 cp ipvsadm /tmp/hyperstart-rootfs/sbin/
