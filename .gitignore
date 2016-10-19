@@ -28,10 +28,7 @@ cscope.po.out
 stamp-h
 stamp-h.in
 stamp-h1
-/config.h
-/config.h.in
-/config.log
-/config.status
+/config.*
 /configure
 /aclocal.m4
 /autoscan.log
