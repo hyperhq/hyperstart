@@ -157,32 +157,23 @@ int hyper_handle_event(int efd, struct epoll_event *event)
 	fprintf(stdout, "%s get event %d, he %p, fd %d. ops %p\n",
 			__func__, event->events, he, he->fd, he->ops);
 
-	/* do not handle hup event if have in event */
+	/* do not handle hup event if have in/out event */
 	if ((event->events & EPOLLIN) && he->ops->read) {
 		fprintf(stdout, "%s event EPOLLIN, he %p, fd %d, %p\n",
 			__func__, he, he->fd, he->ops);
-		if (he->ops->read && he->ops->read(he, efd) < 0)
-			return -1;
-	} else if (event->events & EPOLLHUP) {
-		fprintf(stdout, "%s event EPOLLHUP, he %p, fd %d, %p\n",
-			__func__, he, he->fd, he->ops);
-		if (he->ops->hup)
-			he->ops->hup(he, efd);
-		return 0;
+		return he->ops->read(he, efd);
 	}
-
-	if (event->events & EPOLLOUT) {
+	if ((event->events & EPOLLOUT) && he->ops->write) {
 		fprintf(stdout, "%s event EPOLLOUT, he %p, fd %d, %p\n",
 			__func__, he, he->fd, he->ops);
-		if (he->ops->write && he->ops->write(he, efd) < 0)
-			return -1;
+		return he->ops->write(he, efd);
 	}
 
-	if (event->events & EPOLLERR) {
-		fprintf(stdout, "get epoll err on event: %p\n", he);
+	if ((event->events & EPOLLHUP) || (event->events & EPOLLERR)) {
+		fprintf(stdout, "%s event EPOLLHUP or EPOLLERR, he %p, fd %d, %x\n",
+			__func__, he, he->fd, event->events);
 		if (he->ops->hup)
 			he->ops->hup(he, efd);
-		return 0;
 	}
 
 	return 0;
