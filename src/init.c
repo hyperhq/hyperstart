@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1393,9 +1394,13 @@ static int hyper_setup_init_process(void)
 
 int main(int argc, char *argv[])
 {
-	char *cmdline, *ctl_serial, *tty_serial;
+	char *binary_name, *cmdline, *ctl_serial, *tty_serial;
+	bool is_init;
 
-	if (hyper_setup_init_process() < 0) {
+	binary_name = basename(argv[0]);
+	is_init = strncmp(binary_name, "init", 5) == 0;
+
+	if (is_init && hyper_setup_init_process() < 0) {
 		return -1;
 	}
 
