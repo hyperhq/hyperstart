@@ -115,8 +115,9 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_
 				continue;
 
 			if (errno != EAGAIN && errno != EIO) {
-				perror("fail to read tty fd");
-				return -1;
+				perror("failed to read process's stdout/stderr");
+				pts_hup(de, efd, exec);
+				return 0;
 			}
 
 			break;
@@ -152,12 +153,10 @@ static int write_to_stdin(struct hyper_event *de, int efd)
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdinev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
 
-	int ret = hyper_event_write(de, efd);
-
-	if (ret >= 0 && de->wbuf.get == 0 && exec->close_stdin_request)
+	if (hyper_event_write(de, efd) < 0 || (de->wbuf.get == 0 && exec->close_stdin_request))
 		pts_hup(de, efd, exec);
 
-	return ret;
+	return 0;
 }
 
 struct hyper_event_ops in_ops = {
