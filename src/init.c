@@ -42,8 +42,6 @@ struct hyper_ctl ctl;
 sigset_t orig_mask;
 
 static int hyper_handle_exit(struct hyper_pod *pod);
-static struct hyper_event_ops hyper_channel_ops;
-static struct hyper_event_ops hyper_ttyfd_ops;
 
 static int hyper_set_win_size(char *json, int length)
 {
@@ -1174,9 +1172,23 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 	return ret == 0 ? 0 : -1;
 }
 
+static struct hyper_event_ops hyper_vsock_channel_ops = {
+	.read		= hyper_channel_read,
+	.hup		= hyper_event_hup,
+	.rbuf_size	= 65536,
+};
+
+static struct hyper_event_ops hyper_vsock_ttyfd_ops = {
+	.read		= hyper_ttyfd_read,
+	.write		= hyper_event_write,
+	.hup		= hyper_event_hup,
+	.rbuf_size	= 65536,
+	.wbuf_size	= 65536,
+};
+
 static int hyper_vsock_ctl_accept(struct hyper_event *he, int efd)
 {
-	if (hyper_vsock_accept(he, efd, &ctl.chan, &hyper_channel_ops) < 0)
+	if (hyper_vsock_accept(he, efd, &ctl.chan, &hyper_vsock_channel_ops) < 0)
 		return -1;
 
 	if (hyper_send_type(ctl.chan.fd, READY) < 0) {
@@ -1190,7 +1202,7 @@ static int hyper_vsock_ctl_accept(struct hyper_event *he, int efd)
 
 static int hyper_vsock_msg_accept(struct hyper_event *he, int efd)
 {
-	return hyper_vsock_accept(he, efd, &ctl.chan, &hyper_ttyfd_ops);
+	return hyper_vsock_accept(he, efd, &ctl.tty, &hyper_vsock_ttyfd_ops);
 }
 
 static struct hyper_event_ops hyper_channel_ops = {
