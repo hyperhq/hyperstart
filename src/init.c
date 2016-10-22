@@ -1176,7 +1176,16 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 
 static int hyper_vsock_ctl_accept(struct hyper_event *he, int efd)
 {
-	return hyper_vsock_accept(he, efd, &ctl.chan, &hyper_channel_ops);
+	if (hyper_vsock_accept(he, efd, &ctl.chan, &hyper_channel_ops) < 0)
+		return -1;
+
+	if (hyper_send_type(ctl.chan.fd, READY) < 0) {
+		perror("send READY MESSAGE failed\n");
+		hyper_event_hup(&ctl.chan, efd);
+		return -1;
+	}
+
+	return 0;
 }
 
 static int hyper_vsock_msg_accept(struct hyper_event *he, int efd)
