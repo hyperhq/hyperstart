@@ -1044,7 +1044,7 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		pod->req_destroy = 1;
 		fprintf(stdout, "get DESTROYPOD message\n");
 		hyper_destroy_pod(pod, 0);
-		return 0;
+		break;
 	case EXECCMD:
 		ret = hyper_exec_cmd((char *)buf->data + 8, len - 8);
 		break;
