@@ -1282,20 +1282,6 @@ static int hyper_loop(void)
 		return -1;
 	}
 
-	fprintf(stdout, "hyper_init_event hyper channel event %p, ops %p, fd %d\n",
-		&ctl.chan, &hyper_channel_ops, ctl.chan.fd);
-	if (hyper_init_event(&ctl.chan, &hyper_channel_ops, pod) < 0 ||
-	    hyper_add_event(ctl.efd, &ctl.chan, EPOLLIN) < 0) {
-		return -1;
-	}
-
-	fprintf(stdout, "hyper_init_event hyper ttyfd event %p, ops %p, fd %d\n",
-		&ctl.tty, &hyper_ttyfd_ops, ctl.tty.fd);
-	if (hyper_init_event(&ctl.tty, &hyper_ttyfd_ops, pod) < 0 ||
-	    hyper_add_event(ctl.efd, &ctl.tty, EPOLLIN) < 0) {
-		return -1;
-	}
-
 	if (ctl.vsock_ctl_listener.fd > 0) {
 		fprintf(stdout, "hyper_init_event hyper vsock control channel listener event %p, ops %p, fd %d\n",
 			&ctl.vsock_ctl_listener, &hyper_vsock_ctl_listen_ops, ctl.vsock_ctl_listener.fd);
@@ -1307,6 +1293,20 @@ static int hyper_loop(void)
 			&ctl.vsock_msg_listener, &hyper_vsock_msg_listen_ops, ctl.vsock_msg_listener.fd);
 		if (hyper_init_event(&ctl.vsock_msg_listener, &hyper_vsock_msg_listen_ops, pod) < 0 ||
 		    hyper_add_event(ctl.efd, &ctl.vsock_msg_listener, EPOLLIN) < 0) {
+			return -1;
+		}
+	} else {
+		fprintf(stdout, "hyper_init_event hyper channel event %p, ops %p, fd %d\n",
+			&ctl.chan, &hyper_channel_ops, ctl.chan.fd);
+		if (hyper_init_event(&ctl.chan, &hyper_channel_ops, pod) < 0 ||
+		    hyper_add_event(ctl.efd, &ctl.chan, EPOLLIN) < 0) {
+			return -1;
+		}
+
+		fprintf(stdout, "hyper_init_event hyper ttyfd event %p, ops %p, fd %d\n",
+			&ctl.tty, &hyper_ttyfd_ops, ctl.tty.fd);
+		if (hyper_init_event(&ctl.tty, &hyper_ttyfd_ops, pod) < 0 ||
+		    hyper_add_event(ctl.efd, &ctl.tty, EPOLLIN) < 0) {
 			return -1;
 		}
 	}
@@ -1394,22 +1394,22 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-	ctl.chan.fd = hyper_setup_ctl_channel(ctl_serial);
-	if (ctl.chan.fd < 0) {
-		fprintf(stderr, "fail to setup hyper control serial port\n");
-		goto out1;
-	}
-
-	ctl.tty.fd = hyper_setup_tty_channel(tty_serial);
-	if (ctl.tty.fd < 0) {
-		fprintf(stderr, "fail to setup hyper tty serial port\n");
-		goto out2;
-	}
-
 	if (ctl.vsock_ctl_listener.fd > 0) {
 		if (hyper_setup_vsock_channel() < 0) {
 			fprintf(stderr, "fail to setup hyper vsock listener\n");
 			goto out3;
+		}
+	} else {
+		ctl.chan.fd = hyper_setup_ctl_channel(ctl_serial);
+		if (ctl.chan.fd < 0) {
+			fprintf(stderr, "fail to setup hyper control serial port\n");
+			goto out1;
+		}
+
+		ctl.tty.fd = hyper_setup_tty_channel(tty_serial);
+		if (ctl.tty.fd < 0) {
+			fprintf(stderr, "fail to setup hyper tty serial port\n");
+			goto out2;
 		}
 	}
 
