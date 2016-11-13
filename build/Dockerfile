@@ -3,7 +3,7 @@ MAINTAINER Hyper Developers <dev@hyper.sh>
 
 RUN yum install -y patch gcc ncurses-devel make openssl-devel bc
 
-ENV KERNEL_VERSION 4.4.28
+ENV KERNEL_VERSION 4.8.5
 ENV LOCALVERSION -hyper
 ENV KERNEL_RELEASE ${KERNEL_VERSION}${LOCALVERSION}
 
@@ -11,8 +11,10 @@ ENV KBUILD_BUILD_USER    dev
 ENV KBUILD_BUILD_HOST    hyper.sh
 ENV KBUILD_BUILD_VERSION 1
 
-RUN mkdir /root/build/ && mkdir /root/build/result/
-RUN curl -fSL https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-${KERNEL_VERSION}.tar.gz | tar -zx -C /root/build
+RUN mkdir /root/build/ && mkdir /root/build/linux-${KERNEL_VERSION} && mkdir /root/build/result/
+COPY linux-4.8.5.tar.gz /root/build/linux-${KERNEL_VERSION}
+RUN cd /root/build/linux-${KERNEL_VERSION}/ && tar zxf linux-${KERNEL_VERSION}.tar.gz
+#RUN curl -fSL https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-${KERNEL_VERSION}.tar.gz | tar -zx -C /root/build
 
 COPY kernel_config /root/build/linux-${KERNEL_VERSION}/.config
 COPY kernel_patch/ /root/build/kernel_patch/
