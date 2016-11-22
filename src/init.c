@@ -991,7 +991,18 @@ static int hyper_ttyfd_read(struct hyper_event *he, int efd)
 	if (buf->get < STREAM_HEADER_SIZE) {
 		size = nonblock_read(he->fd, buf->data + buf->get, STREAM_HEADER_SIZE - buf->get);
 		if (size < 0) {
+			/* vsock returns -ENOTCONN upon reading closed socket... */
+			if (size == -ENOTCONN) {
+				fprintf(stderr, "ttyfd read failed on %p fd %d with err %d\n", he, he->fd, size);
+				hyper_modify_event(efd, he, he->flag & ~EPOLLIN);
+				size = 0;
+			}
 			return size;
+		} else if (size == 0) {
+			/* remote closes connection */
+			fprintf(stderr, "remote closes connection on %p fd %d\n", he, he->fd);
+			hyper_modify_event(efd, he, he->flag & ~EPOLLIN);
+			return 0;
 		}
 		buf->get += size;
 		if (buf->get < STREAM_HEADER_SIZE) {
@@ -1122,7 +1133,18 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 	if (buf->get < CONTROL_HEADER_SIZE) {
 		size = nonblock_read(he->fd, buf->data + buf->get, CONTROL_HEADER_SIZE - buf->get);
 		if (size < 0) {
+			/* vsock returns -ENOTCONN upon reading closed socket... */
+			if (size == -ENOTCONN) {
+				fprintf(stderr, "ttyfd read failed on %p fd %d with err %d\n", he, he->fd, size);
+				hyper_modify_event(efd, he, he->flag & ~EPOLLIN);
+				size = 0;
+			}
 			return size;
+		} else if (size == 0) {
+			/* remote closes connection */
+			fprintf(stderr, "remote closes connection on %p fd %d\n", he, he->fd);
+			hyper_modify_event(efd, he, he->flag & ~EPOLLIN);
+			return 0;
 		}
 		if (size > 0) {
 			/* control channel, need ack */
