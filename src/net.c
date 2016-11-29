@@ -614,8 +614,9 @@ static int hyper_setup_interface(struct rtnl_handle *rth,
 		char buf[256];
 	} req;
 	int ifindex;
+	struct hyper_ipaddress *ip;
 
-	if (!(iface->device && iface->ipaddr && iface->mask)) {
+	if (!iface->device || list_empty(&iface->ipaddresses)) {
 		fprintf(stderr, "interface information incorrect\n");
 		return -1;
 	}
@@ -635,26 +636,28 @@ static int hyper_setup_interface(struct rtnl_handle *rth,
 	req.ifa.ifa_index = ifindex;
 	req.ifa.ifa_scope = 0;
 
-	if (get_addr_ipv4((uint8_t *)&data, iface->ipaddr) <= 0) {
-		fprintf(stderr, "get addr failed\n");
-		return -1;
-	}
+	list_for_each_entry(ip, &iface->ipaddresses, list) {
+		if (get_addr_ipv4((uint8_t *)&data, ip->addr) <= 0) {
+			fprintf(stderr, "get addr failed\n");
+			return -1;
+		}
 
-	if (addattr_l(&req.n, sizeof(req), IFA_LOCAL, &data, 4)) {
-		fprintf(stderr, "setup attr failed\n");
-		return -1;
-	}
+		if (addattr_l(&req.n, sizeof(req), IFA_LOCAL, &data, 4)) {
+			fprintf(stderr, "setup attr failed\n");
+			return -1;
+		}
 
-	if (get_netmask(&mask, iface->mask) < 0) {
-		fprintf(stderr, "get netamsk failed\n");
-		return -1;
-	}
+		if (get_netmask(&mask, ip->mask) < 0) {
+			fprintf(stderr, "get netamsk failed\n");
+			return -1;
+		}
 
-	req.ifa.ifa_prefixlen = mask;
-	fprintf(stdout, "interface get netamsk %d %s\n", req.ifa.ifa_prefixlen, iface->mask);
-	if (rtnl_talk(rth, &req.n, 0, 0, NULL) < 0) {
-		perror("rtnl_talk failed");
-		return -1;
+		req.ifa.ifa_prefixlen = mask;
+		fprintf(stdout, "interface get netamsk %d %s\n", req.ifa.ifa_prefixlen, ip->mask);
+		if (rtnl_talk(rth, &req.n, 0, 0, NULL) < 0) {
+			perror("rtnl_talk failed");
+			return -1;
+		}
 	}
 
 	if (iface->new_device_name && strcmp(iface->new_device_name, iface->device)) {
@@ -681,8 +684,9 @@ static int hyper_cleanup_interface(struct rtnl_handle *rth,
 		char buf[256];
 	} req;
 	int ifindex;
+	struct hyper_ipaddress *ip;
 
-	if (!(iface->device && iface->ipaddr && iface->mask)) {
+	if (!iface->device || list_empty(&iface->ipaddresses)) {
 		fprintf(stderr, "interface information incorrect\n");
 		return -1;
 	}
@@ -702,26 +706,28 @@ static int hyper_cleanup_interface(struct rtnl_handle *rth,
 	req.ifa.ifa_index = ifindex;
 	req.ifa.ifa_scope = 0;
 
-	if (get_addr_ipv4((uint8_t *)&data, iface->ipaddr) <= 0) {
-		fprintf(stderr, "get addr failed\n");
-		return -1;
-	}
+	list_for_each_entry(ip, &iface->ipaddresses, list) {
+		if (get_addr_ipv4((uint8_t *)&data, ip->addr) <= 0) {
+			fprintf(stderr, "get addr failed\n");
+			return -1;
+		}
 
-	if (addattr_l(&req.n, sizeof(req), IFA_LOCAL, &data, 4)) {
-		fprintf(stderr, "setup attr failed\n");
-		return -1;
-	}
+		if (addattr_l(&req.n, sizeof(req), IFA_LOCAL, &data, 4)) {
+			fprintf(stderr, "setup attr failed\n");
+			return -1;
+		}
 
-	if (get_netmask(&mask, iface->mask) < 0) {
-		fprintf(stderr, "get netamsk failed\n");
-		return -1;
-	}
+		if (get_netmask(&mask, ip->mask) < 0) {
+			fprintf(stderr, "get netamsk failed\n");
+			return -1;
+		}
 
-	req.ifa.ifa_prefixlen = mask;
-	fprintf(stdout, "interface get netamsk %d %s\n", req.ifa.ifa_prefixlen, iface->mask);
-	if (rtnl_talk(rth, &req.n, 0, 0, NULL) < 0) {
-		perror("rtnl_talk failed");
-		return -1;
+		req.ifa.ifa_prefixlen = mask;
+		fprintf(stdout, "interface get netamsk %d %s\n", req.ifa.ifa_prefixlen, ip->mask);
+		if (rtnl_talk(rth, &req.n, 0, 0, NULL) < 0) {
+			perror("rtnl_talk failed");
+			return -1;
+		}
 	}
 
 	/* Don't down&remove lo device */
@@ -838,9 +844,7 @@ void hyper_cleanup_network(struct hyper_pod *pod)
 		if (hyper_cleanup_interface(&rth, iface) < 0)
 			fprintf(stderr, "link down device %s failed\n", iface->device);
 
-		free(iface->device);
-		free(iface->ipaddr);
-		free(iface->mask);
+		hyper_free_interface(iface);
 	}
 
 	free(pod->iface);
@@ -874,9 +878,7 @@ int hyper_cmd_setup_interface(char *json, int length)
 	}
 	ret = 0;
 out1:
-	free(iface->device);
-	free(iface->ipaddr);
-	free(iface->mask);
+	hyper_free_interface(iface);
 	free(iface);
 out:
 	netlink_close(&rth);
