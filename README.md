@@ -4,7 +4,7 @@ You can get the binary installer of HyperContainer and HyperStart through [The H
 
 ## Build from source 
 
-clone this repo, and make sure you have build-essentials installed. Go into the working copy and
+clone this repo, and make sure you have build-essential installed. Go into the working copy and
 
     > ./autogen.sh
     > ./configure
