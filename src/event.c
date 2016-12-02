@@ -140,7 +140,7 @@ int hyper_requeue_event(int efd, struct hyper_event *ev)
 	return 0;
 }
 
-int hyper_event_write(struct hyper_event *he, int efd)
+int hyper_event_write(struct hyper_event *he, int efd, int events)
 {
 	struct hyper_buf *buf = &he->wbuf;
 	uint32_t len = 0;
@@ -185,12 +185,12 @@ int hyper_handle_event(int efd, struct epoll_event *event)
 	if ((event->events & EPOLLIN) && he->ops->read) {
 		fprintf(stdout, "%s event EPOLLIN, he %p, fd %d, %p\n",
 			__func__, he, he->fd, he->ops);
-		return he->ops->read(he, efd);
+		return he->ops->read(he, efd, event->events);
 	}
 	if ((event->events & EPOLLOUT) && he->ops->write) {
 		fprintf(stdout, "%s event EPOLLOUT, he %p, fd %d, %p\n",
 			__func__, he, he->fd, he->ops);
-		return he->ops->write(he, efd);
+		return he->ops->write(he, efd, event->events);
 	}
 
 	if ((event->events & EPOLLHUP) || (event->events & EPOLLERR)) {
