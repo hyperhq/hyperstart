@@ -96,6 +96,30 @@ int hyper_modify_event(int efd, struct hyper_event *he, int flag)
 	return 0;
 }
 
+int hyper_wbuf_append_msg(struct hyper_event *he, uint8_t *data, uint32_t len)
+{
+	struct hyper_buf *buf = &he->wbuf;
+
+	if (buf->get + len > buf->size) {
+		uint8_t *data;
+		fprintf(stdout, "%s: tty buf full\n", __func__);
+
+		data = realloc(buf->data, buf->size + len);
+		if (data == NULL) {
+			perror("realloc failed");
+			return -1;
+		}
+		buf->data = data;
+		buf->size += len;
+	}
+
+	memcpy(buf->data + buf->get, data, len);
+	buf->get += len;
+
+	hyper_modify_event(ctl.efd, he, he->flag| EPOLLOUT);
+	return 0;
+}
+
 int hyper_requeue_event(int efd, struct hyper_event *ev)
 {
 	struct epoll_event event = {

@@ -33,31 +33,22 @@ static void hyper_exec_process(struct hyper_exec *exec, struct stdio_config *io)
 
 static int send_exec_finishing(uint64_t seq, int len, int code)
 {
-	struct hyper_buf *buf = &ctl.tty.wbuf;
-
-	if (buf->get + len > buf->size) {
-		uint8_t *data;
-		fprintf(stdout, "%s: tty buf full\n", __func__);
-
-		data = realloc(buf->data, buf->size + len);
-		if (data == NULL) {
-			perror("realloc failed");
-			return -1;
-		}
-		buf->data = data;
-		buf->size += len;
+	int ret = -1;
+	uint8_t *data = malloc(len);
+	if (data == NULL) {
+		goto fail;
 	}
 
 	/* no in event, no more data, send eof */
-	hyper_set_be64(buf->data + buf->get, seq);
-	hyper_set_be32(buf->data + buf->get + 8, len);
+	hyper_set_be64(data, seq);
+	hyper_set_be32(data + 8, len);
 	if (len > 12)
-		buf->data[buf->get + 12] = code;
+		data[12] = code;
 
-	buf->get += len;
-	hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT);
-
-	return 0;
+	ret = hyper_wbuf_append_msg(&ctl.tty, data, len);
+fail:
+	free(data);
+	return ret;
 }
 
 static int hyper_send_exec_eof(struct hyper_exec *exec) {
