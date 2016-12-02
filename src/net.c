@@ -111,7 +111,7 @@ int hyper_get_type(int fd, uint32_t *type)
 	return 0;
 }
 
-int hyper_send_msg_block(int fd, uint32_t type, uint32_t len, uint8_t *data)
+int hyper_send_data_block(int fd, uint8_t *data, uint32_t len)
 {
 	int ret, flags;
 
@@ -121,7 +121,7 @@ int hyper_send_msg_block(int fd, uint32_t type, uint32_t len, uint8_t *data)
 		return -1;
 	}
 
-	ret = hyper_send_msg(fd, type, len, data);
+	ret = hyper_send_data(fd, data, len);
 
 	if (fcntl(fd, F_SETFL, flags) < 0) {
 		perror("restore fd flag failed");
