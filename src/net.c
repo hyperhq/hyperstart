@@ -67,41 +67,28 @@ int hyper_send_data(int fd, uint8_t *data, uint32_t len)
 	return 0;
 }
 
-int hyper_send_msg(int fd, uint32_t type, uint32_t len,
-		 uint8_t *message)
-{
-	uint8_t buf[8];
-
-	fprintf(stdout, "hyper send type %d, len %d\n", type, len);
-
-	hyper_set_be32(buf, type);
-	hyper_set_be32(buf + 4, len + 8);
-
-	if (hyper_send_data(fd, buf, 8) < 0)
-		return -1;
-
-	if (message && hyper_send_data(fd, message, len) < 0)
-		return -1;
-
-	return 0;
-}
-
 int hyper_send_type(int fd, uint32_t type)
 {
-	return hyper_send_msg(fd, type, 0, NULL);
+	uint8_t buf[4];
+
+	fprintf(stdout, "hyper send type %d\n", type);
+
+	hyper_set_be32(buf, type);
+
+	return hyper_send_data(fd, buf, 4);
 }
 
 int hyper_get_type(int fd, uint32_t *type)
 {
 	int len = 0, size;
-	uint8_t buf[8];
+	uint8_t buf[4];
 
-	while (len < 8) {
-		size = read(fd, buf + len, 8 - len);
+	while (len < 4) {
+		size = read(fd, buf + len, 4 - len);
 		if (size <= 0) {
 			if (errno == EINTR)
 				continue;
-			perror("wait for ack failed");
+			perror("hyper_get_type failed");
 			return -1;
 		}
 		len += size;

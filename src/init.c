@@ -905,13 +905,15 @@ void hyper_cleanup_pod(struct hyper_pod *pod)
 
 static int hyper_setup_ctl_channel(char *name)
 {
+	uint8_t buf[8];
 	int ret = hyper_open_channel(name, 0);
-
 	if (ret < 0)
 		return ret;
 
 	fprintf(stdout, "send ready message\n");
-	if (hyper_send_type(ret, READY) < 0) {
+	hyper_set_be32(buf, READY);
+	hyper_set_be32(buf + 4, 8);
+	if (hyper_send_data_block(ret, buf, 8) < 0) {
 		perror("send READY MESSAGE failed\n");
 		goto out;
 	}
