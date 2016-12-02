@@ -18,6 +18,7 @@
 #include <sys/epoll.h>
 #include <inttypes.h>
 #include <ctype.h>
+#include <sys/prctl.h>
 
 #include "../config.h"
 #include "hyper.h"
@@ -1195,6 +1196,7 @@ static int hyper_loop(void)
 	orig_mask = omask;
 	sigdelset(&omask, SIGCHLD);
 	signal(SIGCHLD, hyper_init_sigchld);
+	prctl(PR_SET_CHILD_SUBREAPER, 1);
 
 	if (hyper_write_file("/proc/sys/fs/file-max", filemax, strlen(filemax)) < 0) {
 		fprintf(stderr, "sysctl: setup default file-max(%s) failed\n", filemax);
