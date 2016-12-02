@@ -116,7 +116,7 @@ int hyper_wbuf_append_msg(struct hyper_event *he, uint8_t *data, uint32_t len)
 	memcpy(buf->data + buf->get, data, len);
 	buf->get += len;
 
-	hyper_modify_event(ctl.efd, he, he->flag| EPOLLOUT);
+	hyper_modify_event(hyper_epoll.efd, he, he->flag| EPOLLOUT);
 	return 0;
 }
 
@@ -162,7 +162,7 @@ int hyper_event_write(struct hyper_event *he, int efd)
 	memmove(buf->data, buf->data + len, buf->get);
 
 	if (buf->get == 0) {
-		hyper_modify_event(ctl.efd, he, he->flag & ~EPOLLOUT);
+		hyper_modify_event(hyper_epoll.efd, he, he->flag & ~EPOLLOUT);
 	}
 
 	return 0;
