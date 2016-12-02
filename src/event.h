@@ -22,6 +22,7 @@ struct hyper_buf {
 
 struct hyper_event {
 	int			fd;
+	int			hup;
 	int			flag;
 	struct hyper_buf	rbuf;
 	struct hyper_buf	wbuf;
