@@ -41,4 +41,5 @@ int hyper_handle_event(int efd, struct epoll_event *event);
 void hyper_reset_event(struct hyper_event *de);
 void hyper_event_hup(struct hyper_event *de, int efd);
 int hyper_event_write(struct hyper_event *de, int efd);
+int hyper_wbuf_append_msg(struct hyper_event *de, uint8_t *data, uint32_t len);
 #endif
