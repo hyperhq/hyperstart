@@ -85,6 +85,7 @@ int hyper_open_serial(char *tty);
 void hyper_cleanup_pod(struct hyper_pod *pod);
 int hyper_enter_sandbox(struct hyper_pod *pod, int pidpipe);
 void hyper_pod_destroyed(int failed);
+int hyper_send_pod_finished(struct hyper_pod *pod);
 
 extern struct hyper_pod global_pod;
 extern struct hyper_epoll hyper_epoll;

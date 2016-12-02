@@ -42,6 +42,28 @@ struct hyper_epoll hyper_epoll;
 sigset_t orig_mask;
 
 static int hyper_handle_exit(struct hyper_pod *pod);
+static int hyper_ctl_append_msg(struct hyper_event *he, uint32_t type, uint8_t *data, uint32_t len);
+
+int hyper_send_pod_finished(struct hyper_pod *pod)
+{
+	struct hyper_container *c;
+	uint8_t *data = NULL, *new;
+	int c_num = 0;
+
+	list_for_each_entry(c, &pod->containers, list) {
+		c_num++;
+		new = realloc(data, c_num * 4);
+		if (new == NULL) {
+			free(data);
+			return -1;
+		}
+
+		hyper_set_be32(new + ((c_num - 1) * 4), c->exec.code);
+		data = new;
+	}
+
+	return hyper_ctl_append_msg(&hyper_epoll.ctl, PODFINISHED, data, c_num * 4);
+}
 
 static int hyper_set_win_size(char *json, int length)
 {
@@ -520,9 +542,23 @@ static void hyper_print_uptime(void)
 	close(fd);
 }
 
+static void hyper_flush_channel()
+{
+	// Todo: remove this after we implement DESTROYVM message.
+	struct hyper_buf *ctl_buf = &hyper_epoll.ctl.wbuf;
+	struct hyper_buf *tty_buf = &hyper_epoll.tty.wbuf;
+
+	hyper_send_data_block(hyper_epoll.ctl.fd, ctl_buf->data, ctl_buf->get);
+	hyper_send_data_block(hyper_epoll.tty.fd, tty_buf->data, tty_buf->get);
+}
+
 void hyper_pod_destroyed(int failed)
 {
-	hyper_send_msg_block(hyper_epoll.ctl.fd, failed?ERROR:ACK, 0, NULL);
+	hyper_ctl_append_msg(&hyper_epoll.ctl, failed?ERROR:ACK, NULL, 0);
+	// Todo: this doesn't make sure peer receives the data
+	hyper_flush_channel();
+	// Todo: don't shutdown vm until hyperstart receives the DESTROYVM message,
+	// peer will send to DESTROYVM until receives the whole data of tty/ctl.
 	hyper_shutdown();
 }
 
@@ -1009,15 +1045,36 @@ static int hyper_ttyfd_read(struct hyper_event *he, int efd)
 	return ret == 0 ? 0 : -1;
 }
 
-static int hyper_ctlmsg_handle(struct hyper_event *de, uint32_t len)
+static int hyper_ctl_append_msg(struct hyper_event *he, uint32_t type, uint8_t *data, uint32_t len)
 {
-	struct hyper_buf *buf = &de->rbuf;
-	struct hyper_pod *pod = de->ptr;
+	int ret = -1;
+	fprintf(stdout, "hyper ctl append type %d, len %d\n", type, len);
+
+	uint8_t *new_data = realloc(data, len + 8);
+	if (new_data == NULL) {
+		new_data = data;
+		goto out;
+	}
+
+	memmove(new_data + 8, new_data, len);
+	hyper_set_be32(new_data, type);
+	hyper_set_be32(new_data + 4, len + 8);
+
+	ret = hyper_wbuf_append_msg(he, new_data, len + 8);
+out:
+	free(new_data);
+	return ret;
+}
+
+static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
+{
+	struct hyper_buf *buf = &he->rbuf;
+	struct hyper_pod *pod = he->ptr;
 	uint32_t type = 0, datalen = 0;
 	uint8_t *data = NULL;
 	int i, ret = 0;
 
-	// append a null byte to it. hyper_channel_read() left this room for us.
+	// append a null byte to it. hyper_ctlfd_read() left this room for us.
 	buf->data[buf->get] = 0;
 	for (i = 0; i < buf->get; i++)
 		fprintf(stdout, "%0x ", buf->data[i]);
@@ -1087,20 +1144,13 @@ static int hyper_ctlmsg_handle(struct hyper_event *de, uint32_t len)
 		break;
 	}
 
-	if (ret < 0)
-		hyper_send_msg_block(de->fd, ERROR, 0, NULL);
-	else
-		hyper_send_msg_block(de->fd, ACK, datalen, data);
-
-	free(data);
-	return 0;
+	return hyper_ctl_append_msg(he, ret < 0 ? ERROR: ACK, data, datalen);
 }
 
 static int hyper_ctlfd_read(struct hyper_event *he, int efd)
 {
 	struct hyper_buf *buf = &he->rbuf;
 	uint32_t len;
-	uint8_t data[4];
 	int size;
 	int ret;
 
@@ -1112,9 +1162,10 @@ static int hyper_ctlfd_read(struct hyper_event *he, int efd)
 			return size;
 		}
 		if (size > 0) {
+			uint8_t *data = malloc(4);
 			/* control channel, need ack */
 			hyper_set_be32(data, size);
-			hyper_send_msg(he->fd, NEXT, 4, data);
+			hyper_ctl_append_msg(&hyper_epoll.ctl, NEXT, data, 4);
 		}
 		buf->get += size;
 		if (buf->get < CONTROL_HEADER_SIZE) {
@@ -1143,9 +1194,10 @@ static int hyper_ctlfd_read(struct hyper_event *he, int efd)
 		return size;
 	}
 	if (size > 0) {
+		uint8_t *data = malloc(4);
 		/* control channel, need ack */
 		hyper_set_be32(data, size);
-		hyper_send_msg(he->fd, NEXT, 4, data);
+		hyper_ctl_append_msg(&hyper_epoll.ctl, NEXT, data, 4);
 	}
 	buf->get += size;
 	if (buf->get < len) {
@@ -1161,6 +1213,7 @@ static int hyper_ctlfd_read(struct hyper_event *he, int efd)
 
 static struct hyper_event_ops hyper_ctlfd_ops = {
 	.read		= hyper_ctlfd_read,
+	.write		= hyper_event_write,
 	.rbuf_size	= 10240,
 	.wbuf_size	= 4096,
 };
