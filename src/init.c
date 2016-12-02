@@ -1006,6 +1006,27 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 	return 0;
 }
 
+static ssize_t hyper_channel_read(struct hyper_event *he, int efd, int len, int events)
+{
+	struct hyper_buf *buf = &he->rbuf;
+	ssize_t size;
+
+	size = nonblock_read(he->fd, buf->data + buf->get, len);
+	if (size < 0)
+		goto out;
+
+	// check if peer is dissapeared
+	if ((size == 0) && (events & EPOLLHUP)) {
+		he->hup = 1;
+		fprintf(stdout, "peer is disappeared\n");
+		// use EPOLLOUT| EPOLLET event to check if peer disappeared
+		hyper_modify_event(efd, he, EPOLLOUT| EPOLLET);
+	}
+
+out:
+	return size;
+}
+
 static int hyper_ttyfd_read(struct hyper_event *he, int efd, int events)
 {
 	struct hyper_buf *buf = &he->rbuf;
@@ -1014,10 +1035,11 @@ static int hyper_ttyfd_read(struct hyper_event *he, int efd, int events)
 	int ret;
 
 	if (buf->get < STREAM_HEADER_SIZE) {
-		size = nonblock_read(he->fd, buf->data + buf->get, STREAM_HEADER_SIZE - buf->get);
+		size = hyper_channel_read(he, efd, STREAM_HEADER_SIZE - buf->get, events);
 		if (size < 0) {
 			return size;
 		}
+
 		buf->get += size;
 		if (buf->get < STREAM_HEADER_SIZE) {
 			return 0;
@@ -1031,7 +1053,7 @@ static int hyper_ttyfd_read(struct hyper_event *he, int efd, int events)
 		return -1;
 	}
 
-	size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
+	size = hyper_channel_read(he, efd, len - buf->get, events);
 	if (size < 0) {
 		return size;
 	}
@@ -1159,7 +1181,7 @@ static int hyper_ctlfd_read(struct hyper_event *he, int efd, int events)
 	fprintf(stdout, "%s\n", __func__);
 
 	if (buf->get < CONTROL_HEADER_SIZE) {
-		size = nonblock_read(he->fd, buf->data + buf->get, CONTROL_HEADER_SIZE - buf->get);
+		size = hyper_channel_read(he, efd, CONTROL_HEADER_SIZE - buf->get, events);
 		if (size < 0) {
 			return size;
 		}
@@ -1191,7 +1213,7 @@ static int hyper_ctlfd_read(struct hyper_event *he, int efd, int events)
 		buf->size = len + 1;
 	}
 
-	size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
+	size = hyper_channel_read(he, efd, len - buf->get, events);
 	if (size < 0) {
 		return size;
 	}
@@ -1213,16 +1235,28 @@ static int hyper_ctlfd_read(struct hyper_event *he, int efd, int events)
 	return ret == 0 ? 0 : -1;
 }
 
+static int hyper_channel_write(struct hyper_event *he, int efd, int events)
+{
+	// virtio serial port receives writable event, it means peer appears
+	if (he->hup){
+		he->hup = 0;
+		fprintf(stdout, "peer is appeared\n");
+		hyper_modify_event(efd, he, EPOLLIN| EPOLLOUT);
+	}
+
+	return hyper_event_write(he, efd, events);
+}
+
 static struct hyper_event_ops hyper_ctlfd_ops = {
 	.read		= hyper_ctlfd_read,
-	.write		= hyper_event_write,
+	.write		= hyper_channel_write,
 	.rbuf_size	= 10240,
 	.wbuf_size	= 4096,
 };
 
 static struct hyper_event_ops hyper_ttyfd_ops = {
 	.read		= hyper_ttyfd_read,
-	.write		= hyper_event_write,
+	.write		= hyper_channel_write,
 	.rbuf_size	= 4096,
 	.wbuf_size	= 10240,
 };
