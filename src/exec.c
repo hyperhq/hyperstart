@@ -139,12 +139,12 @@ out:
 	return 0;
 }
 
-static int write_to_stdin(struct hyper_event *de, int efd)
+static int write_to_stdin(struct hyper_event *de, int efd, int events)
 {
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdinev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
 
-	if (hyper_event_write(de, efd) < 0 || (de->wbuf.get == 0 && exec->close_stdin_request))
+	if (hyper_event_write(de, efd, events) < 0 || (de->wbuf.get == 0 && exec->close_stdin_request))
 		pts_hup(de, efd, exec);
 
 	return 0;
@@ -156,7 +156,7 @@ struct hyper_event_ops in_ops = {
 	.wbuf_size	= 512,
 };
 
-static int stdout_loop(struct hyper_event *de, int efd)
+static int stdout_loop(struct hyper_event *de, int efd, int events)
 {
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdoutev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
@@ -171,7 +171,7 @@ struct hyper_event_ops out_ops = {
 	/* don't need write buff, the stdout data is one way */
 };
 
-static int stderr_loop(struct hyper_event *de, int efd)
+static int stderr_loop(struct hyper_event *de, int efd, int events)
 {
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, stderrev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->errseq);

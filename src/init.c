@@ -1006,7 +1006,7 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 	return 0;
 }
 
-static int hyper_ttyfd_read(struct hyper_event *he, int efd)
+static int hyper_ttyfd_read(struct hyper_event *he, int efd, int events)
 {
 	struct hyper_buf *buf = &he->rbuf;
 	uint32_t len;
@@ -1149,7 +1149,7 @@ static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
 	return hyper_ctl_append_msg(he, ret < 0 ? ERROR: ACK, data, datalen);
 }
 
-static int hyper_ctlfd_read(struct hyper_event *he, int efd)
+static int hyper_ctlfd_read(struct hyper_event *he, int efd, int events)
 {
 	struct hyper_buf *buf = &he->rbuf;
 	uint32_t len;
