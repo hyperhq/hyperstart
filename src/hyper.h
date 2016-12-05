@@ -55,10 +55,10 @@ struct file_command {
 	char		*file;
 };
 
-struct hyper_ctl {
+struct hyper_epoll {
 	int			efd;
+	struct hyper_event	ctl;
 	struct hyper_event	tty;
-	struct hyper_event	chan;
 };
 
 static inline int hyper_symlink(char *oldpath, char *newpath)
@@ -85,8 +85,9 @@ int hyper_open_serial(char *tty);
 void hyper_cleanup_pod(struct hyper_pod *pod);
 int hyper_enter_sandbox(struct hyper_pod *pod, int pidpipe);
 void hyper_pod_destroyed(int failed);
+int hyper_send_pod_finished(struct hyper_pod *pod);
 
 extern struct hyper_pod global_pod;
-extern struct hyper_ctl ctl;
+extern struct hyper_epoll hyper_epoll;
 extern sigset_t orig_mask;
 #endif

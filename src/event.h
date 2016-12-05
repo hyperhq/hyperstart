@@ -7,8 +7,8 @@
 struct hyper_event;
 
 struct hyper_event_ops {
-	int		(*read)(struct hyper_event *e, int efd);
-	int		(*write)(struct hyper_event *e, int efd);
+	int		(*read)(struct hyper_event *e, int efd, int events);
+	int		(*write)(struct hyper_event *e, int efd, int events);
 	void		(*hup)(struct hyper_event *e, int efd);
 	int		rbuf_size;
 	int		wbuf_size;
@@ -22,6 +22,7 @@ struct hyper_buf {
 
 struct hyper_event {
 	int			fd;
+	int			hup;
 	int			flag;
 	struct hyper_buf	rbuf;
 	struct hyper_buf	wbuf;
@@ -40,5 +41,6 @@ int hyper_init_event(struct hyper_event *de, struct hyper_event_ops *ops,
 int hyper_handle_event(int efd, struct epoll_event *event);
 void hyper_reset_event(struct hyper_event *de);
 void hyper_event_hup(struct hyper_event *de, int efd);
-int hyper_event_write(struct hyper_event *de, int efd);
+int hyper_event_write(struct hyper_event *de, int efd, int events);
+int hyper_wbuf_append_msg(struct hyper_event *de, uint8_t *data, uint32_t len);
 #endif

@@ -96,6 +96,30 @@ int hyper_modify_event(int efd, struct hyper_event *he, int flag)
 	return 0;
 }
 
+int hyper_wbuf_append_msg(struct hyper_event *he, uint8_t *data, uint32_t len)
+{
+	struct hyper_buf *buf = &he->wbuf;
+
+	if (buf->get + len > buf->size) {
+		uint8_t *data;
+		fprintf(stdout, "%s: tty buf full\n", __func__);
+
+		data = realloc(buf->data, buf->size + len);
+		if (data == NULL) {
+			perror("realloc failed");
+			return -1;
+		}
+		buf->data = data;
+		buf->size += len;
+	}
+
+	memcpy(buf->data + buf->get, data, len);
+	buf->get += len;
+
+	hyper_modify_event(hyper_epoll.efd, he, he->flag| EPOLLOUT);
+	return 0;
+}
+
 int hyper_requeue_event(int efd, struct hyper_event *ev)
 {
 	struct epoll_event event = {
@@ -116,7 +140,7 @@ int hyper_requeue_event(int efd, struct hyper_event *ev)
 	return 0;
 }
 
-int hyper_event_write(struct hyper_event *he, int efd)
+int hyper_event_write(struct hyper_event *he, int efd, int events)
 {
 	struct hyper_buf *buf = &he->wbuf;
 	uint32_t len = 0;
@@ -138,7 +162,7 @@ int hyper_event_write(struct hyper_event *he, int efd)
 	memmove(buf->data, buf->data + len, buf->get);
 
 	if (buf->get == 0) {
-		hyper_modify_event(ctl.efd, he, he->flag & ~EPOLLOUT);
+		hyper_modify_event(hyper_epoll.efd, he, he->flag & ~EPOLLOUT);
 	}
 
 	return 0;
@@ -161,12 +185,12 @@ int hyper_handle_event(int efd, struct epoll_event *event)
 	if ((event->events & EPOLLIN) && he->ops->read) {
 		fprintf(stdout, "%s event EPOLLIN, he %p, fd %d, %p\n",
 			__func__, he, he->fd, he->ops);
-		return he->ops->read(he, efd);
+		return he->ops->read(he, efd, event->events);
 	}
 	if ((event->events & EPOLLOUT) && he->ops->write) {
 		fprintf(stdout, "%s event EPOLLOUT, he %p, fd %d, %p\n",
 			__func__, he, he->fd, he->ops);
-		return he->ops->write(he, efd);
+		return he->ops->write(he, efd, event->events);
 	}
 
 	if ((event->events & EPOLLHUP) || (event->events & EPOLLERR)) {

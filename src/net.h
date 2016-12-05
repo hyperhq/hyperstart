@@ -52,8 +52,6 @@ int hyper_setup_dns(struct hyper_pod *pod);
 void hyper_cleanup_dns(struct hyper_pod *pod);
 int hyper_get_type(int fd, uint32_t *type);
 int hyper_send_type(int fd, uint32_t type);
-int hyper_send_type_block(int fd, uint32_t type, int need_ack);
-int hyper_send_msg(int fd, uint32_t type, uint32_t len, uint8_t *data);
-int hyper_send_msg_block(int fd, uint32_t type, uint32_t len, uint8_t *data);
+int hyper_send_data_block(int fd, uint8_t *data, uint32_t len);
 int hyper_send_data(int fd, uint8_t *data, uint32_t len);
 #endif
