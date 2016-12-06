@@ -44,27 +44,6 @@ sigset_t orig_mask;
 static int hyper_handle_exit(struct hyper_pod *pod);
 static int hyper_ctl_append_msg(struct hyper_event *he, uint32_t type, uint8_t *data, uint32_t len);
 
-int hyper_send_pod_finished(struct hyper_pod *pod)
-{
-	struct hyper_container *c;
-	uint8_t *data = NULL, *new;
-	int c_num = 0;
-
-	list_for_each_entry(c, &pod->containers, list) {
-		c_num++;
-		new = realloc(data, c_num * 4);
-		if (new == NULL) {
-			free(data);
-			return -1;
-		}
-
-		hyper_set_be32(new + ((c_num - 1) * 4), c->exec.code);
-		data = new;
-	}
-
-	return hyper_ctl_append_msg(&hyper_epoll.ctl, PODFINISHED, data, c_num * 4);
-}
-
 static int hyper_set_win_size(char *json, int length)
 {
 	struct winsize size;
@@ -1118,10 +1097,6 @@ static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
 		ret = hyper_start_pod((char *)buf->data + 8, len - 8);
 		hyper_print_uptime();
 		break;
-	case STOPPOD_DEPRECATED:
-		fprintf(stderr, "get abandoned STOPPOD message\n");
-		ret = -1;
-		break;
 	case DESTROYPOD:
 		pod->req_destroy = 1;
 		fprintf(stdout, "get DESTROYPOD message\n");
@@ -1137,7 +1112,6 @@ static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
 		ret = hyper_cmd_rw_file((char *)buf->data + 8, len - 8, &datalen, &data, READFILE);
 		break;
 	case PING:
-	case GETPOD:
 		break;
 	case READY:
 		ret = hyper_rescan();
@@ -1162,6 +1136,14 @@ static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
 		break;
 	case SETUPROUTE:
 		ret = hyper_cmd_setup_route((char *)buf->data + 8, len - 8);
+		break;
+	case GETPOD_DEPRECATED:
+	case STOPPOD_DEPRECATED:
+	case RESTARTCONTAINER_DEPRECATED:
+	case CMDFINISHED_DEPRECATED:
+	case PODFINISHED_DEPRECATED:
+		fprintf(stderr, "get abandoned command\n");
+		ret = -1;
 		break;
 	default:
 		ret = -1;
