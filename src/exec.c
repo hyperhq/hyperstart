@@ -580,16 +580,7 @@ exit:
 
 static void hyper_free_exec(struct hyper_exec *exec)
 {
-	int i;
-
-	free(exec->container_id);
-
-	for (i = 0; i < exec->argc; i++) {
-		//fprintf(stdout, "argv %d %s\n", i, exec->argv[i]);
-		free(exec->argv[i]);
-	}
-
-	free(exec->argv);
+	hyper_cleanup_exec(exec);
 	free(exec);
 }
 
