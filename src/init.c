@@ -44,26 +44,38 @@ sigset_t orig_mask;
 static int hyper_handle_exit(struct hyper_pod *pod);
 static int hyper_ctl_append_msg(struct hyper_event *he, uint32_t type, uint8_t *data, uint32_t len);
 
-static int hyper_set_win_size(char *json, int length)
+static int hyper_set_win_size(struct hyper_pod *pod, char *json, int length)
 {
 	struct winsize size;
 	struct hyper_exec *exec;
-	int ret;
+	int ret = -1;
 
-	fprintf(stdout, "call hyper_win_size, json %s, len %d\n", json, length);
+	fprintf(stdout, "call hyper_set_win_size, json %s, len %d\n", json, length);
 	JSON_Value *value = hyper_json_parse(json, length);
 	if (value == NULL) {
 		fprintf(stderr, "set term size failed\n");
-		ret = -1;
 		goto out;
 	}
-	const uint64_t seq = (uint64_t)json_object_get_number(json_object(value), "seq");
-
-	exec = hyper_find_exec_by_seq(&global_pod, seq);
-	if (exec == NULL) {
-		fprintf(stdout, "can not find exec whose seq is %" PRIu64"\n", seq);
-		ret = 0;
+	const char *container = json_object_get_string(json_object(value), "container");
+	const char *process = json_object_get_string(json_object(value), "process");
+	if (!container || !process) {
+		fprintf(stderr, "call hyper_set_win_size, invalid config");
 		goto out;
+	}
+
+	struct hyper_container *c = hyper_find_container(pod, container);
+	if (!c) {
+		fprintf(stderr, "call hyper_set_win_size, can not find the container: %s\n", container);
+		goto out;
+	}
+	if (strcmp(c->exec.id, process) == 0) {
+		exec = &c->exec;
+	} else {
+		exec = hyper_find_exec_by_name(pod, process);
+		if (!exec) {
+			fprintf(stderr, "call hyper_set_win_size, can not find the process: %s\n", process);
+			goto out;
+		}
 	}
 
 	size.ws_row = (int)json_object_get_number(json_object(value), "row");
@@ -1117,7 +1129,7 @@ static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
 		ret = hyper_rescan();
 		break;
 	case WINSIZE:
-		ret = hyper_set_win_size((char *)buf->data + 8, len - 8);
+		ret = hyper_set_win_size(pod, (char *)buf->data + 8, len - 8);
 		break;
 	case NEWCONTAINER:
 		ret = hyper_new_container((char *)buf->data + 8, len - 8);
