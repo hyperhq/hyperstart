@@ -188,6 +188,9 @@ void hyper_cleanup_exec(struct hyper_exec *exec)
 	free(exec->container_id);
 	exec->container_id = NULL;
 
+	free(exec->id);
+	exec->id = NULL;
+
 	free(exec->user);
 	exec->user = NULL;
 	free(exec->group);
@@ -474,7 +477,11 @@ static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *t
 	for (j = 0; j < toks_size; j++) {
 		t = &toks[i];
 		dprintf(stdout, "%d name %s\n", i, json_token_str(json, t));
-		if (json_token_streq(json, t, "user") && t->size == 1) {
+		if (json_token_streq(json, t, "id") && t->size == 1) {
+			exec->id = (json_token_str(json, &toks[++i]));
+			dprintf(stdout, "container process id %s\n", exec->id);
+			i++;
+		} else if (json_token_streq(json, t, "user") && t->size == 1) {
 			exec->user = (json_token_str(json, &toks[++i]));
 			dprintf(stdout, "container process user %s\n", exec->user);
 			i++;

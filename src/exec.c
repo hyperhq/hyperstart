@@ -713,6 +713,19 @@ static int hyper_release_exec(struct hyper_exec *exec)
 	return 0;
 }
 
+struct hyper_exec *hyper_find_exec_by_name(struct hyper_pod *pod, const char *process)
+{
+	struct hyper_exec *exec;
+
+	list_for_each_entry(exec, &pod->exec_head, list) {
+		if (strcmp(exec->id, process) == 0) {
+			return exec;
+		}
+	}
+
+	return NULL;
+}
+
 struct hyper_exec *hyper_find_exec_by_pid(struct list_head *head, int pid)
 {
 	struct hyper_exec *exec;
