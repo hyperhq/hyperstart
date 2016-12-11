@@ -191,26 +191,62 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 	char *user = exec->user == NULL || strlen(exec->user) == 0 ? NULL : exec->user;
 	char *group = exec->group == NULL || strlen(exec->group) == 0 ? NULL : exec->group;
 
+	uid_t uid = 0;
+	gid_t gid = 0;
+	int ngroups;
+	gid_t *reallocgroups, *groups = NULL;
+
 	// check the config
-	if (!user) {
-		if (group || exec->nr_additional_groups > 0) {
-			fprintf(stderr, "group or additional groups can only be set when user is set\n");
-			return -1;
-		}
+	if (!user && !group && exec->nr_additional_groups == 0) {
 		return 0;
 	}
 
 	// get uid
-	fprintf(stdout, "try to find the user: %s\n", user);
-	struct passwd *pwd = hyper_getpwnam(user);
-	if (pwd == NULL) {
-		perror("can't find the user");
-		return -1;
+	if (user) {
+		fprintf(stdout, "try to find the user: %s\n", user);
+		struct passwd *pwd = hyper_getpwnam(user);
+		if (pwd == NULL) {
+			perror("can't find the user");
+			return -1;
+		}
+		uid = pwd->pw_uid;
+		gid = pwd->pw_gid;
+
+		// get groups of user
+		groups = malloc(sizeof(gid_t) * 10);
+		if (groups == NULL) {
+			goto fail;
+		}
+		if (hyper_getgrouplist(pwd->pw_name, gid, groups, &ngroups) < 0) {
+			reallocgroups = realloc(groups, sizeof(gid_t) * ngroups);
+			if (reallocgroups == NULL) {
+				goto fail;
+			}
+			groups = reallocgroups;
+			if (hyper_getgrouplist(pwd->pw_name, gid, groups, &ngroups) < 0) {
+				goto fail;
+			}
+		}
+
+		// set user related envs. the container env config can overwrite it
+		setenv("USER", pwd->pw_name, 1);
+		setenv("HOME", pwd->pw_dir, 1);
+	} else {
+		ngroups = getgroups(0, NULL);
+		if (ngroups < 0) {
+			goto fail;
+		}
+		groups = malloc(sizeof(gid_t) * ngroups);
+		if (groups == NULL) {
+			goto fail;
+		}
+		ngroups = getgroups(ngroups, groups);
+		if (ngroups < 0) {
+			goto fail;
+		}
 	}
-	uid_t uid = pwd->pw_uid;
 
 	// get gid
-	gid_t gid = pwd->pw_gid;
 	if (group) {
 		fprintf(stdout, "try to find the group: %s\n", group);
 		struct group *gr = hyper_getgrnam(group);
@@ -221,19 +257,8 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 		gid = gr->gr_gid;
 	}
 
-	// get all gids
-	int i, ngroups = 10;
-	gid_t *reallocgroups, *groups = malloc(sizeof(gid_t) * ngroups);
-	if (groups == NULL)
-		goto fail;
-	if (hyper_getgrouplist(pwd->pw_name, gid, groups, &ngroups) < 0) {
-		reallocgroups = realloc(groups, sizeof(gid_t) * ngroups);
-		if (reallocgroups == NULL)
-			goto fail;
-		groups = reallocgroups;
-		if (hyper_getgrouplist(pwd->pw_name, gid, groups, &ngroups) < 0)
-			goto fail;
-	}
+	// append additional groups to supplementary groups
+	int i;
 	reallocgroups = realloc(groups, sizeof(gid_t) * (ngroups + exec->nr_additional_groups));
 	if (reallocgroups == NULL)
 		goto fail;
@@ -273,10 +298,6 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 		goto fail;
 	}
 	free(groups);
-
-	// set user related envs. the container env config can overwrite it
-	setenv("USER", pwd->pw_name, 1);
-	setenv("HOME", pwd->pw_dir, 1);
 
 	return 0;
 
