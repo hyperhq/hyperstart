@@ -42,7 +42,6 @@ struct hyper_epoll hyper_epoll;
 sigset_t orig_mask;
 
 static int hyper_handle_exit(struct hyper_pod *pod);
-static int hyper_ctl_append_msg(struct hyper_event *he, uint32_t type, uint8_t *data, uint32_t len);
 
 static int hyper_set_win_size(struct hyper_pod *pod, char *json, int length)
 {
@@ -1060,7 +1059,7 @@ static int hyper_ttyfd_read(struct hyper_event *he, int efd, int events)
 	return ret == 0 ? 0 : -1;
 }
 
-static int hyper_ctl_append_msg(struct hyper_event *he, uint32_t type, uint8_t *data, uint32_t len)
+int hyper_ctl_append_msg(struct hyper_event *he, uint32_t type, uint8_t *data, uint32_t len)
 {
 	int ret = -1;
 	fprintf(stdout, "hyper ctl append type %d, len %d\n", type, len);
