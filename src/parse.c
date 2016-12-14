@@ -147,7 +147,6 @@ static int container_parse_additional_groups(struct hyper_exec *exec, char *json
 	i++;
 	for (j = 0; j < exec->nr_additional_groups; j++, i++) {
 		exec->additional_groups[j] = (json_token_str(json, &toks[i]));
-		fprintf(stdout, "container process additional group %d %s\n", j, exec->additional_groups[j]);
 	}
 
 	return i;
@@ -174,7 +173,6 @@ static int container_parse_argv(struct hyper_exec *exec, char *json, jsmntok_t *
 	i++;
 	for (j = 0; j < exec->argc; j++, i++) {
 		exec->argv[j] = (json_token_str(json, &toks[i]));
-		fprintf(stdout, "container init arg %d %s\n", j, exec->argv[j]);
 	}
 
 	return i;
@@ -249,7 +247,6 @@ static int container_parse_volumes(struct hyper_container *c, char *json, jsmnto
 	}
 
 	c->vols_num = toks[i].size;
-	fprintf(stdout, "volumes num %d\n", c->vols_num);
 
 	i++;
 	for (j = 0; j < c->vols_num; j++) {
@@ -265,26 +262,20 @@ static int container_parse_volumes(struct hyper_container *c, char *json, jsmnto
 			if (json_token_streq(json, &toks[i], "device")) {
 				c->vols[j].device =
 				(json_token_str(json, &toks[++i]));
-				fprintf(stdout, "volume %d device %s\n", j, c->vols[j].device);
 			} else if (json_token_streq(json, &toks[i], "addr")) {
 				c->vols[j].scsiaddr = (json_token_str(json, &toks[++i]));
-				fprintf(stdout, "volume %d scsi id %s\n", j, c->vols[j].scsiaddr);
 			} else if (json_token_streq(json, &toks[i], "mount")) {
 				c->vols[j].mountpoint =
 				(json_token_str(json, &toks[++i]));
-				fprintf(stdout, "volume %d mp %s\n", j, c->vols[j].mountpoint);
 			} else if (json_token_streq(json, &toks[i], "fstype")) {
 				c->vols[j].fstype =
 				(json_token_str(json, &toks[++i]));
-				fprintf(stdout, "volume %d fstype %s\n", j, c->vols[j].fstype);
 			} else if (json_token_streq(json, &toks[i], "readOnly")) {
 				if (!json_token_streq(json, &toks[++i], "false"))
 					c->vols[j].readonly = 1;
-				fprintf(stdout, "volume %d readonly %d\n", j, c->vols[j].readonly);
 			} else if (json_token_streq(json, &toks[i], "dockerVolume")) {
 				if (!json_token_streq(json, &toks[++i], "false"))
 					c->vols[j].docker = 1;
-				fprintf(stdout, "volume %d docker volume %d\n", j, c->vols[j].docker);
 			} else {
 				fprintf(stdout, "get unknown section %s in voulmes\n",
 					json_token_str(json, &toks[i]));
@@ -325,7 +316,6 @@ static int container_parse_fsmap(struct hyper_container *c, char *json, jsmntok_
 	}
 
 	c->maps_num = toks[i].size;
-	fprintf(stdout, "fsmap num %d\n", c->maps_num);
 
 	i++;
 	for (j = 0; j < c->maps_num; j++) {
@@ -341,19 +331,15 @@ static int container_parse_fsmap(struct hyper_container *c, char *json, jsmntok_
 			if (json_token_streq(json, &toks[i], "source")) {
 				c->maps[j].source =
 				(json_token_str(json, &toks[++i]));
-				fprintf(stdout, "maps %d source %s\n", j, c->maps[j].source);
 			} else if (json_token_streq(json, &toks[i], "path")) {
 				c->maps[j].path =
 				(json_token_str(json, &toks[++i]));
-				fprintf(stdout, "maps %d path %s\n", j, c->maps[j].path);
 			} else if (json_token_streq(json, &toks[i], "readOnly")) {
 				if (!json_token_streq(json, &toks[++i], "false"))
 					c->maps[j].readonly = 1;
-				fprintf(stdout, "maps %d readonly %d\n", j, c->maps[j].readonly);
 			} else if (json_token_streq(json, &toks[i], "dockerVolume")) {
 				if (!json_token_streq(json, &toks[++i], "false"))
 					c->maps[j].docker = 1;
-				fprintf(stdout, "maps %d docker volume %d\n", j, c->maps[j].docker);
 			} else {
 				fprintf(stdout, "in maps incorrect %s\n",
 					json_token_str(json, &toks[i]));
@@ -381,7 +367,6 @@ static int container_parse_envs(struct hyper_exec *exec, char *json, jsmntok_t *
 	}
 
 	exec->envs_num = toks[i].size;
-	fprintf(stdout, "envs num %d\n", exec->envs_num);
 
 	i++;
 	for (j = 0; j < exec->envs_num; j++) {
@@ -397,11 +382,9 @@ static int container_parse_envs(struct hyper_exec *exec, char *json, jsmntok_t *
 			if (json_token_streq(json, &toks[i], "env")) {
 				exec->envs[j].env =
 				(json_token_str(json, &toks[++i]));
-				fprintf(stdout, "envs %d env %s\n", j, exec->envs[j].env);
 			} else if (json_token_streq(json, &toks[i], "value")) {
 				exec->envs[j].value =
 				(json_token_str(json, &toks[++i]));
-				fprintf(stdout, "envs %d value %s\n", j, exec->envs[j].value);
 			} else {
 				fprintf(stdout, "get unknown section %s in envs\n",
 					json_token_str(json, &toks[i]));
@@ -444,7 +427,6 @@ static int container_parse_sysctl(struct hyper_container *c, char *json, jsmntok
 	}
 
 	c->sys_num = toks[i].size;
-	fprintf(stdout, "sysctl size %d\n", c->sys_num);
 
 	i++;
 	for (j = 0; j < c->sys_num; j++) {
@@ -453,7 +435,6 @@ static int container_parse_sysctl(struct hyper_container *c, char *json, jsmntok
 			*p = '/';
 		}
 		c->sys[j].value = (json_token_str(json, &toks[++i]));
-		fprintf(stdout, "sysctl %s:%s\n", c->sys[j].path, c->sys[j].value);
 	}
 	return i;
 }
@@ -472,14 +453,11 @@ static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *t
 	i++;
 	for (j = 0; j < toks_size; j++) {
 		t = &toks[i];
-		fprintf(stdout, "%d name %s\n", i, json_token_str(json, t));
 		if (json_token_streq(json, t, "user") && t->size == 1) {
 			exec->user = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "container process user %s\n", exec->user);
 			i++;
 		} else if (json_token_streq(json, t, "group") && t->size == 1) {
 			exec->group = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "container process group %s\n", exec->group);
 			i++;
 		} else if (json_token_streq(json, t, "additionalGroups") && t->size == 1) {
 			next = container_parse_additional_groups(exec, json, &toks[++i]);
@@ -489,18 +467,13 @@ static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *t
 		} else if (json_token_streq(json, t, "terminal") && t->size == 1) {
 			if (!json_token_streq(json, &toks[++i], "false")) {
 				exec->tty = 1;
-				fprintf(stdout, "container uses terminal\n");
-			} else {
-				fprintf(stdout, "container doesn't use terminal\n");
 			}
 			i++;
 		} else if (json_token_streq(json, t, "stdio") && t->size == 1) {
 			exec->seq = json_token_ll(json, &toks[++i]);
-			fprintf(stdout, "container seq %" PRIu64 "\n", exec->seq);
 			i++;
 		} else if (json_token_streq(json, t, "stderr") && t->size == 1) {
 			exec->errseq = json_token_ll(json, &toks[++i]);
-			fprintf(stdout, "container stderr seq %" PRIu64 "\n", exec->errseq);
 			i++;
 		} else if (json_token_streq(json, t, "args") && t->size == 1) {
 			next = container_parse_argv(exec, json, &toks[++i]);
@@ -514,7 +487,6 @@ static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *t
 			i += next;
 		} else if (json_token_streq(json, t, "workdir") && t->size == 1) {
 			exec->workdir = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "container workdir %s\n", exec->workdir);
 			i++;
 		}
 	}
@@ -554,7 +526,6 @@ static int container_parse_ports(struct hyper_container *c, char *json, jsmntok_
 	}
 
 	c->ports_num = toks[i].size;
-	fprintf(stdout, "ports num %d\n", c->ports_num);
 
 	i++;
 	for (j = 0; j < c->ports_num; j++) {
@@ -570,13 +541,10 @@ static int container_parse_ports(struct hyper_container *c, char *json, jsmntok_
 			if (json_token_streq(json, &toks[i], "protocol")) {
 				c->ports[j].protocol =
 				(json_token_str(json, &toks[++i]));
-				fprintf(stdout, "port %d protocol %s\n", j, c->ports[j].protocol);
 			} else if (json_token_streq(json, &toks[i], "hostPort")) {
 				c->ports[j].host_port = json_token_int(json, &toks[++i]);
-				fprintf(stdout, "port %d host_port %d\n", j, c->ports[j].host_port);
 			} else if (json_token_streq(json, &toks[i], "containerPort")) {
 				c->ports[j].container_port = json_token_int(json, &toks[++i]);
-				fprintf(stdout, "port %d container_port %d\n", j, c->ports[j].container_port);
 			} else {
 				fprintf(stdout, "get unknown section %s in ports\n",
 					json_token_str(json, &toks[i]));
@@ -643,31 +611,24 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 	INIT_LIST_HEAD(&c->list);
 
 	next_container = toks[i].size;
-	fprintf(stdout, "next container %d\n", next_container);
 	i++;
 	for (j = 0; j < next_container; j++) {
 		t = &toks[i];
-		fprintf(stdout, "%d name %s\n", i, json_token_str(json, t));
 		if (json_token_streq(json, t, "id") && t->size == 1) {
 			c->id = (json_token_str(json, &toks[++i]));
 			c->exec.container_id = strdup(c->id);
-			fprintf(stdout, "container id %s\n", c->id);
 			i++;
 		} else if (json_token_streq(json, t, "rootfs") && t->size == 1) {
 			c->rootfs = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "container rootfs %s\n", c->rootfs);
 			i++;
 		} else if (json_token_streq(json, t, "image") && t->size == 1) {
 			c->image = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "container image %s\n", c->image);
 			i++;
 		} else if (json_token_streq(json, t, "addr") && t->size == 1) {
 			c->scsiaddr = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "container image scsi id %s\n", c->scsiaddr);
 			i++;
 		} else if (json_token_streq(json, t, "fstype") && t->size == 1) {
 			c->fstype = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "container fstype %s\n", c->fstype);
 			i++;
 		} else if (json_token_streq(json, t, "volumes") && t->size == 1) {
 			next = container_parse_volumes(c, json, &toks[++i]);
@@ -690,12 +651,10 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 				goto fail;
 			i += next;
 		} else if (json_token_streq(json, t, "restartPolicy") && t->size == 1) {
-			fprintf(stdout, "restart policy %s\n", json_token_str(json, &toks[++i]));
-			i++;
+			i += 2;
 		} else if (json_token_streq(json, t, "initialize") && t->size == 1) {
 			if (!json_token_streq(json, &toks[++i], "false")) {
 				c->initialize = 1;
-				fprintf(stdout, "need to initialize container\n");
 			}
 			i++;
 		} else if (json_token_streq(json, t, "ports") && t->size == 1) {
@@ -729,7 +688,6 @@ static int hyper_parse_containers(struct hyper_pod *pod, char *json, jsmntok_t *
 	}
 
 	c_num = toks[i].size;
-	fprintf(stdout, "container count %d\n", c_num);
 
 	i++;
 	for (j = 0; j < c_num; j++) {
@@ -782,7 +740,6 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 	for (j = 0; j < next_if; j++, i++) {
 		if (json_token_streq(json, &toks[i], "device")) {
 			iface->device = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "net device is %s\n", iface->device);
 		} else if (json_token_streq(json, &toks[i], "ipAddresses")) {
 			if (toks[++i].type != JSMN_ARRAY) {
 				fprintf(stdout, "interface object needs ipAddresses array\n");
@@ -790,7 +747,6 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 			}
 
 			num_ipaddr = toks[i].size;
-			fprintf(stdout, "Number of ip addresses:%d\n", num_ipaddr);
 
 			for (k = 0; k < num_ipaddr; k++) {
 				if (toks[++i].type != JSMN_OBJECT) {
@@ -809,12 +765,8 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 					i++;
 					if (json_token_streq(json, &toks[i], "ipAddress")) {
 						ipaddr->addr = (json_token_str(json, &toks[++i]));
-						fprintf(stdout, "net ipaddress for device %s is %s\n",
-							iface->device, ipaddr->addr);
 					} else if (json_token_streq(json, &toks[i], "netMask")) {
 						ipaddr->mask = (json_token_str(json, &toks[++i]));
-						fprintf(stdout, "net mask for device %s is %s\n",
-							iface->device, ipaddr->mask);
 					} else {
 						fprintf(stderr, "get unknown section %s in interfaces\n",
 						json_token_str(json, &toks[i]));
@@ -827,19 +779,16 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 			}
 		} else if (json_token_streq(json, &toks[i], "newDeviceName")) {
 			iface->new_device_name = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "new interface name is %s\n", iface->new_device_name);
 		} else if (json_token_streq(json, &toks[i], "ipAddress")) {
 			if (ipaddr_oldf == NULL) {
 				ipaddr_oldf = calloc(1, sizeof(*ipaddr));
 			}
 			ipaddr_oldf->addr = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "net ipaddress is %s\n", ipaddr_oldf->addr);
 		} else if (json_token_streq(json, &toks[i], "netMask")) {
 			if (ipaddr_oldf == NULL) {
 				ipaddr_oldf = calloc(1, sizeof(*ipaddr));
 			}
 			ipaddr_oldf->mask = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "net mask is %s\n", ipaddr_oldf->mask);
 		} else {
 			fprintf(stderr, "get unknown section %s in interfaces\n",
 				json_token_str(json, &toks[i]));
@@ -915,7 +864,6 @@ static int hyper_parse_interfaces(struct hyper_pod *pod, char *json, jsmntok_t *
 	}
 
 	pod->i_num = toks[i].size;
-	fprintf(stdout, "network interfaces num %d\n", pod->i_num);
 
 	pod->iface = calloc(pod->i_num, sizeof(*iface));
 	if (pod->iface == NULL) {
@@ -946,7 +894,6 @@ static int hyper_parse_routes(struct hyper_route **routes, uint32_t *r_num, char
 	}
 
 	num = toks[i].size;
-	fprintf(stdout, "network routes num %d\n", num);
 
 	rts = calloc(num, sizeof(*rts));
 	if (rts == NULL) {
@@ -969,13 +916,10 @@ static int hyper_parse_routes(struct hyper_route **routes, uint32_t *r_num, char
 		for (i_rt = 0; i_rt < next_rt; i_rt++, i++) {
 			if (json_token_streq(json, &toks[i], "dest")) {
 				rt->dst = (json_token_str(json, &toks[++i]));
-				fprintf(stdout, "route %d dest is %s\n", j, rt->dst);
 			} else if (json_token_streq(json, &toks[i], "gateway")) {
 				rt->gw = (json_token_str(json, &toks[++i]));
-				fprintf(stdout, "route %d gateway is %s\n", j, rt->gw);
 			} else if (json_token_streq(json, &toks[i], "device")) {
 				rt->device = (json_token_str(json, &toks[++i]));
-				fprintf(stdout, "route %d device is %s\n", j, rt->device);
 			} else {
 				fprintf(stderr, "get unknown section %s in routes\n",
 					json_token_str(json, &toks[i]));
@@ -1053,7 +997,6 @@ static int hyper_parse_dns(struct hyper_pod *pod, char *json, jsmntok_t *toks)
 	}
 
 	pod->d_num = toks[i].size;
-	fprintf(stdout, "dns count %d\n", pod->d_num);
 
 	pod->dns = calloc(pod->d_num, sizeof(*pod->dns));
 	if (pod->dns == NULL) {
@@ -1064,7 +1007,6 @@ static int hyper_parse_dns(struct hyper_pod *pod, char *json, jsmntok_t *toks)
 	i++;
 	for (j = 0; j < pod->d_num; j++, i++) {
 		pod->dns[j] = json_token_str(json, &toks[i]);
-		fprintf(stdout, "pod dns %d: %s\n", j, pod->dns[j]);
 	}
 
 	return i;
@@ -1084,7 +1026,6 @@ static int hyper_parse_portmapping_internal_networks(struct portmapping_white_li
 	}
 
 	podmapping->i_num = toks[i].size;
-	fprintf(stdout, "internal networks count %d\n", podmapping->i_num);
 
 	podmapping->internal_networks = calloc(podmapping->i_num, sizeof(*podmapping->internal_networks));
 	if (podmapping->internal_networks == NULL) {
@@ -1095,7 +1036,6 @@ static int hyper_parse_portmapping_internal_networks(struct portmapping_white_li
 	i++;
 	for (j = 0; j < podmapping->i_num; j++, i++) {
 		podmapping->internal_networks[j] = json_token_str(json, &toks[i]);
-		fprintf(stdout, "podmapping internal_networks %d: %s\n", j, podmapping->internal_networks[j]);
 	}
 
 	return i;
@@ -1115,7 +1055,6 @@ static int hyper_parse_portmapping_external_networks(struct portmapping_white_li
 	}
 
 	podmapping->e_num = toks[i].size;
-	fprintf(stdout, "external networks count %d\n", podmapping->e_num);
 
 	podmapping->external_networks = calloc(podmapping->e_num, sizeof(*podmapping->external_networks));
 	if (podmapping->external_networks == NULL) {
@@ -1126,7 +1065,6 @@ static int hyper_parse_portmapping_external_networks(struct portmapping_white_li
 	i++;
 	for (j = 0; j < podmapping->e_num; j++, i++) {
 		podmapping->external_networks[j] = json_token_str(json, &toks[i]);
-		fprintf(stdout, "podmapping external_networks %d: %s\n", j, podmapping->external_networks[j]);
 	}
 
 	return i;
@@ -1152,7 +1090,6 @@ static int hyper_parse_portmapping_whitelist(struct hyper_pod *pod, char *json, 
 	for (j = 0; j < toks_size; j++) {
 		jsmntok_t *t = &toks[i];
 
-		fprintf(stdout, "token %d, type is %d, size is %d\n", i, t->type, t->size);
 		if (t->type != JSMN_STRING) {
 			i++;
 			continue;
@@ -1219,8 +1156,6 @@ realloc:
 	for (i = 0; i < n;) {
 		jsmntok_t *t = &toks[i];
 
-		fprintf(stdout, "token %d, type is %d, size is %d\n", i, t->type, t->size);
-
 		if (t->type != JSMN_STRING) {
 			i++;
 			continue;
@@ -1252,15 +1187,12 @@ realloc:
 			i += next;
 		} else if (json_token_streq(json, t, "shareDir") && t->size == 1) {
 			pod->share_tag = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "share tag is %s\n", pod->share_tag);
 			i++;
 		} else if (json_token_streq(json, t, "hostname") && t->size == 1) {
 			pod->hostname = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "hostname is %s\n", pod->hostname);
 			i++;
 		} else if (json_token_streq(json, t, "restartPolicy") && t->size == 1) {
 			i += 2;
-			fprintf(stdout, "restartPolicy is deprecated\n");
 		} else if (json_token_streq(json, t, "portmappingWhiteLists") && t->size == 1) {
 			next = hyper_parse_portmapping_whitelist(pod, json, &toks[++i]);
 			if (next < 0)
@@ -1362,7 +1294,6 @@ realloc:
 
 		if (json_token_streq(json, t, "container")) {
 			exec->container_id = (json_token_str(json, &toks[++i]));
-			fprintf(stdout, "get container %s\n", exec->container_id);
 		} else if (json_token_streq(json, t, "process") && t->size == 1) {
 			j = hyper_parse_process(exec, json, &toks[++i]);
 			if (j < 0)
@@ -1427,10 +1358,8 @@ int hyper_parse_file_command(struct file_command *cmd, char *json, int length)
 
 		if (json_token_streq(json, t, "container")) {
 			cmd->id = (json_token_str(json, &toks[i]));
-			fprintf(stdout, "file cmd get container %s\n", cmd->id);
 		} else if (json_token_streq(json, t, "file")) {
 			cmd->file = (json_token_str(json, &toks[i]));
-			fprintf(stdout, "file cmd get file %s\n", cmd->file);
 		} else {
 			fprintf(stdout, "get unknown section %s in file cmd\n",
 				json_token_str(json, t));
