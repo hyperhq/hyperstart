@@ -17,5 +17,5 @@ struct hyper_interface *hyper_parse_setup_interface(char *json, int length);
 void hyper_free_interface(struct hyper_interface *iface);
 int hyper_parse_setup_routes(struct hyper_route **routes, uint32_t *r_num, char *json, int length);
 JSON_Value *hyper_json_parse(char *json, int length);
-
+void hyper_cleanup_exec(struct hyper_exec *exec);
 #endif
