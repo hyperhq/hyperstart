@@ -10,10 +10,10 @@ struct hyper_pod;
 struct env;
 
 #ifdef WITH_DEBUG
-#define dprintf(fmt, ...) \
-	fprintf(stdout, fmt, ##__VA_ARGS__)
+#define dprintf(fd, fmt, ...) \
+	fprintf(fd, fmt, ##__VA_ARGS__)
 #else
-#define dprintf(fmr, ...)
+#define dprintf(fd, fmt, ...) do { } while (0)
 #endif
 
 char *read_cmdline(void);
