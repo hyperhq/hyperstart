@@ -12,7 +12,7 @@
 #include <linux/virtio_ids.h>
 #include <linux/vm_sockets.h>
 
-#include "event.h"
+#include "vsock.h"
 
 /* for pre-vsock kernels. */
 #ifndef VIRTIO_ID_VSOCK
@@ -115,7 +115,8 @@ int hyper_create_vsock_listener(unsigned short port)
 	return fd;
 }
 
-int hyper_vsock_accept(struct hyper_event *he, int efd, int events)
+int hyper_vsock_accept(struct hyper_event *he, int efd,
+		       struct hyper_event *ne, struct hyper_event_ops *ops)
 {
 	int ret = 0;
 
@@ -137,7 +138,25 @@ int hyper_vsock_accept(struct hyper_event *he, int efd, int events)
 		}
 		fprintf(stdout, "vsock connection from cid %u port %u\n",
 			sa_client.svm_cid, sa_client.svm_port);
-		close(fd);
+
+		/* only accept host vsock connections */
+		if (sa_client.svm_cid != VMADDR_CID_HOST) {
+			close(fd);
+			continue;
+		}
+
+		/* oh, we already have it! */
+		if (ne->fd > 0) {
+			close(fd);
+			continue;
+		}
+
+		ne->fd = fd;
+		if (hyper_init_event(ne, ops, he->ptr) < 0 ||
+		    hyper_add_event(efd, ne, EPOLLIN) < 0) {
+			hyper_reset_event(ne);
+			return -1;
+		}
 	}
 
 	return ret;
