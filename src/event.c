@@ -54,11 +54,11 @@ int hyper_init_event(struct hyper_event *he, struct hyper_event_ops *ops, void *
 int hyper_add_event(int efd, struct hyper_event *he, int flag)
 {
 	struct epoll_event event = {
-		.events		= flag,
+		.events		= flag | EPOLLRDHUP,
 		.data.ptr	= he,
 	};
 
-	he->flag = flag;
+	he->flag = flag | EPOLLRDHUP;
 	if (hyper_setfd_nonblock(he->fd) < 0) {
 		perror("set fd nonblock failed");
 		return -1;
@@ -77,14 +77,14 @@ int hyper_add_event(int efd, struct hyper_event *he, int flag)
 int hyper_modify_event(int efd, struct hyper_event *he, int flag)
 {
 	struct epoll_event event = {
-		.events		= flag,
+		.events		= flag | EPOLLRDHUP,
 		.data.ptr	= he,
 	};
 
 	if (he->flag == flag)
 		return 0;
 
-	he->flag = flag;
+	he->flag = flag | EPOLLRDHUP;
 	fprintf(stdout, "%s modify event fd %d, %p, event %d\n",
 			__func__, he->fd, he, flag);
 
@@ -191,7 +191,7 @@ int hyper_handle_event(int efd, struct epoll_event *event)
 		return he->ops->write(he, efd, event->events);
 	}
 
-	if ((event->events & EPOLLHUP) || (event->events & EPOLLERR)) {
+	if ((event->events & EPOLLHUP) || (event->events & EPOLLERR) || (event->events & EPOLLRDHUP)) {
 		fprintf(stdout, "%s event EPOLLHUP or EPOLLERR, he %p, fd %d, %x\n",
 			__func__, he, he->fd, event->events);
 		if (he->ops->hup)
