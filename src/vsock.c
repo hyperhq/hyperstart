@@ -6,12 +6,17 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
 #include <linux/pci_regs.h>
 #include <linux/virtio_ids.h>
+#include <linux/vm_sockets.h>
 
 /* for pre-vsock kernels. */
 #ifndef VIRTIO_ID_VSOCK
  #define VIRTIO_ID_VSOCK 0x13
+#endif
+#ifndef AF_VSOCK
+ #define AF_VSOCK 40
 #endif
 
 /* include/linux/pci_ids.h. It can be read from file pci.ids but why the dependency? */
@@ -75,4 +80,34 @@ int probe_vsock_device(void)
 
 	free(list);
 	return found;
+}
+
+int hyper_create_vsock_listener(unsigned short port)
+{
+	int fd;
+	struct sockaddr_vm sa_listen = {
+		.svm_family = AF_VSOCK,
+		.svm_cid = VMADDR_CID_ANY,
+		.svm_port = port,
+	};
+
+	fd = socket(AF_VSOCK, SOCK_STREAM, 0);
+	if (fd < 0) {
+		perror("fail to create vsock socket");
+		return -1;
+	}
+
+	if (bind(fd, (struct sockaddr*)&sa_listen, sizeof(sa_listen)) < 0) {
+		perror("fail to bind vsock");
+		close(fd);
+		return -1;
+	}
+
+	if (listen(fd, SOMAXCONN) < 0) {
+		perror("fail to listen vsock");
+		close(fd);
+		return -1;
+	}
+
+	return fd;
 }

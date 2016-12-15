@@ -919,6 +919,19 @@ static int hyper_setup_tty_channel(char *name)
 	return ret;
 }
 
+static int hyper_setup_vsock_channel(void)
+{
+	hyper_epoll.vsock_ctl_listener.fd = hyper_create_vsock_listener(HYPER_VSOCK_CTL_PORT);
+	if (hyper_epoll.vsock_ctl_listener.fd < 0)
+		return -1;
+
+	hyper_epoll.vsock_msg_listener.fd = hyper_create_vsock_listener(HYPER_VSOCK_MSG_PORT);
+	if (hyper_epoll.vsock_msg_listener.fd < 0)
+		return -1;
+
+	return 0;
+}
+
 static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 {
 	struct hyper_buf *rbuf = &de->rbuf;
@@ -1424,7 +1437,7 @@ int main(int argc, char *argv[])
 	} else if (hyper_cmd("modprobe vmw_vsock_virtio_transport") < 0) {
 		fprintf(stderr, "fail to load vmw_vsock_virtio_transport.ko\n");
 	} else {
-		hyper_epoll.vsock = 1;
+		hyper_epoll.vsock_ctl_listener.fd = 1; /* >0 indicates vsock support */
 	}
 #endif
 
@@ -1440,8 +1453,21 @@ int main(int argc, char *argv[])
 		goto out2;
 	}
 
+	if (hyper_epoll.vsock_ctl_listener.fd > 0) {
+		if (hyper_setup_vsock_channel() < 0) {
+			fprintf(stderr, "fail to setup hyper vsock listener\n");
+			goto out3;
+		}
+	}
+
 	hyper_loop();
 
+	if (hyper_epoll.vsock_ctl_listener.fd > 0)
+		close(hyper_epoll.vsock_ctl_listener.fd);
+	if (hyper_epoll.vsock_msg_listener.fd > 0)
+		close(hyper_epoll.vsock_msg_listener.fd);
+
+out3:
 	close(hyper_epoll.tty.fd);
 out2:
 	close(hyper_epoll.ctl.fd);
