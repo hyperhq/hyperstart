@@ -27,6 +27,7 @@ struct hyper_exec {
 
 	// configs
 	char			*container_id;
+	char			*id;
 	char			*user;
 	char			*group;
 	char			**additional_groups;
@@ -45,6 +46,7 @@ struct hyper_pod;
 
 int hyper_exec_cmd(char *json, int length);
 int hyper_run_process(struct hyper_exec *e);
+struct hyper_exec *hyper_find_exec_by_name(struct hyper_pod *pod, const char *process);
 struct hyper_exec *hyper_find_exec_by_pid(struct list_head *head, int pid);
 struct hyper_exec *hyper_find_exec_by_seq(struct hyper_pod *pod, uint64_t seq);
 int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code);

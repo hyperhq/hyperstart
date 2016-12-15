@@ -56,7 +56,13 @@ static int hyper_send_exec_eof(struct hyper_exec *exec) {
 }
 
 static int hyper_send_exec_code(struct hyper_exec *exec) {
-	return send_exec_finishing(exec->seq, 13, exec->code);
+	char *pae; // ProcessAsyncEvent
+#define PAE "{\"container\":\"%s\",\"process\":\"%s\",\"event\":\"finished\",\"status\":%d}"
+	if (asprintf(&pae, PAE, exec->container_id, exec->id, exec->code) < 0) {
+		return -1;
+	}
+#undef PAE
+	return hyper_ctl_append_msg(&hyper_epoll.ctl, PROCESSASYNCEVENT, (uint8_t *)pae, strlen(pae));
 }
 
 static void pts_hup(struct hyper_event *de, int efd, struct hyper_exec *exec)
@@ -703,9 +709,6 @@ static int hyper_release_exec(struct hyper_exec *exec)
 		if (exec->pod->req_destroy) {
 			/* shutdown vm manually, hyper doesn't care the pod finished codes */
 			hyper_pod_destroyed(0);
-		} else {
-			/* send out pod finish message, hyper will decide if restart pod or not */
-			hyper_send_pod_finished(exec->pod);
 		}
 
 		hyper_cleanup_pod(exec->pod);
@@ -714,6 +717,19 @@ static int hyper_release_exec(struct hyper_exec *exec)
 
 	hyper_free_exec(exec);
 	return 0;
+}
+
+struct hyper_exec *hyper_find_exec_by_name(struct hyper_pod *pod, const char *process)
+{
+	struct hyper_exec *exec;
+
+	list_for_each_entry(exec, &pod->exec_head, list) {
+		if (strcmp(exec->id, process) == 0) {
+			return exec;
+		}
+	}
+
+	return NULL;
 }
 
 struct hyper_exec *hyper_find_exec_by_pid(struct list_head *head, int pid)
