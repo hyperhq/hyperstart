@@ -714,7 +714,7 @@ ssize_t nonblock_read(int fd, void *buf, size_t count)
 		len += ret;
 	}
 
-	return len > 0 ? len : ret;
+	return len > 0 ? len : -errno;
 }
 
 int hyper_mount_nfs(char *server, char *mountpoint)
