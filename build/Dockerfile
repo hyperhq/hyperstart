@@ -1,7 +1,7 @@
 FROM centos:7
 MAINTAINER Hyper Developers <dev@hyper.sh>
 
-RUN yum install -y patch gcc ncurses-devel make openssl-devel bc
+RUN yum install -y patch gcc ncurses-devel make openssl-devel bc perl
 
 ENV KERNEL_VERSION 4.4.28
 ENV LOCALVERSION -hyper
