@@ -703,3 +703,11 @@ ssize_t nonblock_read(int fd, void *buf, size_t count)
 
 	return len > 0 ? len : ret;
 }
+
+int hyper_mount_nfs(char *server, char *mountpoint)
+{
+	char cmd[512];
+	snprintf(cmd, sizeof(cmd), "mount.nfs4 -n %s %s", server, mountpoint);
+
+	return hyper_cmd(cmd);
+}
