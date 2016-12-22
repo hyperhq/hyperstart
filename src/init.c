@@ -1380,6 +1380,15 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	if (unlink("/dev/ptmx") < 0) {
+		perror("remove /dev/ptmx failed");
+		return -1;
+	}
+	if (symlink("/dev/pts/ptmx", "/dev/ptmx") < 0) {
+		perror("link /dev/pts/ptmx to /dev/ptmx failed");
+		return -1;
+	}
+
 	cmdline = read_cmdline();
 
 	setsid();

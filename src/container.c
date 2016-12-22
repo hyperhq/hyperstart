@@ -313,16 +313,12 @@ static int container_setup_mount(struct hyper_container *container)
 		return -1;
 	}
 
-	if (unlink("./dev/ptmx") < 0) {
-		perror("remove /dev/ptmx failed");
-		return -1;
-	}
-	if (symlink("/dev/pts/ptmx", "./dev/ptmx") < 0) {
+	/* all containers share the same devtmpfs, so we need to ignore the errno EEXIST */
+	if (symlink("/dev/pts/ptmx", "./dev/ptmx") < 0 && errno != EEXIST) {
 		perror("link /dev/pts/ptmx to /dev/ptmx failed");
 		return -1;
 	}
 
-	/* all containers share the same devtmpfs, so we need to ignore the errno EEXIST */
 	if ((symlink("/proc/self/fd", "./dev/fd") < 0 && errno != EEXIST) ||
 	    (symlink("/proc/self/fd/0", "./dev/stdin") < 0 && errno != EEXIST) ||
 	    (symlink("/proc/self/fd/1", "./dev/stdout") < 0 && errno != EEXIST) ||
