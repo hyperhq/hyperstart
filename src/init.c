@@ -62,19 +62,10 @@ static int hyper_set_win_size(struct hyper_pod *pod, char *json, int length)
 		goto out;
 	}
 
-	struct hyper_container *c = hyper_find_container(pod, container);
-	if (!c) {
-		fprintf(stderr, "call hyper_set_win_size, can not find the container: %s\n", container);
+	exec = hyper_find_process(pod, container, process);
+	if (!exec) {
+		fprintf(stderr, "call hyper_set_win_size, can not find the process: %s\n", process);
 		goto out;
-	}
-	if (strcmp(c->exec.id, process) == 0) {
-		exec = &c->exec;
-	} else {
-		exec = hyper_find_exec_by_name(pod, process);
-		if (!exec) {
-			fprintf(stderr, "call hyper_set_win_size, can not find the process: %s\n", process);
-			goto out;
-		}
 	}
 
 	size.ws_row = (int)json_object_get_number(json_object(value), "row");
