@@ -178,8 +178,6 @@ void hyper_event_hup(struct hyper_event *he, int efd)
 int hyper_handle_event(int efd, struct epoll_event *event)
 {
 	struct hyper_event *he = event->data.ptr;
-	fprintf(stdout, "%s get event %d, he %p, fd %d. ops %p\n",
-			__func__, event->events, he, he->fd, he->ops);
 
 	/* do not handle hup event if have in/out event */
 	if ((event->events & EPOLLIN) && he->ops->read) {

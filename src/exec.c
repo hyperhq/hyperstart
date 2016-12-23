@@ -737,7 +737,6 @@ struct hyper_exec *hyper_find_exec_by_pid(struct list_head *head, int pid)
 	struct hyper_exec *exec;
 
 	list_for_each_entry(exec, head, list) {
-		fprintf(stdout, "exec pid %d, pid %d\n", exec->pid, pid);
 		if (exec->pid != pid)
 			continue;
 
@@ -752,8 +751,6 @@ struct hyper_exec *hyper_find_exec_by_seq(struct hyper_pod *pod, uint64_t seq)
 	struct hyper_exec *exec;
 
 	list_for_each_entry(exec, &pod->exec_head, list) {
-		fprintf(stdout, "exec seq %" PRIu64 ", seq %" PRIu64 "\n",
-			exec->seq, seq);
 		if (exec->seq != seq)
 			continue;
 
@@ -821,8 +818,6 @@ int hyper_handle_exec_exit(struct hyper_pod *pod, int pid, uint8_t code)
 
 	exec = hyper_find_exec_by_pid(&pod->exec_head, pid);
 	if (exec == NULL) {
-		fprintf(stdout, "can not find exec whose pid is %d\n",
-			pid);
 		return 0;
 	}
 
