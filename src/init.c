@@ -475,9 +475,9 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 
 static int hyper_setup_pod(struct hyper_pod *pod)
 {
-	/* create tmp proc directory */
-	if (hyper_mkdir("/tmp/hyper/proc", 0755) < 0) {
-		perror("create tmp proc failed");
+	/* create sandbox directory */
+	if (hyper_mkdir("/tmp/hyper", 0755) < 0) {
+		perror("create sandbox directory failed");
 		return -1;
 	}
 
@@ -1363,6 +1363,15 @@ int main(int argc, char *argv[])
 
 	if (mount("devpts", "/dev/pts", "devpts", MS_NOSUID| MS_NOEXEC, NULL) == -1) {
 		perror("mount devpts failed");
+		return -1;
+	}
+
+	if (unlink("/dev/ptmx") < 0) {
+		perror("remove /dev/ptmx failed");
+		return -1;
+	}
+	if (symlink("/dev/pts/ptmx", "/dev/ptmx") < 0) {
+		perror("link /dev/pts/ptmx to /dev/ptmx failed");
 		return -1;
 	}
 
