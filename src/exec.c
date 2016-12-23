@@ -67,31 +67,28 @@ static int hyper_send_exec_code(struct hyper_exec *exec) {
 
 static void pts_hup(struct hyper_event *de, int efd, struct hyper_exec *exec)
 {
-	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
-
 	hyper_event_hup(de, efd);
-
 	hyper_release_exec(exec);
 }
 
 static void stdin_hup(struct hyper_event *de, int efd)
 {
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdinev);
-	fprintf(stdout, "%s\n", __func__);
+	fprintf(stdout, "%s, seq %" PRIu64", id %s\n", __func__, exec->seq, exec->id);
 	return pts_hup(de, efd, exec);
 }
 
 static void stdout_hup(struct hyper_event *de, int efd)
 {
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdoutev);
-	fprintf(stdout, "%s\n", __func__);
+	fprintf(stdout, "%s, seq %" PRIu64", id %s\n", __func__, exec->seq, exec->id);
 	return pts_hup(de, efd, exec);
 }
 
 static void stderr_hup(struct hyper_event *de, int efd)
 {
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, stderrev);
-	fprintf(stdout, "%s\n", __func__);
+	fprintf(stdout, "%s, seq %" PRIu64", id %s\n", __func__, exec->seq, exec->id);
 	return pts_hup(de, efd, exec);
 }
 
@@ -802,7 +799,6 @@ static int hyper_kill_container_processes(struct hyper_container *c) {
 			if (st.st_ino != st1.st_ino)
 			       continue;
 
-			fprintf(stdout, "kill process of container %d\n", pid);
 			kill(pid, SIGKILL);
 			loop = 1;
 		}
