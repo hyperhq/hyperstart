@@ -1086,16 +1086,14 @@ static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
 	struct hyper_pod *pod = he->ptr;
 	uint32_t type = 0, datalen = 0;
 	uint8_t *data = NULL;
-	int i, ret = 0;
+	int ret = 0;
 
 	// append a null byte to it. hyper_ctlfd_read() left this room for us.
 	buf->data[buf->get] = 0;
-	for (i = 0; i < buf->get; i++)
-		fprintf(stdout, "%0x ", buf->data[i]);
 
 	type = hyper_get_be32(buf->data);
 
-	fprintf(stdout, "\n %s, type %" PRIu32 ", len %" PRIu32 "\n",
+	fprintf(stdout, "%s, type %" PRIu32 ", len %" PRIu32 "\n",
 		__func__, type, len);
 
 	switch (type) {
@@ -1171,8 +1169,6 @@ static int hyper_ctlfd_read(struct hyper_event *he, int efd, int events)
 	int size;
 	int ret;
 
-	fprintf(stdout, "%s\n", __func__);
-
 	if (buf->get < CONTROL_HEADER_SIZE) {
 		size = hyper_channel_read(he, efd, CONTROL_HEADER_SIZE - buf->get, events);
 		if (size < 0) {
@@ -1191,7 +1187,7 @@ static int hyper_ctlfd_read(struct hyper_event *he, int efd, int events)
 	}
 
 	len = hyper_get_be32(buf->data + CONTROL_HEADER_LENGTH_OFFSET);
-	fprintf(stdout, "get length %" PRIu32"\n", len);
+	fprintf(stdout, "%s: get length %" PRIu32"\n", __func__, len);
 	// test it with '>=' to leave at least one byte in hyper_ctlfd_handle(),
 	// so that hyper_ctlfd_handle() can convert the data to c-string inplace.
 	if (len >= buf->size) {
@@ -1336,7 +1332,6 @@ static int hyper_loop(void)
 			perror("hyper wait event failed");
 			return -1;
 		}
-		fprintf(stdout, "%s epoll_wait %d\n", __func__, n);
 
 		for (i = 0; i < n; i++) {
 			if (hyper_handle_event(hyper_epoll.efd, &events[i]) < 0)
