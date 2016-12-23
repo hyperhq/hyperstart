@@ -18,6 +18,7 @@
 #include <linux/reboot.h>
 #include <grp.h>
 #include <pwd.h>
+#include <libgen.h>
 
 #include "util.h"
 #include "hyper.h"
@@ -287,53 +288,37 @@ int hyper_create_file(const char *hyper_path)
 	return 0;
 }
 
-int hyper_mkdir(char *hyper_path, mode_t mode)
+int hyper_mkdir(char *path, mode_t mode)
 {
 	struct stat st;
-	char *p, *path = strdup(hyper_path);
-
-	if (path == NULL) {
-		errno = ENOMEM;
-		goto fail;
-	}
 
 	if (stat(path, &st) >= 0) {
 		if (S_ISDIR(st.st_mode))
-			goto out;
+			return 0;
 		errno = ENOTDIR;
-		goto fail;
+		return -1;
 	}
 
 	if (errno != ENOENT)
-		goto fail;
+		return -1;
 
-	p = strrchr(path, '/');
-	if (p == NULL) {
-		errno = EINVAL;
-		goto fail;
+	char *parent_path = strdup(path);
+	if (parent_path == NULL) {
+		errno = ENOMEM;
+		return -1;
 	}
-
-	if (p != path) {
-		*p = '\0';
-
-		if (hyper_mkdir(path, mode) < 0)
-			goto fail;
-
-		*p = '/';
+	if (hyper_mkdir(dirname(parent_path), mode) < 0) {
+		free(parent_path);
+		return -1;
 	}
+	free(parent_path);
 
 	fprintf(stdout, "create directory %s\n", path);
 	if (mkdir(path, mode) < 0 && errno != EEXIST) {
 		perror("failed to create directory");
-		goto fail;
+		return -1;
 	}
-out:
-	free(path);
 	return 0;
-
-fail:
-	free(path);
-	return -1;
 }
 
 void online_cpu(void)
