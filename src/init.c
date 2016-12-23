@@ -603,6 +603,12 @@ static int hyper_new_container(char *json, int length)
 		return -1;
 	}
 
+	if (hyper_find_container(pod, c->id) != NULL) {
+		fprintf(stderr, "container id conflicts");
+		hyper_cleanup_container(c, pod);
+		return -1;
+	}
+
 	list_add_tail(&c->list, &pod->containers);
 	ret = hyper_setup_container(c, pod);
 	if (ret >= 0)
