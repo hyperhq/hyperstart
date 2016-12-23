@@ -472,6 +472,22 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 }
 #endif
 
+static int hyper_setup_virtual_hyperstart_exec_container(struct hyper_pod *pod)
+{
+	if (hyper_mkdir("/tmp/hyper/" HYPERSTART_EXEC_CONTAINER, 0755) < 0) {
+		perror("create virtual hyperstart-exec container directory failed");
+		return -1;
+	}
+
+	// for creating ptymaster when adding process with terminal=true
+	if (symlink("/dev/pts", "/tmp/hyper/" HYPERSTART_EXEC_CONTAINER "/devpts") < 0) {
+		perror("create virtual hyperstart-exec container's /dev symlink failed");
+		return -1;
+	}
+
+	return 0;
+}
+
 static int hyper_setup_pod(struct hyper_pod *pod)
 {
 	/* create sandbox directory */
@@ -502,6 +518,10 @@ static int hyper_setup_pod(struct hyper_pod *pod)
 
 	if (hyper_setup_pod_init(pod) < 0) {
 		fprintf(stderr, "start container failed\n");
+		return -1;
+	}
+
+	if (hyper_setup_virtual_hyperstart_exec_container(pod) < 0) {
 		return -1;
 	}
 
@@ -599,7 +619,7 @@ static int hyper_new_container(struct hyper_pod *pod, char *json, int length)
 		return -1;
 	}
 
-	if (hyper_find_container(pod, c->id) != NULL) {
+	if (hyper_has_container(pod, c->id)) {
 		fprintf(stderr, "container id conflicts");
 		hyper_cleanup_container(c, pod);
 		return -1;
