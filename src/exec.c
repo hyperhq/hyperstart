@@ -590,7 +590,7 @@ static void hyper_free_exec(struct hyper_exec *exec)
 	free(exec);
 }
 
-int hyper_exec_cmd(char *json, int length)
+int hyper_exec_cmd(struct hyper_pod *pod, char *json, int length)
 {
 	struct hyper_exec *exec;
 
@@ -602,7 +602,18 @@ int hyper_exec_cmd(char *json, int length)
 		return -1;
 	}
 
-	exec->pod = &global_pod;
+	if (hyper_find_container(pod, exec->container_id) == NULL) {
+		fprintf(stderr, "call hyper_exec_cmd, no such container: %s\n", exec->container_id);
+		hyper_free_exec(exec);
+		return -1;
+	}
+	if (hyper_find_exec_by_name(pod, exec->id) != NULL) {
+		fprintf(stderr, "call hyper_exec_cmd, process id conflicts");
+		hyper_free_exec(exec);
+		return -1;
+	}
+
+	exec->pod = pod;
 	int ret = hyper_run_process(exec);
 	if (ret < 0) {
 		hyper_free_exec(exec);
@@ -717,6 +728,24 @@ static int hyper_release_exec(struct hyper_exec *exec)
 
 	hyper_free_exec(exec);
 	return 0;
+}
+
+struct hyper_exec *hyper_find_process(struct hyper_pod *pod, const char *container, const char *process)
+{
+	struct hyper_container *c = hyper_find_container(pod, container);
+	if (c) {
+		if (strcmp(c->exec.id, process) == 0) {
+			return &c->exec;
+		}
+	} else {
+		return NULL;
+	}
+
+	struct hyper_exec *exec = hyper_find_exec_by_name(pod, process);
+	if (strcmp(exec->container_id, container) == 0) {
+		return exec;
+	}
+	return NULL;
 }
 
 struct hyper_exec *hyper_find_exec_by_name(struct hyper_pod *pod, const char *process)
