@@ -602,6 +602,17 @@ int hyper_exec_cmd(struct hyper_pod *pod, char *json, int length)
 		return -1;
 	}
 
+	if (hyper_find_container(pod, exec->container_id) == NULL) {
+		fprintf(stderr, "call hyper_exec_cmd, no such container: %s\n", exec->container_id);
+		hyper_free_exec(exec);
+		return -1;
+	}
+	if (hyper_find_exec_by_name(pod, exec->id) != NULL) {
+		fprintf(stderr, "call hyper_exec_cmd, process id conflicts");
+		hyper_free_exec(exec);
+		return -1;
+	}
+
 	exec->pod = pod;
 	int ret = hyper_run_process(exec);
 	if (ret < 0) {
