@@ -484,9 +484,9 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 
 static int hyper_setup_pod(struct hyper_pod *pod)
 {
-	/* create tmp proc directory */
-	if (hyper_mkdir("/tmp/hyper/proc", 0755) < 0) {
-		perror("create tmp proc failed");
+	/* create sandbox directory */
+	if (hyper_mkdir("/tmp/hyper", 0755) < 0) {
+		perror("create sandbox directory failed");
 		return -1;
 	}
 
