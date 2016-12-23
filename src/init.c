@@ -155,7 +155,6 @@ static void hyper_term_all(struct hyper_pod *pod)
 	fprintf(stdout, "Sending SIGTERM\n");
 
 	for (--index; index >= 0; --index) {
-		fprintf(stdout, "kill process %d\n", pids[index]);
 		kill(pids[index], SIGTERM);
 	}
 

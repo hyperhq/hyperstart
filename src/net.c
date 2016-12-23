@@ -166,7 +166,6 @@ static int hyper_get_ifindex(char *nic)
 	int fd, ifindex = -1;
 	char path[512], buf[8];
 
-	fprintf(stdout, "net device %s\n", nic);
 	sprintf(path, "/sys/class/net/%s/ifindex", nic);
 	fprintf(stdout, "net device sys path is %s\n", path);
 

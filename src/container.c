@@ -546,8 +546,6 @@ static int hyper_setup_container_rootfs(void *data)
 		goto fail;
 	}
 
-	fprintf(stdout, "container root directory %s\n", root);
-
 	if (container->fstype) {
 		char dev[128];
 		char *options = NULL;
