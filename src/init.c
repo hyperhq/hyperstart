@@ -30,7 +30,7 @@
 #include "container.h"
 #include "syscall.h"
 
-struct hyper_pod global_pod = {
+static struct hyper_pod global_pod = {
 	.containers	=	LIST_HEAD_INIT(global_pod.containers),
 	.exec_head	=	LIST_HEAD_INIT(global_pod.exec_head),
 };
@@ -555,10 +555,8 @@ static int hyper_destroy_pod(struct hyper_pod *pod, int error)
 	return 0;
 }
 
-static int hyper_start_pod(char *json, int length)
+static int hyper_start_pod(struct hyper_pod *pod, char *json, int length)
 {
-	struct hyper_pod *pod = &global_pod;
-
 	fprintf(stdout, "call hyper_start_pod, json %s, len %d\n", json, length);
 
 	if (pod->init_pid)
@@ -584,11 +582,10 @@ static int hyper_start_pod(char *json, int length)
 	return 0;
 }
 
-static int hyper_new_container(char *json, int length)
+static int hyper_new_container(struct hyper_pod *pod, char *json, int length)
 {
 	int ret;
 	struct hyper_container *c;
-	struct hyper_pod *pod = &global_pod;
 
 	fprintf(stdout, "call hyper_new_container, json %s, len %d\n", json, length);
 
@@ -624,10 +621,9 @@ static int hyper_new_container(char *json, int length)
 	return ret;
 }
 
-static int hyper_kill_container(char *json, int length)
+static int hyper_kill_container(struct hyper_pod *pod, char *json, int length)
 {
 	struct hyper_container *c;
-	struct hyper_pod *pod = &global_pod;
 	int ret = -1;
 
 	JSON_Value *value = hyper_json_parse(json, length);
@@ -649,10 +645,9 @@ out:
 	return ret;
 }
 
-static int hyper_remove_container(char *json, int length)
+static int hyper_remove_container(struct hyper_pod *pod, char *json, int length)
 {
 	struct hyper_container *c;
-	struct hyper_pod *pod = &global_pod;
 	int ret = -1;
 
 	JSON_Value *value = hyper_json_parse(json, length);
@@ -716,7 +711,7 @@ exit:
 	exit(ret);
 }
 
-static int hyper_cmd_rw_file(char *json, int length, uint32_t *rdatalen, uint8_t **rdata, int rw)
+static int hyper_cmd_rw_file(struct hyper_pod *pod, char *json, int length, uint32_t *rdatalen, uint8_t **rdata, int rw)
 {
 	struct file_command cmd = {
 		.id = NULL,
@@ -727,7 +722,6 @@ static int hyper_cmd_rw_file(char *json, int length, uint32_t *rdatalen, uint8_t
 		.rw = rw,
 	};
 	struct hyper_container *c;
-	struct hyper_pod *pod = &global_pod;
 	char *data = NULL;
 	void *stack = NULL;
 	int stacksize = getpagesize() * 4;
@@ -1102,7 +1096,7 @@ static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
 		hyper_set_be32(data, APIVERSION);
 		break;
 	case STARTPOD:
-		ret = hyper_start_pod((char *)buf->data + 8, len - 8);
+		ret = hyper_start_pod(pod, (char *)buf->data + 8, len - 8);
 		hyper_print_uptime();
 		break;
 	case DESTROYPOD:
@@ -1111,13 +1105,13 @@ static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
 		hyper_destroy_pod(pod, 0);
 		return 0;
 	case EXECCMD:
-		ret = hyper_exec_cmd((char *)buf->data + 8, len - 8);
+		ret = hyper_exec_cmd(pod, (char *)buf->data + 8, len - 8);
 		break;
 	case WRITEFILE:
-		ret = hyper_cmd_rw_file((char *)buf->data + 8, len - 8, NULL, NULL, WRITEFILE);
+		ret = hyper_cmd_rw_file(pod, (char *)buf->data + 8, len - 8, NULL, NULL, WRITEFILE);
 		break;
 	case READFILE:
-		ret = hyper_cmd_rw_file((char *)buf->data + 8, len - 8, &datalen, &data, READFILE);
+		ret = hyper_cmd_rw_file(pod, (char *)buf->data + 8, len - 8, &datalen, &data, READFILE);
 		break;
 	case PING:
 		break;
@@ -1128,13 +1122,13 @@ static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
 		ret = hyper_set_win_size(pod, (char *)buf->data + 8, len - 8);
 		break;
 	case NEWCONTAINER:
-		ret = hyper_new_container((char *)buf->data + 8, len - 8);
+		ret = hyper_new_container(pod, (char *)buf->data + 8, len - 8);
 		break;
 	case KILLCONTAINER:
-		ret = hyper_kill_container((char *)buf->data + 8, len - 8);
+		ret = hyper_kill_container(pod, (char *)buf->data + 8, len - 8);
 		break;
 	case REMOVECONTAINER:
-		ret = hyper_remove_container((char *)buf->data + 8, len - 8);
+		ret = hyper_remove_container(pod, (char *)buf->data + 8, len - 8);
 		break;
 	case ONLINECPUMEM:
 		hyper_cmd_online_cpu_mem();

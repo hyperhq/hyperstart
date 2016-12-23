@@ -590,7 +590,7 @@ static void hyper_free_exec(struct hyper_exec *exec)
 	free(exec);
 }
 
-int hyper_exec_cmd(char *json, int length)
+int hyper_exec_cmd(struct hyper_pod *pod, char *json, int length)
 {
 	struct hyper_exec *exec;
 
@@ -602,7 +602,7 @@ int hyper_exec_cmd(char *json, int length)
 		return -1;
 	}
 
-	exec->pod = &global_pod;
+	exec->pod = pod;
 	int ret = hyper_run_process(exec);
 	if (ret < 0) {
 		hyper_free_exec(exec);

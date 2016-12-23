@@ -87,7 +87,6 @@ int hyper_enter_sandbox(struct hyper_pod *pod, int pidpipe);
 void hyper_pod_destroyed(int failed);
 int hyper_ctl_append_msg(struct hyper_event *he, uint32_t type, uint8_t *data, uint32_t len);
 
-extern struct hyper_pod global_pod;
 extern struct hyper_epoll hyper_epoll;
 extern sigset_t orig_mask;
 #endif

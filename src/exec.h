@@ -44,7 +44,7 @@ struct hyper_exec {
 
 struct hyper_pod;
 
-int hyper_exec_cmd(char *json, int length);
+int hyper_exec_cmd(struct hyper_pod *pod, char *json, int length);
 int hyper_run_process(struct hyper_exec *e);
 struct hyper_exec *hyper_find_process(struct hyper_pod *pod, const char *container, const char *process);
 struct hyper_exec *hyper_find_exec_by_name(struct hyper_pod *pod, const char *process);
