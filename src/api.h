@@ -33,6 +33,13 @@ enum {
 	SIGNALPROCESS,
 };
 
+// "hyperstart" is the special container ID for adding processes.
+//
+// The processes will be execve()-ed in the same namespaces as the
+// hyperstart(init) process rather than in any container.
+// This operation is "hyperstart-exec"
+#define HYPERSTART_EXEC_CONTAINER "hyperstart"
+
 /*
  * control message format
  * | ctrl id | length  | payload (length-8)      |

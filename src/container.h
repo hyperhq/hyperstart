@@ -2,6 +2,7 @@
 #define _CONTAINER_H_
 
 #include "exec.h"
+#include "api.h"
 
 struct volume {
 	char	*device;
@@ -61,4 +62,7 @@ void hyper_cleanup_container(struct hyper_container *container, struct hyper_pod
 void hyper_cleanup_containers(struct hyper_pod *pod);
 void hyper_free_container(struct hyper_container *c);
 
+static inline int hyper_has_container(struct hyper_pod *pod, const char *id) {
+	return strcmp(id, HYPERSTART_EXEC_CONTAINER) == 0 || hyper_find_container(pod, id) != NULL;
+}
 #endif

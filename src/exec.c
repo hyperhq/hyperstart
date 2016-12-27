@@ -599,7 +599,7 @@ int hyper_exec_cmd(struct hyper_pod *pod, char *json, int length)
 		return -1;
 	}
 
-	if (hyper_find_container(pod, exec->container_id) == NULL) {
+	if (!hyper_has_container(pod, exec->container_id)) {
 		fprintf(stderr, "call hyper_exec_cmd, no such container: %s\n", exec->container_id);
 		hyper_free_exec(exec);
 		return -1;
@@ -646,6 +646,11 @@ int hyper_run_process(struct hyper_exec *exec)
 		perror("fork prerequisite process failed");
 		goto close_tty;
 	} else if (pid == 0) {
+		if (strcmp(exec->container_id, HYPERSTART_EXEC_CONTAINER) == 0) {
+			hyper_send_type(pipe[1], getpid());
+			hyper_exec_process(exec, &io);
+			_exit(125);
+		}
 		hyper_do_exec_cmd(exec, pipe[1], &io);
 	}
 	fprintf(stdout, "prerequisite process pid %d\n", pid);
