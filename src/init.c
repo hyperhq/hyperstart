@@ -644,6 +644,31 @@ out:
 	return ret;
 }
 
+static int hyper_signal_process(struct hyper_pod *pod, char *json, int length)
+{
+	struct hyper_exec *exec;
+	int ret = -1;
+
+	JSON_Value *value = hyper_json_parse(json, length);
+	if (value == NULL) {
+		goto out;
+	}
+
+	const char *container = json_object_get_string(json_object(value), "container");
+	const char *process = json_object_get_string(json_object(value), "process");
+	exec = hyper_find_process(pod, container, process);
+	if (exec == NULL) {
+		fprintf(stderr, "can not find process");
+		goto out;
+	}
+
+	kill(exec->pid, (int)json_object_get_number(json_object(value), "signal"));
+	ret = 0;
+out:
+	json_value_free(value);
+	return ret;
+}
+
 static int hyper_remove_container(struct hyper_pod *pod, char *json, int length)
 {
 	struct hyper_container *c;
@@ -1135,6 +1160,9 @@ static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
 		break;
 	case SETUPROUTE:
 		ret = hyper_cmd_setup_route((char *)buf->data + 8, len - 8);
+		break;
+	case SIGNALPROCESS:
+		ret = hyper_signal_process(pod, (char *)buf->data + 8, len - 8);
 		break;
 	case GETPOD_DEPRECATED:
 	case STOPPOD_DEPRECATED:
