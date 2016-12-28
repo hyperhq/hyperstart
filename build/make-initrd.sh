@@ -11,9 +11,10 @@ mkdir -m 0755 -p /tmp/hyperstart-rootfs/dev \
 	  /tmp/hyperstart-rootfs/bin \
 	  /tmp/hyperstart-rootfs/proc
 
-cp ../src/init /tmp/hyperstart-rootfs
-cp busybox /tmp/hyperstart-rootfs
-cp iptables /tmp/hyperstart-rootfs
+cp ../src/init /tmp/hyperstart-rootfs/
+cp busybox /tmp/hyperstart-rootfs/sbin/
+cp iptables /tmp/hyperstart-rootfs/sbin/
+cp ipvsadm /tmp/hyperstart-rootfs/sbin/
 cp libm.so.6 /tmp/hyperstart-rootfs/lib64/
 
 if [ "$1"x = "aarch64"x ]; then
@@ -28,13 +29,13 @@ BUSYBOX_BINARIES=(/bin/sh /bin/tar /bin/hwclock /sbin/modprobe /sbin/depmod)
 for bin in ${BUSYBOX_BINARIES[@]}
 do
 	mkdir -p /tmp/hyperstart-rootfs/`dirname ${bin}`
-	ln -sf /busybox /tmp/hyperstart-rootfs/${bin}
+	ln -sf /sbin/busybox /tmp/hyperstart-rootfs/${bin}
 done
-IPTABLES_BINARIES=(/sbin/iptables /sbin/iptables-restore /sbin/iptables-save)
+IPTABLES_BINARIES=(/sbin/iptables-restore /sbin/iptables-save)
 for bin in ${IPTABLES_BINARIES[@]}
 do
 	mkdir -p /tmp/hyperstart-rootfs/`dirname ${bin}`
-	ln -sf /iptables /tmp/hyperstart-rootfs/${bin}
+	ln -sf /sbin/iptables /tmp/hyperstart-rootfs/${bin}
 done
 
 ldd /tmp/hyperstart-rootfs/init | while read line
