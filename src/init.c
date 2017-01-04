@@ -1270,9 +1270,23 @@ static struct hyper_event_ops hyper_ttyfd_ops = {
 	.wbuf_size	= 10240,
 };
 
+static struct hyper_event_ops hyper_vsock_ctlfd_ops = {
+	.read		= hyper_ctlfd_read,
+	.hup		= hyper_event_hup,
+	.rbuf_size	= 65536,
+};
+
+static struct hyper_event_ops hyper_vsock_ttyfd_ops = {
+	.read		= hyper_ttyfd_read,
+	.write		= hyper_event_write,
+	.hup		= hyper_event_hup,
+	.rbuf_size	= 65536,
+	.wbuf_size	= 65536,
+};
+
 static int hyper_vsock_ctl_accept(struct hyper_event *he, int efd, int events)
 {
-	if (hyper_vsock_accept(he, efd, &hyper_epoll.ctl, &hyper_ctlfd_ops) < 0)
+	if (hyper_vsock_accept(he, efd, &hyper_epoll.ctl, &hyper_vsock_ctlfd_ops) < 0)
 		return -1;
 
 	if (hyper_ctl_send_ready(hyper_epoll.ctl.fd)) {
@@ -1285,7 +1299,7 @@ static int hyper_vsock_ctl_accept(struct hyper_event *he, int efd, int events)
 
 static int hyper_vsock_msg_accept(struct hyper_event *he, int efd, int events)
 {
-	return hyper_vsock_accept(he, efd, &hyper_epoll.tty, &hyper_ttyfd_ops);
+	return hyper_vsock_accept(he, efd, &hyper_epoll.tty, &hyper_vsock_ttyfd_ops);
 }
 
 static struct hyper_event_ops hyper_vsock_ctl_listen_ops = {
