@@ -1294,8 +1294,10 @@ static struct hyper_event_ops hyper_ttyfd_ops = {
 
 static struct hyper_event_ops hyper_vsock_ctlfd_ops = {
 	.read		= hyper_ctlfd_read,
+	.write		= hyper_event_write,
 	.hup		= hyper_event_hup,
 	.rbuf_size	= 65536,
+	.wbuf_size	= 65536,
 };
 
 static struct hyper_event_ops hyper_vsock_ttyfd_ops = {
