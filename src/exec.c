@@ -715,16 +715,11 @@ static int hyper_release_exec(struct hyper_exec *exec)
 		fprintf(stdout, "%s container init exited %s, remains %d\n",
 			__func__, exec->pod->req_destroy?"manually":"automatically", exec->pod->remains);
 
-		// TODO send finish of this container and full cleanup
-		if (--exec->pod->remains > 0)
-			return 0;
-
-		if (exec->pod->req_destroy) {
+		if (--exec->pod->remains == 0 && exec->pod->req_destroy) {
 			/* shutdown vm manually, hyper doesn't care the pod finished codes */
 			hyper_pod_destroyed(0);
 		}
 
-		hyper_cleanup_pod(exec->pod);
 		return 0;
 	}
 
