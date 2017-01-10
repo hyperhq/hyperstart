@@ -887,47 +887,6 @@ static void hyper_cmd_online_cpu_mem()
 	}
 }
 
-static void hyper_cleanup_hostname(struct hyper_pod *pod)
-{
-	free(pod->hostname);
-	pod->hostname = NULL;
-}
-
-static void hyper_cleanup_shared(struct hyper_pod *pod)
-{
-	if (pod->share_tag == NULL) {
-		fprintf(stdout, "no shared directory\n");
-		return;
-	}
-
-	free(pod->share_tag);
-	pod->share_tag = NULL;
-	if (umount(SHARED_DIR) < 0 &&
-	    umount2(SHARED_DIR, MNT_DETACH)) {
-		perror("fail to umount shared dir");
-		return;
-	}
-
-	if (rmdir(SHARED_DIR) < 0)
-		perror("fail to delete " SHARED_DIR);
-
-	sync();
-}
-
-void hyper_cleanup_pod(struct hyper_pod *pod)
-{
-	if (pod->init_pid) {
-		hyper_kill_process(pod->init_pid);
-		pod->init_pid = 0;
-	}
-	hyper_cleanup_containers(pod);
-	hyper_cleanup_network(pod);
-	hyper_cleanup_shared(pod);
-	hyper_cleanup_dns(pod);
-	hyper_cleanup_portmapping(pod);
-	hyper_cleanup_hostname(pod);
-}
-
 static int hyper_setup_ctl_channel(char *name)
 {
 	uint8_t buf[8];
