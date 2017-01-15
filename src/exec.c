@@ -739,9 +739,12 @@ struct hyper_exec *hyper_find_process(struct hyper_pod *pod, const char *contain
 	}
 
 	struct hyper_exec *exec = hyper_find_exec_by_name(pod, process);
-	if (strcmp(exec->container_id, container) == 0) {
-		return exec;
+	if (exec) {
+		if (strcmp(exec->container_id, container) == 0) {
+			return exec;
+		}
 	}
+
 	return NULL;
 }
 
