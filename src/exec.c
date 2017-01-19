@@ -444,9 +444,12 @@ static int hyper_setup_stdio_events(struct hyper_exec *exec, struct stdio_config
 {
 	if (exec->tty) {
 		io->stdinevfd = dup(exec->ptyfd);
+		hyper_setfd_cloexec(io->stdinevfd);
 		io->stdoutevfd = dup(exec->ptyfd);
+		hyper_setfd_cloexec(io->stdoutevfd);
 		if (exec->errseq == 0) {
 			io->stderrevfd = dup(exec->ptyfd);
+			hyper_setfd_cloexec(io->stderrevfd);
 		}
 	}
 
