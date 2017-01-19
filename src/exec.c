@@ -510,6 +510,9 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, int pipe, struct stdio_con
 		goto out;
 	}
 
+	// Make sure we start with a clean environment
+	clearenv();
+
 	// set early env. the container env config can overwrite it
 	setenv("HOME", "/root", 1);
 	setenv("HOSTNAME", exec->pod->hostname, 1);
