@@ -518,20 +518,7 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, int pipe, struct stdio_con
 	else
 		unsetenv("TERM");
 
-	if (exec->init == 0) {
-		/* TODO: merge container env to exec env in hyperd */
-		if (hyper_setup_env(c->exec.envs, c->exec.envs_num) < 0) {
-			fprintf(stderr, "setup container envs for exec failed\n");
-			goto out;
-		}
-		/* TODO: copy container workdir to exec workdir in hyperd */
-		if (c->exec.workdir && chdir(c->exec.workdir) < 0) {
-			perror("enter container workdir failed\n");
-			goto out;
-		}
-	}
 	hyper_exec_process(exec, io);
-
 out:
 	_exit(125);
 }
