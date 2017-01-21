@@ -682,7 +682,7 @@ static int hyper_signal_process(struct hyper_pod *pod, char *json, int length)
 		goto out;
 	}
 
-	kill(exec->pid, (int)json_object_get_number(json_object(value), "signal"));
+	kill(-exec->pid, (int)json_object_get_number(json_object(value), "signal"));
 	ret = 0;
 out:
 	json_value_free(value);
