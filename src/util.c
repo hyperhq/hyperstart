@@ -126,6 +126,7 @@ int hyper_find_sd(char *addr, char **dev)
 static unsigned long id_or_max(const char *name)
 {
 	char *ptr;
+	errno = 0;
 	long id = strtol(name, &ptr, 10);
 	if (name == ptr || id < 0 || (errno != 0 && id == 0) || *ptr != '\0')
 		return ~0UL;
