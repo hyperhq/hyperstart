@@ -264,13 +264,18 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 		goto fail;
 	groups = reallocgroups;
 	for (i = 0; i < exec->nr_additional_groups; i++) {
+		unsigned long id;
 		fprintf(stdout, "try to find the group: %s\n", exec->additional_groups[i]);
-		struct group *gr = hyper_getgrnam(exec->additional_groups[i]);
-		if (gr == NULL) {
-			perror("can't find the group");
-			goto fail;
+		if (hyper_name_to_id(exec->additional_groups[i], &id)) {
+			groups[ngroups] = id;
+		} else {
+			struct group *gr = hyper_getgrnam(exec->additional_groups[i]);
+			if (gr == NULL) {
+				perror("can't find the group");
+				goto fail;
+			}
+			groups[ngroups] = gr->gr_gid;
 		}
-		groups[ngroups] = gr->gr_gid;
 		ngroups++;
 	}
 

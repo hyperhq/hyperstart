@@ -131,6 +131,18 @@ static unsigned long id_or_max(const char *name)
 	return id;
 }
 
+// Checks if the name provided is a numeric value and does the conversion.
+bool hyper_name_to_id(const char *name, unsigned long *val)
+{
+	char *ptr;
+	errno = 0;
+	long id = strtol(name, &ptr, 10);
+	if (name == ptr || id < 0 || (errno != 0 && id == 0) || *ptr != '\0')
+		return false;
+	*val = id;
+	return true;
+}
+
 // the same as getpwnam(), but it only parses /etc/passwd and allows name to be id string
 struct passwd *hyper_getpwnam(const char *name)
 {
