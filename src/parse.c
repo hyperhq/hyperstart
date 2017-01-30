@@ -147,7 +147,7 @@ int json_token_streq(char *js, jsmntok_t *t, char *s)
 void hyper_print_unknown_key(char *json, jsmntok_t *t)
 {
 	char *data = json_token_str(json, t);
-	dprintf(stderr, "get unknown key %s\n", data);
+	dbg_pr(stderr, "get unknown key %s\n", data);
 	free(data);
 }
 
@@ -156,21 +156,21 @@ static int container_parse_additional_groups(struct hyper_exec *exec, char *json
 	int i = 0, j;
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dprintf(stdout, "additional groups need array");
+		dbg_pr(stdout, "additional groups need array");
 		return -1;
 	}
 
 	exec->nr_additional_groups = toks[i].size;
 	exec->additional_groups = calloc(exec->nr_additional_groups, sizeof(*exec->additional_groups));
 	if (exec->additional_groups == NULL) {
-		dprintf(stderr, "allocate memory for additional groups failed\n");
+		dbg_pr(stderr, "allocate memory for additional groups failed\n");
 		return -1;
 	}
 
 	i++;
 	for (j = 0; j < exec->nr_additional_groups; j++, i++) {
 		exec->additional_groups[j] = (json_token_str(json, &toks[i]));
-		dprintf(stdout, "container process additional group %d %s\n", j, exec->additional_groups[j]);
+		dbg_pr(stdout, "container process additional group %d %s\n", j, exec->additional_groups[j]);
 	}
 
 	return i;
@@ -181,13 +181,13 @@ static int container_parse_argv(struct hyper_exec *exec, char *json, jsmntok_t *
 	int i = 0, j;
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dprintf(stdout, "cmd need array");
+		dbg_pr(stdout, "cmd need array");
 		return -1;
 	}
 
 	exec->argv = calloc(toks[i].size + 1, sizeof(*exec->argv));
 	if (exec->argv == NULL) {
-		dprintf(stderr, "allocate memory for exec argv failed\n");
+		dbg_pr(stderr, "allocate memory for exec argv failed\n");
 		return -1;
 	}
 
@@ -197,7 +197,7 @@ static int container_parse_argv(struct hyper_exec *exec, char *json, jsmntok_t *
 	i++;
 	for (j = 0; j < exec->argc; j++, i++) {
 		exec->argv[j] = (json_token_str(json, &toks[i]));
-		dprintf(stdout, "container init arg %d %s\n", j, exec->argv[j]);
+		dbg_pr(stdout, "container init arg %d %s\n", j, exec->argv[j]);
 	}
 
 	return i;
@@ -264,25 +264,25 @@ static int container_parse_volumes(struct hyper_container *c, char *json, jsmnto
 	int i = 0, j;
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dprintf(stdout, "volume need array\n");
+		dbg_pr(stdout, "volume need array\n");
 		return -1;
 	}
 
 	c->vols = calloc(toks[i].size, sizeof(*c->vols));
 	if (c->vols == NULL) {
-		dprintf(stderr, "allocate memory for volume failed\n");
+		dbg_pr(stderr, "allocate memory for volume failed\n");
 		return -1;
 	}
 
 	c->vols_num = toks[i].size;
-	dprintf(stdout, "volumes num %d\n", c->vols_num);
+	dbg_pr(stdout, "volumes num %d\n", c->vols_num);
 
 	i++;
 	for (j = 0; j < c->vols_num; j++) {
 		int i_volume, next_volume;
 
 		if (toks[i].type != JSMN_OBJECT) {
-			dprintf(stdout, "volume array need object\n");
+			dbg_pr(stdout, "volume array need object\n");
 			return -1;
 		}
 		next_volume = toks[i].size;
@@ -291,24 +291,24 @@ static int container_parse_volumes(struct hyper_container *c, char *json, jsmnto
 			if (json_token_streq(json, &toks[i], "device")) {
 				c->vols[j].device =
 				(json_token_str(json, &toks[++i]));
-				dprintf(stdout, "volume %d device %s\n", j, c->vols[j].device);
+				dbg_pr(stdout, "volume %d device %s\n", j, c->vols[j].device);
 			} else if (json_token_streq(json, &toks[i], "addr")) {
 				c->vols[j].scsiaddr = (json_token_str(json, &toks[++i]));
-				dprintf(stdout, "volume %d scsi id %s\n", j, c->vols[j].scsiaddr);
+				dbg_pr(stdout, "volume %d scsi id %s\n", j, c->vols[j].scsiaddr);
 			} else if (json_token_streq(json, &toks[i], "mount")) {
 				c->vols[j].mountpoint = (json_token_str(json, &toks[++i]));
-				dprintf(stdout, "volume %d mp %s\n", j, c->vols[j].mountpoint);
+				dbg_pr(stdout, "volume %d mp %s\n", j, c->vols[j].mountpoint);
 			} else if (json_token_streq(json, &toks[i], "fstype")) {
 				c->vols[j].fstype = (json_token_str(json, &toks[++i]));
-				dprintf(stdout, "volume %d fstype %s\n", j, c->vols[j].fstype);
+				dbg_pr(stdout, "volume %d fstype %s\n", j, c->vols[j].fstype);
 			} else if (json_token_streq(json, &toks[i], "readOnly")) {
 				if (!json_token_streq(json, &toks[++i], "false"))
 					c->vols[j].readonly = 1;
-				dprintf(stdout, "volume %d readonly %d\n", j, c->vols[j].readonly);
+				dbg_pr(stdout, "volume %d readonly %d\n", j, c->vols[j].readonly);
 			} else if (json_token_streq(json, &toks[i], "dockerVolume")) {
 				if (!json_token_streq(json, &toks[++i], "false"))
 					c->vols[j].docker = 1;
-				dprintf(stdout, "volume %d docker volume %d\n", j, c->vols[j].docker);
+				dbg_pr(stdout, "volume %d docker volume %d\n", j, c->vols[j].docker);
 			} else {
 				hyper_print_unknown_key(json, &toks[i]);
 				return -1;
@@ -337,25 +337,25 @@ static int container_parse_fsmap(struct hyper_container *c, char *json, jsmntok_
 	int i = 0, j;
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dprintf(stdout, "envs need array\n");
+		dbg_pr(stdout, "envs need array\n");
 		return -1;
 	}
 
 	c->maps = calloc(toks[i].size, sizeof(*c->maps));
 	if (c->maps == NULL) {
-		dprintf(stderr, "allocate memory for fsmap failed\n");
+		dbg_pr(stderr, "allocate memory for fsmap failed\n");
 		return -1;
 	}
 
 	c->maps_num = toks[i].size;
-	dprintf(stdout, "fsmap num %d\n", c->maps_num);
+	dbg_pr(stdout, "fsmap num %d\n", c->maps_num);
 
 	i++;
 	for (j = 0; j < c->maps_num; j++) {
 		int i_map, next_map;
 
 		if (toks[i].type != JSMN_OBJECT) {
-			dprintf(stdout, "fsmap array need object\n");
+			dbg_pr(stdout, "fsmap array need object\n");
 			return -1;
 		}
 		next_map = toks[i].size;
@@ -363,18 +363,18 @@ static int container_parse_fsmap(struct hyper_container *c, char *json, jsmntok_
 		for (i_map = 0; i_map < next_map; i_map++, i++) {
 			if (json_token_streq(json, &toks[i], "source")) {
 				c->maps[j].source = (json_token_str(json, &toks[++i]));
-				dprintf(stdout, "maps %d source %s\n", j, c->maps[j].source);
+				dbg_pr(stdout, "maps %d source %s\n", j, c->maps[j].source);
 			} else if (json_token_streq(json, &toks[i], "path")) {
 				c->maps[j].path = (json_token_str(json, &toks[++i]));
-				dprintf(stdout, "maps %d path %s\n", j, c->maps[j].path);
+				dbg_pr(stdout, "maps %d path %s\n", j, c->maps[j].path);
 			} else if (json_token_streq(json, &toks[i], "readOnly")) {
 				if (!json_token_streq(json, &toks[++i], "false"))
 					c->maps[j].readonly = 1;
-				dprintf(stdout, "maps %d readonly %d\n", j, c->maps[j].readonly);
+				dbg_pr(stdout, "maps %d readonly %d\n", j, c->maps[j].readonly);
 			} else if (json_token_streq(json, &toks[i], "dockerVolume")) {
 				if (!json_token_streq(json, &toks[++i], "false"))
 					c->maps[j].docker = 1;
-				dprintf(stdout, "maps %d docker volume %d\n", j, c->maps[j].docker);
+				dbg_pr(stdout, "maps %d docker volume %d\n", j, c->maps[j].docker);
 			} else {
 				hyper_print_unknown_key(json, &toks[i]);
 				return -1;
@@ -390,25 +390,25 @@ static int container_parse_envs(struct hyper_exec *exec, char *json, jsmntok_t *
 	int i = 0, j;
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dprintf(stdout, "encs need array\n");
+		dbg_pr(stdout, "encs need array\n");
 		return -1;
 	}
 
 	exec->envs = calloc(toks[i].size, sizeof(*exec->envs));
 	if (exec->envs == NULL) {
-		dprintf(stderr, "allocate memory for env failed\n");
+		dbg_pr(stderr, "allocate memory for env failed\n");
 		return -1;
 	}
 
 	exec->envs_num = toks[i].size;
-	dprintf(stdout, "envs num %d\n", exec->envs_num);
+	dbg_pr(stdout, "envs num %d\n", exec->envs_num);
 
 	i++;
 	for (j = 0; j < exec->envs_num; j++) {
 		int i_env, next_env;
 
 		if (toks[i].type != JSMN_OBJECT) {
-			dprintf(stdout, "env array need object\n");
+			dbg_pr(stdout, "env array need object\n");
 			return -1;
 		}
 		next_env = toks[i].size;
@@ -416,10 +416,10 @@ static int container_parse_envs(struct hyper_exec *exec, char *json, jsmntok_t *
 		for (i_env = 0; i_env < next_env; i_env++, i++) {
 			if (json_token_streq(json, &toks[i], "env")) {
 				exec->envs[j].env = (json_token_str(json, &toks[++i]));
-				dprintf(stdout, "envs %d env %s\n", j, exec->envs[j].env);
+				dbg_pr(stdout, "envs %d env %s\n", j, exec->envs[j].env);
 			} else if (json_token_streq(json, &toks[i], "value")) {
 				exec->envs[j].value = (json_token_str(json, &toks[++i]));
-				dprintf(stdout, "envs %d value %s\n", j, exec->envs[j].value);
+				dbg_pr(stdout, "envs %d value %s\n", j, exec->envs[j].value);
 			} else {
 				hyper_print_unknown_key(json, &toks[i]);
 				return -1;
@@ -450,18 +450,18 @@ static int container_parse_sysctl(struct hyper_container *c, char *json, jsmntok
 	char *p;
 
 	if (toks[i].type != JSMN_OBJECT) {
-		dprintf(stdout, "sysctl need object\n");
+		dbg_pr(stdout, "sysctl need object\n");
 		return -1;
 	}
 
 	c->sys = calloc(toks[i].size, sizeof(*c->sys));
 	if (c->sys == NULL) {
-		dprintf(stderr, "allocate memory for sysctl failed\n");
+		dbg_pr(stderr, "allocate memory for sysctl failed\n");
 		return -1;
 	}
 
 	c->sys_num = toks[i].size;
-	dprintf(stdout, "sysctl size %d\n", c->sys_num);
+	dbg_pr(stdout, "sysctl size %d\n", c->sys_num);
 
 	i++;
 	for (j = 0; j < c->sys_num; j++) {
@@ -470,7 +470,7 @@ static int container_parse_sysctl(struct hyper_container *c, char *json, jsmntok
 			*p = '/';
 		}
 		c->sys[j].value = (json_token_str(json, &toks[++i]));
-		dprintf(stdout, "sysctl %s:%s\n", c->sys[j].path, c->sys[j].value);
+		dbg_pr(stdout, "sysctl %s:%s\n", c->sys[j].path, c->sys[j].value);
 	}
 	return i;
 }
@@ -481,7 +481,7 @@ static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *t
 	jsmntok_t *t;
 
 	if (toks[i].type != JSMN_OBJECT) {
-		dprintf(stdout, "process need object\n");
+		dbg_pr(stdout, "process need object\n");
 		return -1;
 	}
 
@@ -491,15 +491,15 @@ static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *t
 		t = &toks[i];
 		if (json_token_streq(json, t, "id") && t->size == 1) {
 			exec->id = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "container process id %s\n", exec->id);
+			dbg_pr(stdout, "container process id %s\n", exec->id);
 			i++;
 		} else if (json_token_streq(json, t, "user") && t->size == 1) {
 			exec->user = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "container process user %s\n", exec->user);
+			dbg_pr(stdout, "container process user %s\n", exec->user);
 			i++;
 		} else if (json_token_streq(json, t, "group") && t->size == 1) {
 			exec->group = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "container process group %s\n", exec->group);
+			dbg_pr(stdout, "container process group %s\n", exec->group);
 			i++;
 		} else if (json_token_streq(json, t, "additionalGroups") && t->size == 1) {
 			next = container_parse_additional_groups(exec, json, &toks[++i]);
@@ -509,18 +509,18 @@ static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *t
 		} else if (json_token_streq(json, t, "terminal") && t->size == 1) {
 			if (!json_token_streq(json, &toks[++i], "false")) {
 				exec->tty = 1;
-				dprintf(stdout, "container uses terminal\n");
+				dbg_pr(stdout, "container uses terminal\n");
 			} else {
-				dprintf(stdout, "container doesn't use terminal\n");
+				dbg_pr(stdout, "container doesn't use terminal\n");
 			}
 			i++;
 		} else if (json_token_streq(json, t, "stdio") && t->size == 1) {
 			exec->seq = json_token_ll(json, &toks[++i]);
-			dprintf(stdout, "container seq %" PRIu64 "\n", exec->seq);
+			dbg_pr(stdout, "container seq %" PRIu64 "\n", exec->seq);
 			i++;
 		} else if (json_token_streq(json, t, "stderr") && t->size == 1) {
 			exec->errseq = json_token_ll(json, &toks[++i]);
-			dprintf(stdout, "container stderr seq %" PRIu64 "\n", exec->errseq);
+			dbg_pr(stdout, "container stderr seq %" PRIu64 "\n", exec->errseq);
 			i++;
 		} else if (json_token_streq(json, t, "args") && t->size == 1) {
 			next = container_parse_argv(exec, json, &toks[++i]);
@@ -534,7 +534,7 @@ static int hyper_parse_process(struct hyper_exec *exec, char *json, jsmntok_t *t
 			i += next;
 		} else if (json_token_streq(json, t, "workdir") && t->size == 1) {
 			exec->workdir = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "container workdir %s\n", exec->workdir);
+			dbg_pr(stdout, "container workdir %s\n", exec->workdir);
 			i++;
 		}
 	}
@@ -563,25 +563,25 @@ static int container_parse_ports(struct hyper_container *c, char *json, jsmntok_
 	}
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dprintf(stdout, "ports format error\n");
+		dbg_pr(stdout, "ports format error\n");
 		return -1;
 	}
 
 	c->ports = calloc(toks[i].size, sizeof(*c->ports));
 	if (c->ports == NULL) {
-		dprintf(stderr, "allocate memory for ports failed\n");
+		dbg_pr(stderr, "allocate memory for ports failed\n");
 		return -1;
 	}
 
 	c->ports_num = toks[i].size;
-	dprintf(stdout, "ports num %d\n", c->ports_num);
+	dbg_pr(stdout, "ports num %d\n", c->ports_num);
 
 	i++;
 	for (j = 0; j < c->ports_num; j++) {
 		int i_port, next_port;
 
 		if (toks[i].type != JSMN_OBJECT) {
-			dprintf(stdout, "port array need object\n");
+			dbg_pr(stdout, "port array need object\n");
 			return -1;
 		}
 		next_port = toks[i].size;
@@ -589,13 +589,13 @@ static int container_parse_ports(struct hyper_container *c, char *json, jsmntok_
 		for (i_port = 0; i_port < next_port; i_port++, i++) {
 			if (json_token_streq(json, &toks[i], "protocol")) {
 				c->ports[j].protocol = (json_token_str(json, &toks[++i]));
-				dprintf(stdout, "port %d protocol %s\n", j, c->ports[j].protocol);
+				dbg_pr(stdout, "port %d protocol %s\n", j, c->ports[j].protocol);
 			} else if (json_token_streq(json, &toks[i], "hostPort")) {
 				c->ports[j].host_port = json_token_int(json, &toks[++i]);
-				dprintf(stdout, "port %d host_port %d\n", j, c->ports[j].host_port);
+				dbg_pr(stdout, "port %d host_port %d\n", j, c->ports[j].host_port);
 			} else if (json_token_streq(json, &toks[i], "containerPort")) {
 				c->ports[j].container_port = json_token_int(json, &toks[++i]);
-				dprintf(stdout, "port %d container_port %d\n", j, c->ports[j].container_port);
+				dbg_pr(stdout, "port %d container_port %d\n", j, c->ports[j].container_port);
 			} else {
 				hyper_print_unknown_key(json, &toks[i]);
 				return -1;
@@ -641,13 +641,13 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 	jsmntok_t *t;
 
 	if (toks[i].type != JSMN_OBJECT) {
-		dprintf(stderr, "format incorrect\n");
+		dbg_pr(stderr, "format incorrect\n");
 		return -1;
 	}
 
 	c = calloc(1, sizeof(*c));
 	if (c == NULL) {
-		dprintf(stdout, "alloc memory for container failed\n");
+		dbg_pr(stdout, "alloc memory for container failed\n");
 		return -1;
 	}
 
@@ -661,7 +661,7 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 	INIT_LIST_HEAD(&c->list);
 
 	next_container = toks[i].size;
-	dprintf(stdout, "next container %d\n", next_container);
+	dbg_pr(stdout, "next container %d\n", next_container);
 	i++;
 	for (j = 0; j < next_container; j++) {
 		t = &toks[i];
@@ -669,23 +669,23 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 		if (json_token_streq(json, t, "id") && t->size == 1) {
 			c->id = (json_token_str(json, &toks[++i]));
 			c->exec.container_id = strdup(c->id);
-			dprintf(stdout, "container id %s\n", c->id);
+			dbg_pr(stdout, "container id %s\n", c->id);
 			i++;
 		} else if (json_token_streq(json, t, "rootfs") && t->size == 1) {
 			c->rootfs = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "container rootfs %s\n", c->rootfs);
+			dbg_pr(stdout, "container rootfs %s\n", c->rootfs);
 			i++;
 		} else if (json_token_streq(json, t, "image") && t->size == 1) {
 			c->image = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "container image %s\n", c->image);
+			dbg_pr(stdout, "container image %s\n", c->image);
 			i++;
 		} else if (json_token_streq(json, t, "addr") && t->size == 1) {
 			c->scsiaddr = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "container image scsi id %s\n", c->scsiaddr);
+			dbg_pr(stdout, "container image scsi id %s\n", c->scsiaddr);
 			i++;
 		} else if (json_token_streq(json, t, "fstype") && t->size == 1) {
 			c->fstype = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "container fstype %s\n", c->fstype);
+			dbg_pr(stdout, "container fstype %s\n", c->fstype);
 			i++;
 		} else if (json_token_streq(json, t, "volumes") && t->size == 1) {
 			next = container_parse_volumes(c, json, &toks[++i]);
@@ -708,12 +708,12 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 				goto fail;
 			i += next;
 		} else if (json_token_streq(json, t, "restartPolicy") && t->size == 1) {
-			dprintf(stdout, "restart policy is abandoned\n");
+			dbg_pr(stdout, "restart policy is abandoned\n");
 			i += 2;
 		} else if (json_token_streq(json, t, "initialize") && t->size == 1) {
 			if (!json_token_streq(json, &toks[++i], "false")) {
 				c->initialize = 1;
-				dprintf(stdout, "need to initialize container\n");
+				dbg_pr(stdout, "need to initialize container\n");
 			}
 			i++;
 		} else if (json_token_streq(json, t, "ports") && t->size == 1) {
@@ -741,12 +741,12 @@ static int hyper_parse_containers(struct hyper_pod *pod, char *json, jsmntok_t *
 	struct hyper_container *c, *n;
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dprintf(stdout, "format incorrect\n");
+		dbg_pr(stdout, "format incorrect\n");
 		return -1;
 	}
 
 	c_num = toks[i].size;
-	dprintf(stdout, "container count %d\n", c_num);
+	dbg_pr(stdout, "container count %d\n", c_num);
 
 	i++;
 	for (j = 0; j < c_num; j++) {
@@ -788,7 +788,7 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 	struct hyper_ipaddress *ipaddr_oldf = NULL;
 
 	if (toks[i].type != JSMN_OBJECT) {
-		dprintf(stdout, "network array need object\n");
+		dbg_pr(stdout, "network array need object\n");
 		return -1;
 	}
 
@@ -799,24 +799,24 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 	for (j = 0; j < next_if; j++, i++) {
 		if (json_token_streq(json, &toks[i], "device")) {
 			iface->device = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "net device is %s\n", iface->device);
+			dbg_pr(stdout, "net device is %s\n", iface->device);
 		} else if (json_token_streq(json, &toks[i], "ipAddresses")) {
 			if (toks[++i].type != JSMN_ARRAY) {
-				dprintf(stdout, "interface object needs ipAddresses array\n");
+				dbg_pr(stdout, "interface object needs ipAddresses array\n");
 				goto fail;
 			}
 
 			num_ipaddr = toks[i].size;
-			dprintf(stdout, "Number of ip addresses:%d\n", num_ipaddr);
+			dbg_pr(stdout, "Number of ip addresses:%d\n", num_ipaddr);
 
 			for (k = 0; k < num_ipaddr; k++) {
 				if (toks[++i].type != JSMN_OBJECT) {
-					dprintf(stderr, "ipaddress is not an object\n");
+					dbg_pr(stderr, "ipaddress is not an object\n");
 					goto fail;
 				}
 				ipaddr = calloc(1, sizeof(*ipaddr));
 				if (ipaddr == NULL) {
-					dprintf(stderr, "Alloc memory for ipaddress failed\n");
+					dbg_pr(stderr, "Alloc memory for ipaddress failed\n");
 					goto fail;
 				}
 
@@ -826,11 +826,11 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 					i++;
 					if (json_token_streq(json, &toks[i], "ipAddress")) {
 						ipaddr->addr = (json_token_str(json, &toks[++i]));
-						dprintf(stdout, "net ipaddress for device %s is %s\n",
+						dbg_pr(stdout, "net ipaddress for device %s is %s\n",
 							iface->device, ipaddr->addr);
 					} else if (json_token_streq(json, &toks[i], "netMask")) {
 						ipaddr->mask = (json_token_str(json, &toks[++i]));
-						dprintf(stdout, "net mask for device %s is %s\n",
+						dbg_pr(stdout, "net mask for device %s is %s\n",
 							iface->device, ipaddr->mask);
 					} else {
 						hyper_print_unknown_key(json, &toks[i]);
@@ -843,19 +843,19 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 			}
 		} else if (json_token_streq(json, &toks[i], "newDeviceName")) {
 			iface->new_device_name = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "new interface name is %s\n", iface->new_device_name);
+			dbg_pr(stdout, "new interface name is %s\n", iface->new_device_name);
 		} else if (json_token_streq(json, &toks[i], "ipAddress")) {
 			if (ipaddr_oldf == NULL) {
 				ipaddr_oldf = calloc(1, sizeof(*ipaddr));
 			}
 			ipaddr_oldf->addr = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "net ipaddress is %s\n", ipaddr_oldf->addr);
+			dbg_pr(stdout, "net ipaddress is %s\n", ipaddr_oldf->addr);
 		} else if (json_token_streq(json, &toks[i], "netMask")) {
 			if (ipaddr_oldf == NULL) {
 				ipaddr_oldf = calloc(1, sizeof(*ipaddr));
 			}
 			ipaddr_oldf->mask = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "net mask is %s\n", ipaddr_oldf->mask);
+			dbg_pr(stdout, "net mask is %s\n", ipaddr_oldf->mask);
 		} else {
 			hyper_print_unknown_key(json, &toks[i]);
 			goto fail;
@@ -885,14 +885,14 @@ struct hyper_interface *hyper_parse_setup_interface(char *json, int length)
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
 	if (toks == NULL) {
-		dprintf(stderr, "allocate tokens for setup interface failed\n");
+		dbg_pr(stderr, "allocate tokens for setup interface failed\n");
 		goto fail;
 	}
 
 	jsmn_init(&p);
 	n = jsmn_parse(&p, json, length, toks, toks_num);
 	if (n < 0) {
-		dprintf(stdout, "jsmn parse failed, n is %d\n", n);
+		dbg_pr(stdout, "jsmn parse failed, n is %d\n", n);
 		if (n == JSMN_ERROR_NOMEM) {
 			toks_num *= 2;
 			goto realloc;
@@ -902,12 +902,12 @@ realloc:
 
 	iface = calloc(1, sizeof(*iface));
 	if (iface == NULL) {
-		dprintf(stderr, "allocate memory for interface failed\n");
+		dbg_pr(stderr, "allocate memory for interface failed\n");
 		goto out;
 	}
 
 	if (hyper_parse_interface(iface, json, toks) < 0) {
-		dprintf(stderr, "parse interface failed\n");
+		dbg_pr(stderr, "parse interface failed\n");
 		goto fail;
 	}
 out:
@@ -925,16 +925,16 @@ static int hyper_parse_interfaces(struct hyper_pod *pod, char *json, jsmntok_t *
 	struct hyper_interface *iface;
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dprintf(stdout, "interfaces need array\n");
+		dbg_pr(stdout, "interfaces need array\n");
 		return -1;
 	}
 
 	pod->i_num = toks[i].size;
-	dprintf(stdout, "network interfaces num %d\n", pod->i_num);
+	dbg_pr(stdout, "network interfaces num %d\n", pod->i_num);
 
 	pod->iface = calloc(pod->i_num, sizeof(*iface));
 	if (pod->iface == NULL) {
-		dprintf(stdout, "alloc memory for interface failed\n");
+		dbg_pr(stdout, "alloc memory for interface failed\n");
 		return -1;
 	}
 
@@ -956,16 +956,16 @@ static int hyper_parse_routes(struct hyper_route **routes, uint32_t *r_num, char
 	struct hyper_route *rts;
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dprintf(stdout, "routes need array\n");
+		dbg_pr(stdout, "routes need array\n");
 		return -1;
 	}
 
 	num = toks[i].size;
-	dprintf(stdout, "network routes num %d\n", num);
+	dbg_pr(stdout, "network routes num %d\n", num);
 
 	rts = calloc(num, sizeof(*rts));
 	if (rts == NULL) {
-		dprintf(stdout, "alloc memory for route failed\n");
+		dbg_pr(stdout, "alloc memory for route failed\n");
 		return -1;
 	}
 
@@ -975,7 +975,7 @@ static int hyper_parse_routes(struct hyper_route **routes, uint32_t *r_num, char
 		struct hyper_route *rt = &rts[j];
 
 		if (toks[i].type != JSMN_OBJECT) {
-			dprintf(stdout, "routes array need object\n");
+			dbg_pr(stdout, "routes array need object\n");
 			goto out;
 		}
 		next_rt = toks[i].size;
@@ -984,13 +984,13 @@ static int hyper_parse_routes(struct hyper_route **routes, uint32_t *r_num, char
 		for (i_rt = 0; i_rt < next_rt; i_rt++, i++) {
 			if (json_token_streq(json, &toks[i], "dest")) {
 				rt->dst = (json_token_str(json, &toks[++i]));
-				dprintf(stdout, "route %d dest is %s\n", j, rt->dst);
+				dbg_pr(stdout, "route %d dest is %s\n", j, rt->dst);
 			} else if (json_token_streq(json, &toks[i], "gateway")) {
 				rt->gw = (json_token_str(json, &toks[++i]));
-				dprintf(stdout, "route %d gateway is %s\n", j, rt->gw);
+				dbg_pr(stdout, "route %d gateway is %s\n", j, rt->gw);
 			} else if (json_token_streq(json, &toks[i], "device")) {
 				rt->device = (json_token_str(json, &toks[++i]));
-				dprintf(stdout, "route %d device is %s\n", j, rt->device);
+				dbg_pr(stdout, "route %d device is %s\n", j, rt->device);
 			} else {
 				hyper_print_unknown_key(json, &toks[i]);
 				goto out;
@@ -1017,14 +1017,14 @@ int hyper_parse_setup_routes(struct hyper_route **routes, uint32_t *r_num, char 
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
 	if (toks == NULL) {
-		dprintf(stderr, "allocate tokens for setup route failed\n");
+		dbg_pr(stderr, "allocate tokens for setup route failed\n");
 		goto out;
 	}
 
 	jsmn_init(&p);
 	n = jsmn_parse(&p, json, length, toks, toks_num);
 	if (n < 0) {
-		dprintf(stdout, "jsmn parse failed, n is %d\n", n);
+		dbg_pr(stdout, "jsmn parse failed, n is %d\n", n);
 		if (n == JSMN_ERROR_NOMEM) {
 			toks_num *= 2;
 			goto realloc;
@@ -1039,7 +1039,7 @@ realloc:
 			continue;
 
 		if (i++ == n || !json_token_streq(json, t, "routes")) {
-			dprintf(stderr, "cannot find routes\n");
+			dbg_pr(stderr, "cannot find routes\n");
 			goto out;
 		}
 		found = 1;
@@ -1047,7 +1047,7 @@ realloc:
 	}
 
 	if (found && (hyper_parse_routes(routes, r_num, json, &toks[i]) < 0)) {
-		dprintf(stdout, "fail to parse routes\n");
+		dbg_pr(stdout, "fail to parse routes\n");
 		goto out;
 	}
 
@@ -1062,23 +1062,23 @@ static int hyper_parse_dns(struct hyper_pod *pod, char *json, jsmntok_t *toks)
 	int i = 0, j;
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dprintf(stdout, "Dns format incorrect\n");
+		dbg_pr(stdout, "Dns format incorrect\n");
 		return -1;
 	}
 
 	pod->d_num = toks[i].size;
-	dprintf(stdout, "dns count %d\n", pod->d_num);
+	dbg_pr(stdout, "dns count %d\n", pod->d_num);
 
 	pod->dns = calloc(pod->d_num, sizeof(*pod->dns));
 	if (pod->dns == NULL) {
-		dprintf(stdout, "alloc memory for dns failed\n");
+		dbg_pr(stdout, "alloc memory for dns failed\n");
 		return -1;
 	}
 
 	i++;
 	for (j = 0; j < pod->d_num; j++, i++) {
 		pod->dns[j] = json_token_str(json, &toks[i]);
-		dprintf(stdout, "pod dns %d: %s\n", j, pod->dns[j]);
+		dbg_pr(stdout, "pod dns %d: %s\n", j, pod->dns[j]);
 	}
 
 	return i;
@@ -1093,23 +1093,23 @@ static int hyper_parse_portmapping_internal_networks(struct portmapping_white_li
 	}
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dprintf(stdout, "internal networks format incorrect\n");
+		dbg_pr(stdout, "internal networks format incorrect\n");
 		return -1;
 	}
 
 	podmapping->i_num = toks[i].size;
-	dprintf(stdout, "internal networks count %d\n", podmapping->i_num);
+	dbg_pr(stdout, "internal networks count %d\n", podmapping->i_num);
 
 	podmapping->internal_networks = calloc(podmapping->i_num, sizeof(*podmapping->internal_networks));
 	if (podmapping->internal_networks == NULL) {
-		dprintf(stdout, "alloc memory for internal_networks failed\n");
+		dbg_pr(stdout, "alloc memory for internal_networks failed\n");
 		return -1;
 	}
 
 	i++;
 	for (j = 0; j < podmapping->i_num; j++, i++) {
 		podmapping->internal_networks[j] = json_token_str(json, &toks[i]);
-		dprintf(stdout, "podmapping internal_networks %d: %s\n", j, podmapping->internal_networks[j]);
+		dbg_pr(stdout, "podmapping internal_networks %d: %s\n", j, podmapping->internal_networks[j]);
 	}
 
 	return i;
@@ -1124,23 +1124,23 @@ static int hyper_parse_portmapping_external_networks(struct portmapping_white_li
 	}
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dprintf(stdout, "external networks format incorrect\n");
+		dbg_pr(stdout, "external networks format incorrect\n");
 		return -1;
 	}
 
 	podmapping->e_num = toks[i].size;
-	dprintf(stdout, "external networks count %d\n", podmapping->e_num);
+	dbg_pr(stdout, "external networks count %d\n", podmapping->e_num);
 
 	podmapping->external_networks = calloc(podmapping->e_num, sizeof(*podmapping->external_networks));
 	if (podmapping->external_networks == NULL) {
-		dprintf(stdout, "alloc memory for external_networks failed\n");
+		dbg_pr(stdout, "alloc memory for external_networks failed\n");
 		return -1;
 	}
 
 	i++;
 	for (j = 0; j < podmapping->e_num; j++, i++) {
 		podmapping->external_networks[j] = json_token_str(json, &toks[i]);
-		dprintf(stdout, "podmapping external_networks %d: %s\n", j, podmapping->external_networks[j]);
+		dbg_pr(stdout, "podmapping external_networks %d: %s\n", j, podmapping->external_networks[j]);
 	}
 
 	return i;
@@ -1151,13 +1151,13 @@ static int hyper_parse_portmapping_whitelist(struct hyper_pod *pod, char *json, 
 	int i = 0, j, toks_size, next;
 
 	if (toks[i].type != JSMN_OBJECT) {
-		dprintf(stdout, "PortmappingWhiteLists format incorrect\n");
+		dbg_pr(stdout, "PortmappingWhiteLists format incorrect\n");
 		return -1;
 	}
 
 	pod->portmap_white_lists = calloc(1, sizeof(*pod->portmap_white_lists));
 	if (pod->portmap_white_lists == NULL) {
-		dprintf(stdout, "alloc memory for portmap_white_lists failed\n");
+		dbg_pr(stdout, "alloc memory for portmap_white_lists failed\n");
 		return -1;
 	}
 
@@ -1166,7 +1166,7 @@ static int hyper_parse_portmapping_whitelist(struct hyper_pod *pod, char *json, 
 	for (j = 0; j < toks_size; j++) {
 		jsmntok_t *t = &toks[i];
 
-		dprintf(stdout, "token %d, type is %d, size is %d\n", i, t->type, t->size);
+		dbg_pr(stdout, "token %d, type is %d, size is %d\n", i, t->type, t->size);
 		if (t->type != JSMN_STRING) {
 			i++;
 			continue;
@@ -1211,15 +1211,15 @@ int hyper_parse_pod(struct hyper_pod *pod, char *json, int length)
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
 	if (toks == NULL) {
-		dprintf(stderr, "allocate tokens for pod failed\n");
+		dbg_pr(stderr, "allocate tokens for pod failed\n");
 		goto out;
 	}
 
-	dprintf(stdout, "call hyper_start_pod, json %s, len %d\n", json, length);
+	dbg_pr(stdout, "call hyper_start_pod, json %s, len %d\n", json, length);
 	jsmn_init(&p);
 	n = jsmn_parse(&p, json, length, toks, toks_num);
 	if (n < 0) {
-		dprintf(stdout, "jsmn parse failed, n is %d\n", n);
+		dbg_pr(stdout, "jsmn parse failed, n is %d\n", n);
 		if (n == JSMN_ERROR_NOMEM) {
 			toks_num *= 2;
 			goto realloc;
@@ -1228,12 +1228,12 @@ realloc:
 		goto out;
 	}
 
-	dprintf(stdout, "jsmn parse successed, n is %d\n", n);
+	dbg_pr(stdout, "jsmn parse successed, n is %d\n", n);
 	next = 0;
 	for (i = 0; i < n;) {
 		jsmntok_t *t = &toks[i];
 
-		dprintf(stdout, "token %d, type is %d, size is %d\n", i, t->type, t->size);
+		dbg_pr(stdout, "token %d, type is %d, size is %d\n", i, t->type, t->size);
 
 		if (t->type != JSMN_STRING) {
 			i++;
@@ -1266,15 +1266,15 @@ realloc:
 			i += next;
 		} else if (json_token_streq(json, t, "shareDir") && t->size == 1) {
 			pod->share_tag = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "share tag is %s\n", pod->share_tag);
+			dbg_pr(stdout, "share tag is %s\n", pod->share_tag);
 			i++;
 		} else if (json_token_streq(json, t, "hostname") && t->size == 1) {
 			pod->hostname = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "hostname is %s\n", pod->hostname);
+			dbg_pr(stdout, "hostname is %s\n", pod->hostname);
 			i++;
 		} else if (json_token_streq(json, t, "restartPolicy") && t->size == 1) {
 			i += 2;
-			dprintf(stdout, "restartPolicy is deprecated\n");
+			dbg_pr(stdout, "restartPolicy is deprecated\n");
 		} else if (json_token_streq(json, t, "portmappingWhiteLists") && t->size == 1) {
 			next = hyper_parse_portmapping_whitelist(pod, json, &toks[++i]);
 			if (next < 0)
@@ -1304,14 +1304,14 @@ struct hyper_container *hyper_parse_new_container(struct hyper_pod *pod, char *j
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
 	if (toks == NULL) {
-		dprintf(stderr, "allocate tokens for new container failed\n");
+		dbg_pr(stderr, "allocate tokens for new container failed\n");
 		goto fail;
 	}
 
 	jsmn_init(&p);
 	n = jsmn_parse(&p, json, length, toks, toks_num);
 	if (n < 0) {
-		dprintf(stdout, "jsmn parse failed, n is %d\n", n);
+		dbg_pr(stdout, "jsmn parse failed, n is %d\n", n);
 		if (n == JSMN_ERROR_NOMEM) {
 			toks_num *= 2;
 			goto realloc;
@@ -1343,14 +1343,14 @@ struct hyper_exec *hyper_parse_execcmd(char *json, int length)
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
 	if (toks == NULL) {
-		dprintf(stderr, "allocate tokens for execcmd failed\n");
+		dbg_pr(stderr, "allocate tokens for execcmd failed\n");
 		goto fail;
 	}
 
 	jsmn_init(&p);
 	n = jsmn_parse(&p, json, length,  toks, toks_num);
 	if (n < 0) {
-		dprintf(stdout, "jsmn parse failed, n is %d\n", n);
+		dbg_pr(stdout, "jsmn parse failed, n is %d\n", n);
 		if (n == JSMN_ERROR_NOMEM) {
 			toks_num *= 2;
 			goto realloc;
@@ -1360,7 +1360,7 @@ realloc:
 
 	exec = calloc(1, sizeof(*exec));
 	if (exec == NULL) {
-		dprintf(stderr, "allocate memory for exec cmd failed\n");
+		dbg_pr(stderr, "allocate memory for exec cmd failed\n");
 		goto out;
 	}
 
@@ -1375,7 +1375,7 @@ realloc:
 
 		if (json_token_streq(json, t, "container")) {
 			exec->container_id = (json_token_str(json, &toks[++i]));
-			dprintf(stdout, "get container %s\n", exec->container_id);
+			dbg_pr(stdout, "get container %s\n", exec->container_id);
 		} else if (json_token_streq(json, t, "process") && t->size == 1) {
 			j = hyper_parse_process(exec, json, &toks[++i]);
 			if (j < 0)
@@ -1385,12 +1385,12 @@ realloc:
 	}
 
 	if (exec->container_id == NULL || strlen(exec->container_id) == 0) {
-		dprintf(stderr, "execcmd format error, has no container id\n");
+		dbg_pr(stderr, "execcmd format error, has no container id\n");
 		goto fail;
 	}
 
 	if (exec->seq == 0) {
-		dprintf(stderr, "execcmd format error, has no seq\n");
+		dbg_pr(stderr, "execcmd format error, has no seq\n");
 		goto fail;
 	}
 
@@ -1416,7 +1416,7 @@ int hyper_parse_file_command(struct file_command *cmd, char *json, int length)
 
 	toks = calloc(toks_num, sizeof(jsmntok_t));
 	if (toks == NULL) {
-		dprintf(stderr, "fail to allocate tokens for file cmd\n");
+		dbg_pr(stderr, "fail to allocate tokens for file cmd\n");
 		ret = -1;
 		goto fail;
 	}
@@ -1424,7 +1424,7 @@ int hyper_parse_file_command(struct file_command *cmd, char *json, int length)
 	jsmn_init(&p);
 	n = jsmn_parse(&p, json, length,  toks, toks_num);
 	if (n < 0) {
-		dprintf(stdout, "jsmn parse failed, n is %d\n", n);
+		dbg_pr(stdout, "jsmn parse failed, n is %d\n", n);
 		ret = -1;
 		goto fail;
 	}
@@ -1440,10 +1440,10 @@ int hyper_parse_file_command(struct file_command *cmd, char *json, int length)
 
 		if (json_token_streq(json, t, "container")) {
 			cmd->id = (json_token_str(json, &toks[i]));
-			dprintf(stdout, "file cmd get container %s\n", cmd->id);
+			dbg_pr(stdout, "file cmd get container %s\n", cmd->id);
 		} else if (json_token_streq(json, t, "file")) {
 			cmd->file = (json_token_str(json, &toks[i]));
-			dprintf(stdout, "file cmd get file %s\n", cmd->file);
+			dbg_pr(stdout, "file cmd get file %s\n", cmd->file);
 		} else {
 			hyper_print_unknown_key(json, t);
 			goto fail;
@@ -1451,7 +1451,7 @@ int hyper_parse_file_command(struct file_command *cmd, char *json, int length)
 	}
 
 	if (cmd->id == NULL || cmd->file == NULL) {
-		dprintf(stderr, "file cmd format incorrect\n");
+		dbg_pr(stderr, "file cmd format incorrect\n");
 		goto fail;
 	}
 
