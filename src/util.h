@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <grp.h>
 #include <pwd.h>
+#include <stdbool.h>
 #include "../config.h"
 
 struct hyper_pod;
@@ -36,6 +37,7 @@ int hyper_setfd_nonblock(int fd);
 int hyper_socketpair(int domain, int type, int protocol, int sv[2]);
 void hyper_shutdown();
 int hyper_insmod(char *module);
+bool hyper_name_to_id(const char *name, unsigned long *val);
 struct passwd *hyper_getpwnam(const char *name);
 struct group *hyper_getgrnam(const char *name);
 int hyper_getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroups);
