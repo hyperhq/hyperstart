@@ -405,19 +405,20 @@ static int hyper_setup_route(struct rtnl_handle *rth,
 	return 0;
 }
 
-static int hyper_set_interface_name(struct rtnl_handle *rth,
+static int hyper_set_interface_attr(struct rtnl_handle *rth,
 				int ifindex,
-				char *new_device_name)
+				void *data,
+				int len,
+				int type)
 {
 	struct {
-                struct nlmsghdr n;
-                struct ifinfomsg i;
-                char buf[1024];
-        } req;
+		struct nlmsghdr n;
+		struct ifinfomsg i;
+		char buf[1024];
+	} req;
 
-	if (ifindex < 0 || !new_device_name) {
+	if (!rth || ifindex < 0)
 		return -1;
-	}
 
 	memset(&req, 0, sizeof(req));
 	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
@@ -428,19 +429,44 @@ static int hyper_set_interface_name(struct rtnl_handle *rth,
 	req.i.ifi_change = 0xFFFFFFFF;
 	req.i.ifi_index = ifindex;
 
-	if (addattr_l(&req.n, sizeof(req), IFLA_IFNAME, 
-			new_device_name,
-			strlen(new_device_name) + 1)) {
+	if (addattr_l(&req.n, sizeof(req), type,
+			data,
+			len)) {
                 fprintf(stderr, "setup attr failed\n");
                 return -1;
         }
 
-	if (rtnl_talk(rth, &req.n, 0, 0, NULL) < 0) {
+	if (rtnl_talk(rth, &req.n, 0, 0, NULL) < 0){
 		perror("rtnl_talk failed");
 		return -1;
 	}
 
 	return 0;
+}
+
+static int hyper_set_interface_name(struct rtnl_handle *rth,
+				int ifindex,
+				char *new_device_name)
+{
+	if ( !rth || ifindex < 0 || !new_device_name) {
+		return -1;
+	}
+	return hyper_set_interface_attr(rth, ifindex, 
+				new_device_name,
+				strlen(new_device_name)+1,
+				IFLA_IFNAME);
+}
+
+static int hyper_set_interface_mtu(struct rtnl_handle *rth,
+				int ifindex,
+				unsigned int mtu)
+{
+	if (!rth || ifindex < 0) {
+		return -1;
+	}
+	return hyper_set_interface_attr(rth, ifindex, &mtu,
+				sizeof(mtu),
+				IFLA_MTU);
 }
 
 static int hyper_setup_interface(struct rtnl_handle *rth,
@@ -503,6 +529,15 @@ static int hyper_setup_interface(struct rtnl_handle *rth,
 	if (iface->new_device_name && strcmp(iface->new_device_name, iface->device)) {
 		fprintf(stdout, "Setting interface name to %s\n", iface->new_device_name);
 		hyper_set_interface_name(rth, ifindex, iface->new_device_name);
+	}
+
+	if (iface->mtu > 0) {
+		fprintf(stdout, "Setting interface MTU to %d\n", iface->mtu);
+		if (hyper_set_interface_mtu(rth, ifindex, iface->mtu) < 0) {
+			fprintf(stderr, "set mtu failed for interface %s\n", 
+					iface->device);
+			return -1;
+		}
 	}
 
 	if (hyper_up_nic(rth, ifindex) < 0) {
