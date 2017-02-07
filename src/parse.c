@@ -856,6 +856,9 @@ static int hyper_parse_interface(struct hyper_interface *iface,
 			}
 			ipaddr_oldf->mask = (json_token_str(json, &toks[++i]));
 			dbg_pr(stdout, "net mask is %s\n", ipaddr_oldf->mask);
+		}  else if (json_token_streq(json, &toks[i], "mtu")) {
+			iface->mtu = (json_token_int(json, &toks[++i]));
+			dbg_pr(stdout, "mtu is %d\n", iface->mtu);
 		} else {
 			hyper_print_unknown_key(json, &toks[i]);
 			goto fail;
