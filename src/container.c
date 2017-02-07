@@ -113,23 +113,33 @@ static int container_setup_volume(struct hyper_container *container)
 		sprintf(path, "/tmp/%s", vol->mountpoint);
 		sprintf(mountpoint, "./%s", vol->mountpoint);
 
-		fprintf(stdout, "mount %s to %s, tmp path %s\n",
-			dev, vol->mountpoint, path);
-
 		if (hyper_mkdir(path, 0755) < 0) {
 			perror("create volume dir failed");
 			return -1;
 		}
 
-		if (!strncmp(vol->fstype, "xfs", strlen("xfs")))
-			options = "nouuid";
+		if (!strcmp(vol->fstype, "nfs")) {
+			fprintf(stdout, "mount nfs share %s to %s, tmp path %s\n",
+				vol->device, vol->mountpoint, path);
 
-		if (mount(dev, path, vol->fstype, 0, options) < 0) {
-			perror("mount volume device failed");
-			return -1;
+			if (hyper_mount_nfs(vol->device, path) < 0)
+				return -1;
+			/* nfs export has implicitly included _data part of the volume */
+			sprintf(volume, "/%s/", path);
+		} else {
+			fprintf(stdout, "mount %s to %s, tmp path %s\n",
+				dev, vol->mountpoint, path);
+
+			if (!strcmp(vol->fstype, "xfs"))
+				options = "nouuid";
+
+			if (mount(dev, path, vol->fstype, 0, options) < 0) {
+				perror("mount volume device failed");
+				return -1;
+			}
+			sprintf(volume, "/%s/_data", path);
 		}
 
-		sprintf(volume, "/%s/_data", path);
 		if (container_check_file_volume(volume, &filevolume) < 0)
 			return -1;
 
