@@ -16,7 +16,6 @@ cp busybox /tmp/hyperstart-rootfs/sbin/
 cp iptables /tmp/hyperstart-rootfs/sbin/
 cp ipvsadm /tmp/hyperstart-rootfs/sbin/
 cp socat /tmp/hyperstart-rootfs/sbin/
-cp libm.so.6 /tmp/hyperstart-rootfs/lib64/
 cp mount.nfs /tmp/hyperstart-rootfs/sbin/mount.nfs4
 
 if [ "$INCLUDE_KMODULES"x == "1"x ]; then
@@ -43,18 +42,22 @@ do
 	ln -sf /sbin/iptables /tmp/hyperstart-rootfs/${bin}
 done
 
-ldd /tmp/hyperstart-rootfs/init | while read line
+LDD_BINARIES=(/init /sbin/ipvsadm /sbin/iptables)
+for bin in ${LDD_BINARIES[@]}
 do
-	arr=(${line// / })
+    ldd /tmp/hyperstart-rootfs/${bin} | while read line
+    do
+	    arr=(${line// / })
 
-	for lib in ${arr[@]}
-	do
-		if [ "${lib:0:1}" = "/" ]; then
-			dir=/tmp/hyperstart-rootfs`dirname $lib`
-			mkdir -p "${dir}"
-			cp -f $lib $dir
-		fi
-	done
+	    for lib in ${arr[@]}
+	    do
+		    if [ "${lib:0:1}" = "/" ]; then
+			    dir=/tmp/hyperstart-rootfs`dirname $lib`
+			    mkdir -p "${dir}"
+			    cp -f $lib $dir
+		    fi
+	    done
+    done
 done
 
 if [ "$1"x = "vbox"x ]; then
