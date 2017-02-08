@@ -465,11 +465,11 @@ static int container_parse_sysctl(struct hyper_container *c, char *json, jsmntok
 
 	i++;
 	for (j = 0; j < c->sys_num; j++) {
-		c->sys[j].path = (json_token_str(json, &toks[++i]));
+		c->sys[j].path = (json_token_str(json, &toks[i++]));
 		while((p = strchr(c->sys[j].path, '.')) != NULL) {
 			*p = '/';
 		}
-		c->sys[j].value = (json_token_str(json, &toks[++i]));
+		c->sys[j].value = (json_token_str(json, &toks[i++]));
 		dbg_pr(stdout, "sysctl %s:%s\n", c->sys[j].path, c->sys[j].value);
 	}
 	return i;
