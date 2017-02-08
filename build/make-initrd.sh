@@ -12,9 +12,8 @@ mkdir -m 0755 -p /tmp/hyperstart-rootfs/dev \
 	  /tmp/hyperstart-rootfs/proc
 
 cp ../src/init /tmp/hyperstart-rootfs
-cp busybox /tmp/hyperstart-rootfs
-cp iptables /tmp/hyperstart-rootfs
-cp libm.so.6 /tmp/hyperstart-rootfs/lib64/
+cp busybox /tmp/hyperstart-rootfs/
+cp iptables /tmp/hyperstart-rootfs/
 cp mount.nfs /tmp/hyperstart-rootfs/sbin/mount.nfs4
 
 if [ "$1"x = "aarch64"x ]; then
@@ -38,18 +37,22 @@ do
 	ln -sf /iptables /tmp/hyperstart-rootfs/${bin}
 done
 
-ldd /tmp/hyperstart-rootfs/init | while read line
+LDD_BINARIES=(/init /iptables /sbin/mount.nfs4)
+for bin in ${LDD_BINARIES[@]}
 do
-	arr=(${line// / })
+    ldd /tmp/hyperstart-rootfs/${bin} | while read line
+    do
+	    arr=(${line// / })
 
-	for lib in ${arr[@]}
-	do
-		if [ "${lib:0:1}" = "/" ]; then
-			dir=/tmp/hyperstart-rootfs`dirname $lib`
-			mkdir -p "${dir}"
-			cp -f $lib $dir
-		fi
-	done
+	    for lib in ${arr[@]}
+	    do
+		    if [ "${lib:0:1}" = "/" ]; then
+			    dir=/tmp/hyperstart-rootfs`dirname $lib`
+			    mkdir -p "${dir}"
+			    cp -f $lib $dir
+		    fi
+	    done
+    done
 done
 
 if [ "$1"x = "vbox"x ]; then
