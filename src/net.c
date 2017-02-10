@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <sched.h>
 
 #include "hyper.h"
 #include "util.h"
@@ -168,6 +169,10 @@ static int hyper_get_ifindex(char *nic)
 
 	sprintf(path, "/sys/class/net/%s/ifindex", nic);
 	fprintf(stdout, "net device sys path is %s\n", path);
+
+	while (access(path, R_OK) < 0) {
+		sched_yield();
+	}
 
 	fd = open(path, O_RDONLY);
 	if (fd < 0) {
