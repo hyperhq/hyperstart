@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1341,10 +1342,9 @@ static int hyper_loop(void)
 	return 0;
 }
 
-int main(int argc, char *argv[])
+static int hyper_setup_init_process(void)
 {
-	char *cmdline, *ctl_serial, *tty_serial;
-
+	/* mount the base file systems */
 	if (mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) == -1) {
 		perror("mount proc failed");
 		return -1;
@@ -1381,11 +1381,30 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	cmdline = read_cmdline();
-
+	/* become the session leader */
 	setsid();
 
+	/* set the controlling terminal */
 	ioctl(STDIN_FILENO, TIOCSCTTY, 1);
+
+	setenv("PATH", "/bin:/sbin/:/usr/bin/:/usr/sbin/", 1);
+
+	return 0;
+}
+
+int main(int argc, char *argv[])
+{
+	char *binary_name, *cmdline, *ctl_serial, *tty_serial;
+	bool is_init;
+
+	binary_name = basename(argv[0]);
+	is_init = strncmp(binary_name, "init", 5) == 0;
+
+	if (is_init && hyper_setup_init_process() < 0) {
+		return -1;
+	}
+
+	cmdline = read_cmdline();
 
 #ifdef WITH_VBOX
 	ctl_serial = "/dev/ttyS0";
@@ -1400,8 +1419,6 @@ int main(int argc, char *argv[])
 	ctl_serial = "sh.hyper.channel.0";
 	tty_serial = "sh.hyper.channel.1";
 #endif
-
-	setenv("PATH", "/bin:/sbin/:/usr/bin/:/usr/sbin/", 1);
 
 	hyper_epoll.ctl.fd = hyper_setup_ctl_channel(ctl_serial);
 	if (hyper_epoll.ctl.fd < 0) {

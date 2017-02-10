@@ -9,9 +9,10 @@
 .deps
 TAGS
 tags
-init
+/src/hyperstart
 build/hyper_daemon
 build/hyper-initrd.img
+data/hyperstart.service
 build/cbfs.rom
 build/root/*
 build/*iso
@@ -28,10 +29,7 @@ cscope.po.out
 stamp-h
 stamp-h.in
 stamp-h1
-/config.h
-/config.h.in
-/config.log
-/config.status
+/config.*
 /configure
 /aclocal.m4
 /autoscan.log

@@ -1,0 +1,5 @@
+[Unit]
+Description=hyperstart guest daemon
+
+[Service]
+ExecStart=@prefix@/bin/hyperstart
