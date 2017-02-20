@@ -9,7 +9,9 @@ matrix:
 
 before_install:
   - sudo apt-get update -qq
-  - sudo apt-get install -y autoconf automake pkg-config libdevmapper-dev libsqlite3-dev libvirt-dev qemu libvirt-bin -qq
+  - sudo apt-get install -y -qq autoconf automake pkg-config libdevmapper-dev libsqlite3-dev libvirt-dev qemu libvirt-bin linux-headers-$(uname -r)
+  - sudo mkdir -p /usr/include/linux
+  - sudo cp /usr/src/linux-headers-$(uname -r)/include/uapi/linux/vm_sockets.h /usr/include/linux
   - cd `mktemp -d`
   - wget https://git.fedorahosted.org/cgit/lvm2.git/snapshot/lvm2-2_02_131.tar.xz
   - tar xf lvm2-2_02_131.tar.xz

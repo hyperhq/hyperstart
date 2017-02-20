@@ -73,6 +73,9 @@ AS_IF([test "x$enable_daemon" = "xno"],[SYSTEMD_SYSTEMUNIT=no])
 AC_SUBST(SYSTEMD_SYSTEMUNIT)
 AM_CONDITIONAL(SYSTEMD, test "x${SYSTEMD_SYSTEMUNIT}" != "xno" )
 
+AC_CHECK_FILE([/usr/include/linux/vm_sockets.h],
+	      [], [AC_MSG_ERROR(Cannot find linux/vm_sockets.h)])
+
 AC_CONFIG_FILES([
   Makefile
   src/Makefile
