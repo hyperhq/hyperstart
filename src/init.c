@@ -889,25 +889,33 @@ static void hyper_cmd_online_cpu_mem()
 	}
 }
 
-static int hyper_setup_ctl_channel(char *name)
+static int hyper_ctl_send_ready(int fd)
 {
 	uint8_t buf[8];
-	int ret = hyper_open_channel(name, 0);
-	if (ret < 0)
-		return ret;
 
 	fprintf(stdout, "send ready message\n");
 	hyper_set_be32(buf, READY);
 	hyper_set_be32(buf + 4, 8);
-	if (hyper_send_data_block(ret, buf, 8) < 0) {
+	if (hyper_send_data_block(fd, buf, 8) < 0) {
 		perror("send READY MESSAGE failed\n");
-		goto out;
+		return -1;
+	}
+	return 0;
+}
+
+static int hyper_setup_ctl_channel(char *name)
+{
+	int fd;
+
+	fd = hyper_open_channel(name, 0);
+	if (fd < 0)
+		return fd;
+	if (hyper_ctl_send_ready(fd) < 0) {
+		close(fd);
+		return -1;
 	}
 
-	return ret;
-out:
-	close(ret);
-	return -1;
+	return fd;
 }
 
 static int hyper_setup_tty_channel(char *name)
@@ -1264,7 +1272,15 @@ static struct hyper_event_ops hyper_ttyfd_ops = {
 
 static int hyper_vsock_ctl_accept(struct hyper_event *he, int efd, int events)
 {
-	return hyper_vsock_accept(he, efd, &hyper_epoll.ctl, &hyper_ctlfd_ops);
+	if (hyper_vsock_accept(he, efd, &hyper_epoll.ctl, &hyper_ctlfd_ops) < 0)
+		return -1;
+
+	if (hyper_ctl_send_ready(hyper_epoll.ctl.fd)) {
+		hyper_event_hup(&hyper_epoll.ctl, efd);
+		return -1;
+	}
+
+	return 0;
 }
 
 static int hyper_vsock_msg_accept(struct hyper_event *he, int efd, int events)
