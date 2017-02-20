@@ -57,6 +57,7 @@ struct file_command {
 
 struct hyper_epoll {
 	int			efd;
+	int			vsock;
 	struct hyper_event	ctl;
 	struct hyper_event	tty;
 };
