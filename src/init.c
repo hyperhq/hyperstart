@@ -1019,8 +1019,10 @@ static ssize_t hyper_channel_read(struct hyper_event *he, int efd, int len, int 
 	ssize_t size;
 
 	size = nonblock_read(he->fd, buf->data + buf->get, len);
-	if (size < 0)
+	if (size < 0) {
+		fprintf(stderr, "%s failed with %d\n", __func__, (int)size);
 		goto out;
+	}
 
 	// check if peer is dissapeared
 	if ((size == 0) && (events & EPOLLHUP)) {

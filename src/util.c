@@ -699,10 +699,12 @@ ssize_t nonblock_read(int fd, void *buf, size_t count)
 {
 	ssize_t len = 0, ret = 0;
 
+	errno = 0;
 	while (len < count) {
 		ret = read(fd, buf + len, count - len);
 		if (ret <= 0) {
 			if (errno == EINTR) {
+				errno = 0;
 				continue;
 			}
 			if (errno == EAGAIN) {
