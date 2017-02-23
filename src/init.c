@@ -1498,7 +1498,7 @@ static int hyper_setup_init_process(void)
 int main(int argc, char *argv[])
 {
 	char *binary_name, *cmdline, *ctl_serial, *tty_serial;
-	bool is_init;
+	bool is_init, has_vsock = false;
 
 	binary_name = basename(argv[0]);
 	is_init = strncmp(binary_name, "init", 5) == 0;
@@ -1526,11 +1526,11 @@ int main(int argc, char *argv[])
 	} else if (hyper_cmd("modprobe vmw_vsock_virtio_transport") < 0) {
 		fprintf(stderr, "fail to load vmw_vsock_virtio_transport.ko\n");
 	} else {
-		hyper_epoll.vsock_ctl_listener.fd = 1; /* >0 indicates vsock support */
+		has_vsock = true;
 	}
 #endif
 
-	if (hyper_epoll.vsock_ctl_listener.fd > 0) {
+	if (has_vsock) {
 		if (hyper_setup_vsock_channel() < 0) {
 			fprintf(stderr, "fail to setup hyper vsock listener\n");
 			goto out;
