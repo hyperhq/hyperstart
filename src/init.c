@@ -132,16 +132,22 @@ static void hyper_term_all(struct hyper_pod *pod)
 	struct dirent *de;
 	pid_t *pids = NULL;
 	struct hyper_exec *e;
+	pid_t hyperstart_pid;
 
 	dp = opendir("/proc");
 	if (dp == NULL)
 		return;
+
+
+	hyperstart_pid = getpid();
 
 	while ((de = readdir(dp)) && de != NULL) {
 		if (!isdigit(de->d_name[0]))
 			continue;
 		pid = atoi(de->d_name);
 		if (pid == 1)
+			continue;
+		if (pid == hyperstart_pid)
 			continue;
 		if (index <= npids) {
 			pids = realloc(pids, npids + 16384);
