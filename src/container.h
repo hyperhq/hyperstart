@@ -35,7 +35,6 @@ struct hyper_container {
 	struct list_head	list;
 	struct hyper_exec	exec;
 	int			ns;
-	uint32_t		code;
 
 	// configs
 	char			*id;
