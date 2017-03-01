@@ -1460,6 +1460,9 @@ static int hyper_loop(void)
 static int hyper_setup_init_process(void)
 {
 	/* mount the base file systems */
+	printf("\n<**********************************************************************\n");
+	printf("< Hyperstart Version: %s\n", VERSIONCOMMIT);
+	printf("<**********************************************************************\n");
 	if (mount("proc", "/proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) == -1) {
 		perror("mount proc failed");
 		return -1;
