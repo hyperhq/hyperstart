@@ -30,6 +30,7 @@
 #include "parse.h"
 #include "container.h"
 #include "syscall.h"
+#include "vsock.h"
 
 static struct hyper_pod global_pod = {
 	.containers	=	LIST_HEAD_INIT(global_pod.containers),
@@ -894,25 +895,33 @@ static void hyper_cmd_online_cpu_mem()
 	}
 }
 
-static int hyper_setup_ctl_channel(char *name)
+static int hyper_ctl_send_ready(int fd)
 {
 	uint8_t buf[8];
-	int ret = hyper_open_channel(name, 0);
-	if (ret < 0)
-		return ret;
 
 	fprintf(stdout, "send ready message\n");
 	hyper_set_be32(buf, READY);
 	hyper_set_be32(buf + 4, 8);
-	if (hyper_send_data_block(ret, buf, 8) < 0) {
+	if (hyper_send_data_block(fd, buf, 8) < 0) {
 		perror("send READY MESSAGE failed\n");
-		goto out;
+		return -1;
+	}
+	return 0;
+}
+
+static int hyper_setup_ctl_channel(char *name)
+{
+	int fd;
+
+	fd = hyper_open_channel(name, 0);
+	if (fd < 0)
+		return fd;
+	if (hyper_ctl_send_ready(fd) < 0) {
+		close(fd);
+		return -1;
 	}
 
-	return ret;
-out:
-	close(ret);
-	return -1;
+	return fd;
 }
 
 static int hyper_setup_tty_channel(char *name)
@@ -922,6 +931,19 @@ static int hyper_setup_tty_channel(char *name)
 		return -1;
 
 	return ret;
+}
+
+static int hyper_setup_vsock_channel(void)
+{
+	hyper_epoll.vsock_ctl_listener.fd = hyper_create_vsock_listener(HYPER_VSOCK_CTL_PORT);
+	if (hyper_epoll.vsock_ctl_listener.fd < 0)
+		return -1;
+
+	hyper_epoll.vsock_msg_listener.fd = hyper_create_vsock_listener(HYPER_VSOCK_MSG_PORT);
+	if (hyper_epoll.vsock_msg_listener.fd < 0)
+		return -1;
+
+	return 0;
 }
 
 static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
@@ -1003,8 +1025,10 @@ static ssize_t hyper_channel_read(struct hyper_event *he, int efd, int len, int 
 	ssize_t size;
 
 	size = nonblock_read(he->fd, buf->data + buf->get, len);
-	if (size < 0)
+	if (size < 0) {
+		fprintf(stderr, "%s failed with %d\n", __func__, (int)size);
 		goto out;
+	}
 
 	// check if peer is dissapeared
 	if ((size == 0) && (events & EPOLLHUP)) {
@@ -1028,7 +1052,18 @@ static int hyper_ttyfd_read(struct hyper_event *he, int efd, int events)
 	if (buf->get < STREAM_HEADER_SIZE) {
 		size = hyper_channel_read(he, efd, STREAM_HEADER_SIZE - buf->get, events);
 		if (size < 0) {
+			/* vsock returns -ENOTCONN upon reading closed socket... */
+			if (size == -ENOTCONN) {
+				fprintf(stderr, "ttyfd read failed on %p fd %d with err %d\n", he, he->fd, size);
+				hyper_modify_event(efd, he, he->flag & ~EPOLLIN);
+				size = 0;
+			}
 			return size;
+		} else if (size == 0) {
+			/* remote closes connection */
+			fprintf(stderr, "remote closes connection on %p fd %d\n", he, he->fd);
+			hyper_modify_event(efd, he, he->flag & ~EPOLLIN);
+			return 0;
 		}
 
 		buf->get += size;
@@ -1176,7 +1211,18 @@ static int hyper_ctlfd_read(struct hyper_event *he, int efd, int events)
 	if (buf->get < CONTROL_HEADER_SIZE) {
 		size = hyper_channel_read(he, efd, CONTROL_HEADER_SIZE - buf->get, events);
 		if (size < 0) {
+			/* vsock returns -ENOTCONN upon reading closed socket... */
+			if (size == -ENOTCONN) {
+				fprintf(stderr, "ttyfd read failed on %p fd %d with err %d\n", he, he->fd, size);
+				hyper_modify_event(efd, he, he->flag & ~EPOLLIN);
+				size = 0;
+			}
 			return size;
+		} else if (size == 0) {
+			/* remote closes connection */
+			fprintf(stderr, "remote closes connection on %p fd %d\n", he, he->fd);
+			hyper_modify_event(efd, he, he->flag & ~EPOLLIN);
+			return 0;
 		}
 		if (size > 0) {
 			uint8_t *data = malloc(4);
@@ -1254,6 +1300,48 @@ static struct hyper_event_ops hyper_ttyfd_ops = {
 	.wbuf_size	= 10240,
 };
 
+static struct hyper_event_ops hyper_vsock_ctlfd_ops = {
+	.read		= hyper_ctlfd_read,
+	.write		= hyper_event_write,
+	.hup		= hyper_event_hup,
+	.rbuf_size	= 65536,
+	.wbuf_size	= 65536,
+};
+
+static struct hyper_event_ops hyper_vsock_ttyfd_ops = {
+	.read		= hyper_ttyfd_read,
+	.write		= hyper_event_write,
+	.hup		= hyper_event_hup,
+	.rbuf_size	= 65536,
+	.wbuf_size	= 65536,
+};
+
+static int hyper_vsock_ctl_accept(struct hyper_event *he, int efd, int events)
+{
+	if (hyper_vsock_accept(he, efd, &hyper_epoll.ctl, &hyper_vsock_ctlfd_ops) < 0)
+		return -1;
+
+	if (hyper_ctl_send_ready(hyper_epoll.ctl.fd)) {
+		hyper_event_hup(&hyper_epoll.ctl, efd);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int hyper_vsock_msg_accept(struct hyper_event *he, int efd, int events)
+{
+	return hyper_vsock_accept(he, efd, &hyper_epoll.tty, &hyper_vsock_ttyfd_ops);
+}
+
+static struct hyper_event_ops hyper_vsock_ctl_listen_ops = {
+	.read		= hyper_vsock_ctl_accept,
+};
+
+static struct hyper_event_ops hyper_vsock_msg_listen_ops = {
+	.read		= hyper_vsock_msg_accept,
+};
+
 static int hyper_loop(void)
 {
 	int i, n;
@@ -1312,18 +1400,33 @@ static int hyper_loop(void)
 		return -1;
 	}
 
-	fprintf(stdout, "hyper_init_event hyper ctlfd event %p, ops %p, fd %d\n",
-		&hyper_epoll.ctl, &hyper_ctlfd_ops, hyper_epoll.ctl.fd);
-	if (hyper_init_event(&hyper_epoll.ctl, &hyper_ctlfd_ops, pod) < 0 ||
-	    hyper_add_event(hyper_epoll.efd, &hyper_epoll.ctl, EPOLLIN) < 0) {
-		return -1;
-	}
+	if (hyper_epoll.vsock_ctl_listener.fd > 0) {
+		fprintf(stdout, "hyper_init_event hyper vsock control channel listener event %p, ops %p, fd %d\n",
+			&hyper_epoll.vsock_ctl_listener, &hyper_vsock_ctl_listen_ops, hyper_epoll.vsock_ctl_listener.fd);
+		if (hyper_init_event(&hyper_epoll.vsock_ctl_listener, &hyper_vsock_ctl_listen_ops, pod) < 0 ||
+		    hyper_add_event(hyper_epoll.efd, &hyper_epoll.vsock_ctl_listener, EPOLLIN) < 0) {
+			return -1;
+		}
+		fprintf(stdout, "hyper_init_event hyper vsock message channel listener event %p, ops %p, fd %d\n",
+			&hyper_epoll.vsock_msg_listener, &hyper_vsock_msg_listen_ops, hyper_epoll.vsock_msg_listener.fd);
+		if (hyper_init_event(&hyper_epoll.vsock_msg_listener, &hyper_vsock_msg_listen_ops, pod) < 0 ||
+		    hyper_add_event(hyper_epoll.efd, &hyper_epoll.vsock_msg_listener, EPOLLIN) < 0) {
+			return -1;
+		}
+	} else {
+		fprintf(stdout, "hyper_init_event hyper ctlfd event %p, ops %p, fd %d\n",
+			&hyper_epoll.ctl, &hyper_ctlfd_ops, hyper_epoll.ctl.fd);
+		if (hyper_init_event(&hyper_epoll.ctl, &hyper_ctlfd_ops, pod) < 0 ||
+		    hyper_add_event(hyper_epoll.efd, &hyper_epoll.ctl, EPOLLIN) < 0) {
+			return -1;
+		}
 
-	fprintf(stdout, "hyper_init_event hyper ttyfd event %p, ops %p, fd %d\n",
-		&hyper_epoll.tty, &hyper_ttyfd_ops, hyper_epoll.tty.fd);
-	if (hyper_init_event(&hyper_epoll.tty, &hyper_ttyfd_ops, pod) < 0 ||
-	    hyper_add_event(hyper_epoll.efd, &hyper_epoll.tty, EPOLLIN) < 0) {
-		return -1;
+		fprintf(stdout, "hyper_init_event hyper ttyfd event %p, ops %p, fd %d\n",
+			&hyper_epoll.tty, &hyper_ttyfd_ops, hyper_epoll.tty.fd);
+		if (hyper_init_event(&hyper_epoll.tty, &hyper_ttyfd_ops, pod) < 0 ||
+		    hyper_add_event(hyper_epoll.efd, &hyper_epoll.tty, EPOLLIN) < 0) {
+			return -1;
+		}
 	}
 
 	events = calloc(MAXEVENTS, sizeof(*events));
@@ -1401,7 +1504,7 @@ static int hyper_setup_init_process(void)
 int main(int argc, char *argv[])
 {
 	char *binary_name, *cmdline, *ctl_serial, *tty_serial;
-	bool is_init;
+	bool is_init, has_vsock = false;
 
 	binary_name = basename(argv[0]);
 	is_init = strncmp(binary_name, "init", 5) == 0;
@@ -1424,26 +1527,45 @@ int main(int argc, char *argv[])
 #else
 	ctl_serial = "sh.hyper.channel.0";
 	tty_serial = "sh.hyper.channel.1";
+	if (probe_vsock_device() <= 0) {
+		fprintf(stderr, "cannot find vsock device\n");
+	} else if (hyper_cmd("modprobe vmw_vsock_virtio_transport") < 0) {
+		fprintf(stderr, "fail to load vmw_vsock_virtio_transport.ko\n");
+	} else {
+		has_vsock = true;
+	}
 #endif
 
-	hyper_epoll.ctl.fd = hyper_setup_ctl_channel(ctl_serial);
-	if (hyper_epoll.ctl.fd < 0) {
-		fprintf(stderr, "fail to setup hyper control serial port\n");
-		goto out1;
-	}
+	if (has_vsock) {
+		if (hyper_setup_vsock_channel() < 0) {
+			fprintf(stderr, "fail to setup hyper vsock listener\n");
+			goto out;
+		}
+	} else {
+		hyper_epoll.ctl.fd = hyper_setup_ctl_channel(ctl_serial);
+		if (hyper_epoll.ctl.fd < 0) {
+			fprintf(stderr, "fail to setup hyper control serial port\n");
+			goto out;
+		}
 
-	hyper_epoll.tty.fd = hyper_setup_tty_channel(tty_serial);
-	if (hyper_epoll.tty.fd < 0) {
-		fprintf(stderr, "fail to setup hyper tty serial port\n");
-		goto out2;
+		hyper_epoll.tty.fd = hyper_setup_tty_channel(tty_serial);
+		if (hyper_epoll.tty.fd < 0) {
+			fprintf(stderr, "fail to setup hyper tty serial port\n");
+			goto out;
+		}
 	}
 
 	hyper_loop();
 
-	close(hyper_epoll.tty.fd);
-out2:
-	close(hyper_epoll.ctl.fd);
-out1:
+out:
+	if (hyper_epoll.vsock_ctl_listener.fd > 0)
+		close(hyper_epoll.vsock_ctl_listener.fd);
+	if (hyper_epoll.vsock_msg_listener.fd > 0)
+		close(hyper_epoll.vsock_msg_listener.fd);
+	if (hyper_epoll.tty.fd > 0)
+		close(hyper_epoll.tty.fd);
+	if (hyper_epoll.ctl.fd > 0)
+		close(hyper_epoll.ctl.fd);
 	free(cmdline);
 
 	return 0;

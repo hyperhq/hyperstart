@@ -59,6 +59,8 @@ struct hyper_epoll {
 	int			efd;
 	struct hyper_event	ctl;
 	struct hyper_event	tty;
+	struct hyper_event	vsock_ctl_listener;
+	struct hyper_event	vsock_msg_listener;
 };
 
 static inline int hyper_symlink(char *oldpath, char *newpath)

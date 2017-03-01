@@ -58,4 +58,10 @@ enum {
 #define STREAM_HEADER_SIZE		12
 #define STREAM_HEADER_LENGTH_OFFSET	8
 
+/*
+ * vsock listening ports
+ */
+#define HYPER_VSOCK_CTL_PORT		2718
+#define HYPER_VSOCK_MSG_PORT		2719
+
 #endif /* _HYPERSTART_API_H_ */

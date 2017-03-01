@@ -73,6 +73,13 @@ AS_IF([test "x$enable_daemon" = "xno"],[SYSTEMD_SYSTEMUNIT=no])
 AC_SUBST(SYSTEMD_SYSTEMUNIT)
 AM_CONDITIONAL(SYSTEMD, test "x${SYSTEMD_SYSTEMUNIT}" != "xno" )
 
+AC_CHECK_FILE([/usr/include/linux/vm_sockets.h],
+	      [have_vsock=yes], [have_vsock=no])
+if test "x$have_vsock" == "xyes"; then
+    AC_DEFINE_UNQUOTED([HAVE_VSOCK], 1, [enable vm socket support])
+fi
+AM_CONDITIONAL([HAVE_VSOCK], [test "x$have_vsock" == "xyes"])
+
 AC_CONFIG_FILES([
   Makefile
   src/Makefile
@@ -87,6 +94,8 @@ AC_MSG_RESULT([
 
 	with-vbox:	${with_vbox}
 	with-aarch64:	${with_aarch64}
+
+	vsock-support:  ${have_vsock}
 
 	compiler:          ${CC}
 	cflags:            ${CFLAGS}
