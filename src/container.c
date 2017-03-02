@@ -203,7 +203,7 @@ static int container_setup_volume(struct hyper_container *container)
 		if (st.st_mode & S_IFDIR) {
 			if (hyper_mkdir(mountpoint, 0755) < 0) {
 				perror("create map dir failed");
-				continue;
+				return -1;
 			}
 			if (map->docker) {
 				/* converted from volume */
@@ -212,28 +212,30 @@ static int container_setup_volume(struct hyper_container *container)
 				if (container->initialize &&
 				    (container_populate_volume(mountpoint, volume) < 0)) {
 					fprintf(stderr, "fail to populate volume %s\n", mountpoint);
-					continue;
+					return -1;
 				}
 			}
 		} else {
 			int fd = open(mountpoint, O_CREAT|O_WRONLY, 0755);
 			if (fd < 0) {
 				perror("create map file failed");
-				continue;
+				return -1;
 			}
 			close(fd);
 		}
 
 		if (mount(src, mountpoint, NULL, MS_BIND, NULL) < 0) {
 			perror("mount fsmap failed");
-			continue;
+			return -1;
 		}
 
 		if (map->readonly == 0)
 			continue;
 
-		if (mount(src, mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0)
+		if (mount(src, mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
 			perror("mount fsmap failed");
+			return -1;
+		}
 	}
 
 	return 0;
