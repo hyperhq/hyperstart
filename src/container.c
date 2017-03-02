@@ -180,7 +180,7 @@ static int container_setup_volume(struct hyper_container *container)
 
 		if (vol->readonly &&
 		    mount(volume, mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
-			perror("mount fsmap failed");
+			perror("mount volume ro failed");
 			return -1;
 		}
 
@@ -233,7 +233,7 @@ static int container_setup_volume(struct hyper_container *container)
 			continue;
 
 		if (mount(src, mountpoint, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
-			perror("mount fsmap failed");
+			perror("mount fsmap ro failed");
 			return -1;
 		}
 	}
