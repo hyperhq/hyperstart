@@ -34,7 +34,6 @@ int hyper_open_channel(char *channel, int mode);
 int hyper_setfd_cloexec(int fd);
 int hyper_setfd_block(int fd);
 int hyper_setfd_nonblock(int fd);
-int hyper_socketpair(int domain, int type, int protocol, int sv[2]);
 void hyper_shutdown();
 int hyper_insmod(char *module);
 bool hyper_name_to_id(const char *name, unsigned long *val);
