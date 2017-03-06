@@ -15,6 +15,7 @@ cp ../src/hyperstart /tmp/hyperstart-rootfs/init
 cp busybox /tmp/hyperstart-rootfs/sbin/
 cp iptables /tmp/hyperstart-rootfs/sbin/
 cp ipvsadm /tmp/hyperstart-rootfs/sbin/
+cp socat /tmp/hyperstart-rootfs/sbin/
 cp libm.so.6 /tmp/hyperstart-rootfs/lib64/
 cp mount.nfs /tmp/hyperstart-rootfs/sbin/mount.nfs4
 
