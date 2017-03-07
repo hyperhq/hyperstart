@@ -7,10 +7,8 @@ go:
   - 1.8
 
 env:
-  - HYPER_EXEC_DRIVER=qemu    HYPER_STORAGE_DRIVER=aufs
   - HYPER_EXEC_DRIVER=qemu    HYPER_STORAGE_DRIVER=rawblock
   - HYPER_EXEC_DRIVER=libvirt HYPER_STORAGE_DRIVER=overlay
-  - HYPER_EXEC_DRIVER=libvirt HYPER_STORAGE_DRIVER=rawblock
 
 before_install:
   - sudo apt-get update -qq
