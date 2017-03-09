@@ -301,6 +301,140 @@ int hyper_create_file(const char *hyper_path)
 	return 0;
 }
 
+static char *hyper_resolve_link(char *path)
+{
+	char buf[512];
+	int len;
+
+	len = readlink(path, buf, sizeof(buf));
+	if (len < 0) {
+		perror("failed to read mkdir symlink");
+		return NULL;
+	} else if (len >= sizeof(buf)) {
+		errno = ENAMETOOLONG;
+		return NULL;
+	}
+
+	buf[len] = '\0';
+	fprintf(stdout, "follow link %s\n", buf);
+	return strdup(buf);
+}
+
+/**
+ * hyper_mkdir_follow_link - create directories recurrsively while resolving symlinks
+ * 			     as if we were in a chroot jail.
+ *
+ * @root: chroot jail path.
+ * @parent: what's already created to the target directory.
+ * @path: target directory. It is always relative to @root even if it starts with /.
+ * @mode: directory mode.
+ * @link_max: max number of symlinks to follow.
+ * @depth: number of components resolved.
+ *
+ * Upon success, @parent is changed to point to resolved path name.
+ */
+static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
+				   mode_t mode, int *link_max, int *depth)
+{
+	char *comp, *prev, *link, *dummy, *npath, *delim = "/";
+	struct stat st;
+
+	npath = strdup(path);
+	if (npath == NULL)
+		goto out;
+
+	comp = strtok_r(npath, delim, &dummy);
+	if (comp == NULL)
+		goto out;
+
+	do {
+		if (!strcmp(comp, "."))
+			continue;
+
+		if (strlen(parent) + strlen(comp) + 1 >= 512) {
+			errno = ENAMETOOLONG;
+			goto out;
+		}
+		prev = &parent[strlen(parent)];
+		strcat(parent, "/");
+		strcat(parent, comp);
+		if (!strcmp(comp, "..")) {
+			if (--(*depth) <= 0) {
+				/* points to root */
+				sprintf(parent, "%s", root);
+				*depth = 0;
+			}
+			/* no need to check parent directory */
+			continue;
+		} else {
+			(*depth)++;
+		}
+
+		if (lstat(parent, &st) >= 0) {
+			if (S_ISDIR(st.st_mode)) {
+				continue;
+			} else if (S_ISLNK(st.st_mode)) {
+				if (--(*link_max) <= 0) {
+					errno = ELOOP;
+					goto out;
+				}
+				link = hyper_resolve_link(parent);
+				if (link == NULL)
+					goto out;
+				if (link[0] == '/') {
+					sprintf(parent, "%s", root);
+					*depth = 0;
+				} else {
+					*prev = '\0'; /* drop current comp */
+					(*depth)--;
+				}
+				if (hyper_mkdir_follow_link(root, parent, link, mode, link_max, depth) < 0) {
+					free(link);
+					goto out;
+				}
+				free(link);
+				continue;
+			} else {
+				errno = ENOTDIR;
+				goto out;
+			}
+		}
+
+		fprintf(stdout, "create directory %s\n", parent);
+		if (mkdir(parent, mode) < 0 && errno != EEXIST) {
+			perror("failed to create directory");
+			goto out;
+		}
+	} while((comp = strtok_r(NULL, delim, &dummy)) != NULL);
+
+	/* reset errno to mark success */
+	errno = 0;
+out:
+	free(npath);
+	printf("parent is %s errno %d\n", parent, errno);
+	return errno ? -1 : 0;
+}
+
+/*
+ * hyper_mkdir_at() is similar to hyper_mkdir() with the exception that
+ * when there are symlinks in the path components, it acts as if we created
+ * directories in a chroot jail. @path is always considered relative to root
+ * even if it starts with a leading stash ('/').
+ *
+ * Upon success, return symlink expanded result.
+ */
+char *hyper_mkdir_at(char *root, char *path, mode_t mode)
+{
+	char result[512];
+	int depth = 0, max_link = 40;
+
+	sprintf(result, "%s", root);
+	if (hyper_mkdir_follow_link(root, result, path, mode, &max_link, &depth) < 0)
+		return NULL;
+
+	return strdup(result);
+}
+
 int hyper_mkdir(char *path, mode_t mode)
 {
 	struct stat st;
