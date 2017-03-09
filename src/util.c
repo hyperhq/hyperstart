@@ -329,15 +329,19 @@ static char *hyper_resolve_link(char *path)
  * @path: target directory. It is always relative to @root even if it starts with /.
  * @mode: directory mode.
  * @link_max: max number of symlinks to follow.
- * @depth: number of components resolved.
  *
  * Upon success, @parent is changed to point to resolved path name.
  */
 static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
-				   mode_t mode, int *link_max, int *depth)
+				   mode_t mode, int *link_max)
 {
 	char *comp, *prev, *link, *dummy, *npath, *delim = "/";
 	struct stat st;
+
+	if (strncmp(root, parent, strlen(root)) != 0) {
+		errno = EINVAL;
+		return -1;
+	}
 
 	npath = strdup(path);
 	if (npath == NULL)
@@ -351,6 +355,23 @@ static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
 		if (!strcmp(comp, "."))
 			continue;
 
+		if (!strcmp(comp, "..")) {
+			/* *NOTE* this works iff:
+			 * 1. parent is initialized as root when entering for the first time.
+			 * 2. comp is never appended to parent with trailing '/'.
+			 * 3. comp is always appended to parent with *one* prefix '/'.
+			 */
+			char *p = strrchr(parent, '/');
+			if (p == NULL) {
+				/* no comp appended, do nothing */
+			} else if (p - parent >= strlen(root)) {
+				/* go back one level */
+				*p = '\0';
+			}
+			/* no need to check parent directory */
+			continue;
+		}
+
 		if (strlen(parent) + strlen(comp) + 1 >= 512) {
 			errno = ENAMETOOLONG;
 			goto out;
@@ -358,17 +379,6 @@ static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
 		prev = &parent[strlen(parent)];
 		strcat(parent, "/");
 		strcat(parent, comp);
-		if (!strcmp(comp, "..")) {
-			if (--(*depth) <= 0) {
-				/* points to root */
-				sprintf(parent, "%s", root);
-				*depth = 0;
-			}
-			/* no need to check parent directory */
-			continue;
-		} else {
-			(*depth)++;
-		}
 
 		if (lstat(parent, &st) >= 0) {
 			if (S_ISDIR(st.st_mode)) {
@@ -383,12 +393,10 @@ static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
 					goto out;
 				if (link[0] == '/') {
 					sprintf(parent, "%s", root);
-					*depth = 0;
 				} else {
 					*prev = '\0'; /* drop current comp */
-					(*depth)--;
 				}
-				if (hyper_mkdir_follow_link(root, parent, link, mode, link_max, depth) < 0) {
+				if (hyper_mkdir_follow_link(root, parent, link, mode, link_max) < 0) {
 					free(link);
 					goto out;
 				}
@@ -411,7 +419,6 @@ static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
 	errno = 0;
 out:
 	free(npath);
-	printf("parent is %s errno %d\n", parent, errno);
 	return errno ? -1 : 0;
 }
 
@@ -426,10 +433,10 @@ out:
 char *hyper_mkdir_at(char *root, char *path, mode_t mode)
 {
 	char result[512];
-	int depth = 0, max_link = 40;
+	int max_link = 40;
 
 	sprintf(result, "%s", root);
-	if (hyper_mkdir_follow_link(root, result, path, mode, &max_link, &depth) < 0)
+	if (hyper_mkdir_follow_link(root, result, path, mode, &max_link) < 0)
 		return NULL;
 
 	return strdup(result);
