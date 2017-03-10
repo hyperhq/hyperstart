@@ -325,14 +325,14 @@ static char *hyper_resolve_link(char *path)
  * 			     as if we were in a chroot jail.
  *
  * @root: chroot jail path.
- * @parent: what's already created to the target directory.
  * @path: target directory. It is always relative to @root even if it starts with /.
+ * @parent: what's already created to the target directory.
  * @mode: directory mode.
  * @link_max: max number of symlinks to follow.
  *
  * Upon success, @parent is changed to point to resolved path name.
  */
-static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
+static int hyper_mkdir_follow_link(const char *root, const char *path, char *parent,
 				   mode_t mode, int *link_max)
 {
 	char *comp, *prev, *link, *dummy, *npath, *delim = "/";
@@ -396,7 +396,7 @@ static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
 				} else {
 					*prev = '\0'; /* drop current comp */
 				}
-				if (hyper_mkdir_follow_link(root, parent, link, mode, link_max) < 0) {
+				if (hyper_mkdir_follow_link(root, link, parent, mode, link_max) < 0) {
 					free(link);
 					goto out;
 				}
@@ -425,21 +425,26 @@ out:
 /*
  * hyper_mkdir_at() is similar to hyper_mkdir() with the exception that
  * when there are symlinks in the path components, it acts as if we created
- * directories in a chroot jail. @path is always considered relative to root
- * even if it starts with a leading stash ('/').
+ * directories in a chroot jail. @hyper_path is always considered relative
+ * to root even if it starts with a leading stash ('/').
  *
- * Upon success, return symlink expanded result.
+ * Upon success, @hyper_path is modified to save resolved path in chroot jail.
  */
-char *hyper_mkdir_at(char *root, char *path, mode_t mode)
+int hyper_mkdir_at(const char *root, char *hyper_path, int size)
 {
 	char result[512];
 	int max_link = 40;
 
 	sprintf(result, "%s", root);
-	if (hyper_mkdir_follow_link(root, result, path, mode, &max_link) < 0)
-		return NULL;
+	if (hyper_mkdir_follow_link(root, hyper_path, result, 0755, &max_link) < 0)
+		return -1;
 
-	return strdup(result);
+	if (strlen(result) + 1 > size) {
+		errno = ENAMETOOLONG;
+		return -1;
+	}
+	sprintf(hyper_path, "%s", result);
+	return 0;
 }
 
 int hyper_mkdir(char *path, mode_t mode)
