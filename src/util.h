@@ -26,7 +26,7 @@ void hyper_sync_time_hctosys();
 void online_cpu(void);
 void online_memory(void);
 int hyper_cmd(char *cmd);
-int hyper_create_file(const char *hyper_path);
+int hyper_create_file_at(const char *root, char *hyper_path, int size);
 void hyper_filize(char *hyper_path);
 int hyper_mkdir(char *path, mode_t mode);
 int hyper_mkdir_at(const char *root, char *path, int size);

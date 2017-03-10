@@ -160,8 +160,7 @@ static int container_setup_volume(struct hyper_container *container)
 				return -1;
 			}
 		} else {
-			hyper_filize(mountpoint);
-			if (hyper_create_file(mountpoint) < 0) {
+			if (hyper_create_file_at(".", mountpoint, sizeof(mountpoint)) < 0) {
 				perror("create volume file failed");
 				return -1;
 			}
@@ -216,12 +215,10 @@ static int container_setup_volume(struct hyper_container *container)
 				}
 			}
 		} else {
-			int fd = open(mountpoint, O_CREAT|O_WRONLY, 0755);
-			if (fd < 0) {
-				perror("create map file failed");
+			if (hyper_create_file_at(".", mountpoint, sizeof(mountpoint)) < 0) {
+				perror("create volume file failed");
 				return -1;
 			}
-			close(fd);
 		}
 
 		if (mount(src, mountpoint, NULL, MS_BIND, NULL) < 0) {
