@@ -715,7 +715,7 @@ static int hyper_release_exec(struct hyper_exec *exec)
 
 		if (--exec->pod->remains == 0 && exec->pod->req_destroy) {
 			/* shutdown vm manually, hyper doesn't care the pod finished codes */
-			hyper_pod_destroyed(0);
+			hyper_pod_destroyed(exec->pod, 0);
 		}
 
 		return 0;

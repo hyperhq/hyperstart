@@ -84,7 +84,7 @@ static inline int hyper_create(char *hyper_path)
 }
 
 int hyper_enter_sandbox(struct hyper_pod *pod, int pidpipe);
-void hyper_pod_destroyed(int failed);
+void hyper_pod_destroyed(struct hyper_pod *pod, int failed);
 int hyper_ctl_append_msg(struct hyper_event *he, uint32_t type, uint8_t *data, uint32_t len);
 
 extern struct hyper_epoll hyper_epoll;

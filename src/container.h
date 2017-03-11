@@ -58,6 +58,7 @@ struct hyper_pod;
 int hyper_setup_container(struct hyper_container *container, struct hyper_pod *pod);
 struct hyper_container *hyper_find_container(struct hyper_pod *pod, const char *id);
 void hyper_cleanup_container(struct hyper_container *container, struct hyper_pod *pod);
+void hyper_cleanup_mounts(struct hyper_pod *pod);
 void hyper_free_container(struct hyper_container *c);
 
 static inline int hyper_has_container(struct hyper_pod *pod, const char *id) {
