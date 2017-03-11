@@ -782,14 +782,43 @@ struct hyper_container *hyper_find_container(struct hyper_pod *pod, const char *
 	return NULL;
 }
 
+static void hyper_cleanup_container_mounts(struct hyper_container *container, struct hyper_pod *pod)
+{
+	int pid, pipe[2] = {-1, -1};
+
+	if (pipe2(pipe, O_CLOEXEC) < 0) {
+		perror("create pipe for unmount failed");
+		return;
+	}
+
+	pid = fork();
+	if (pid < 0) {
+		perror("fork unmount process failed");
+		goto out;
+	} else if (pid == 0) {
+		if (hyper_enter_sandbox(pod, -1) < 0) {
+			hyper_send_type(pipe[1], -1);
+			_exit(-1);
+		}
+		if (setns(container->ns, CLONE_NEWNS) < 0) {
+			perror("fail to enter container ns");
+			hyper_send_type(pipe[1], -1);
+			_exit(-1);
+		}
+		hyper_unmount_all();
+		hyper_send_type(pipe[1], 0);
+		_exit(0);
+	}
+	hyper_get_type(pipe[0], (uint32_t *)&pid);
+
+out:
+	close(pipe[0]);
+	close(pipe[1]);
+}
+
 void hyper_cleanup_container(struct hyper_container *c, struct hyper_pod *pod)
 {
-	char root[512];
-
-	sprintf(root, "/tmp/hyper/%s/devpts/", c->id);
-	if (umount(root) < 0 && umount2(root, MNT_DETACH))
-		perror("umount devpts failed");
-
+	hyper_cleanup_container_mounts(c, pod);
 	close(c->ns);
 	hyper_cleanup_container_portmapping(c, pod);
 	hyper_free_container(c);
@@ -803,4 +832,12 @@ void hyper_cleanup_containers(struct hyper_pod *pod)
 		hyper_cleanup_container(c, pod);
 
 	pod->remains = 0;
+}
+
+void hyper_cleanup_mounts(struct hyper_pod *pod)
+{
+	struct hyper_container *c;
+
+	list_for_each_entry(c, &pod->containers, list)
+		hyper_cleanup_container_mounts(c, pod);
 }
