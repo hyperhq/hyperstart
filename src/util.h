@@ -36,6 +36,7 @@ int hyper_setfd_cloexec(int fd);
 int hyper_setfd_block(int fd);
 int hyper_setfd_nonblock(int fd);
 void hyper_shutdown();
+void hyper_unmount_all(void);
 int hyper_insmod(char *module);
 bool hyper_name_to_id(const char *name, unsigned long *val);
 struct passwd *hyper_getpwnam(const char *name);
