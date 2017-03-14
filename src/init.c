@@ -42,6 +42,8 @@ sigset_t orig_mask;
 
 static int hyper_handle_exit(struct hyper_pod *pod);
 
+static void hyper_cleanup_mounts(struct hyper_pod *pod);
+
 static int hyper_set_win_size(char *json, int length)
 {
 	struct winsize size;
@@ -853,12 +855,49 @@ static void hyper_cleanup_shared(struct hyper_pod *pod)
 	sync();
 }
 
+static void hyper_cleanup_mounts(struct hyper_pod *pod)
+{
+	int pid, pipe[2] = {-1, -1};
+	struct hyper_container *c;
+
+	if (pipe2(pipe, O_CLOEXEC) < 0) {
+		perror("create pipe for unmount failed");
+		return;
+	}
+
+	pid = fork();
+	if (pid < 0) {
+		perror("fork unmount process failed");
+		goto out;
+	} else if (pid == 0) {
+		if (hyper_enter_sandbox(pod, -1) < 0) {
+			hyper_send_type(pipe[1], -1);
+			_exit(-1);
+		}
+		list_for_each_entry(c, &pod->containers, list) {
+			if (setns(c->ns, CLONE_NEWNS) < 0) {
+				perror("fail to enter container ns");
+				continue;
+			}
+			hyper_unmount_all();
+		}
+		hyper_send_type(pipe[1], 0);
+		_exit(0);
+	}
+	hyper_get_type(pipe[0], (uint32_t *)&pid);
+
+out:
+	close(pipe[0]);
+	close(pipe[1]);
+}
+
 void hyper_cleanup_pod(struct hyper_pod *pod)
 {
 	if (pod->init_pid) {
 		hyper_kill_process(pod->init_pid);
 		pod->init_pid = 0;
 	}
+	hyper_cleanup_mounts(pod);
 	hyper_cleanup_containers(pod);
 	hyper_cleanup_network(pod);
 	hyper_cleanup_shared(pod);
