@@ -84,7 +84,7 @@ static inline int hyper_create(char *hyper_path)
 int hyper_open_serial(char *tty);
 void hyper_cleanup_pod(struct hyper_pod *pod);
 int hyper_enter_sandbox(struct hyper_pod *pod, int pidpipe);
-void hyper_pod_destroyed(int failed);
+void hyper_pod_destroyed(struct hyper_pod *pod, int failed);
 
 extern struct hyper_pod global_pod;
 extern struct hyper_ctl ctl;

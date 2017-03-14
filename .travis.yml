@@ -11,9 +11,9 @@ before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -y autoconf automake pkg-config libdevmapper-dev libsqlite3-dev libvirt-dev qemu libvirt-bin -qq
   - cd `mktemp -d`
-  - wget https://git.fedorahosted.org/cgit/lvm2.git/snapshot/lvm2-2_02_131.tar.xz
-  - tar xf lvm2-2_02_131.tar.xz
-  - cd lvm2-2_02_131
+  - wget ftp://sources.redhat.com/pub/lvm2/LVM2.2.02.131.tgz
+  - tar xf LVM2.2.02.131.tgz
+  - cd LVM2.2.02.131
   - ./configure && make device-mapper && sudo make install
 
 script:

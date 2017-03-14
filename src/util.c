@@ -614,7 +614,7 @@ int hyper_setfd_nonblock(int fd)
 	return flags;
 }
 
-static void hyper_unmount_all(void)
+void hyper_unmount_all(void)
 {
 	FILE *mtab;
 	struct mntent *mnt;
