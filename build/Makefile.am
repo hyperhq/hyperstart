@@ -1,5 +1,9 @@
 all-local: initrd
 
+if WITH_KMODULES
+export INCLUDE_KMODULES=1
+endif
+
 if WITH_VBOX
 initrd-local:
 	bash ./make-initrd.sh vbox
