@@ -30,16 +30,24 @@ char *read_cmdline(void)
 	return NULL;
 }
 
-int hyper_setup_env(struct env *envs, int num)
+int hyper_setup_env(struct env *envs, int num, bool setPATH)
 {
 	int i, ret = 0;
 	struct env *env;
+	if (setPATH) {
+		ret = setenv("PATH", "/usr/local/bin:/usr/bin:/bin:.", 1);
+		if (ret < 0) {
+			perror("fail to setup default PATH");
+			ret = -1;
+		}
+	}
 
 	for (i = 0; i < num; i++) {
 		env = &envs[i];
 		if (setenv(env->env, env->value, 1) < 0) {
 			perror("fail to setup env");
 			ret = -1;
+			continue;
 		}
 	}
 

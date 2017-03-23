@@ -534,6 +534,7 @@ out:
 // do the exec, no return
 static void hyper_exec_process(struct hyper_exec *exec, struct stdio_config *io)
 {
+	bool defaultPath = false;
 	if (sigprocmask(SIG_SETMASK, &orig_mask, NULL) < 0) {
 		perror("sigprocmask restore mask failed");
 		goto exit;
@@ -550,7 +551,8 @@ static void hyper_exec_process(struct hyper_exec *exec, struct stdio_config *io)
 	}
 
 	// set the process env
-	if (hyper_setup_env(exec->envs, exec->envs_num) < 0) {
+	defaultPath = (exec->argv[0][0] != '/') && (strcmp(exec->container_id, HYPERSTART_EXEC_CONTAINER) != 0);
+	if (hyper_setup_env(exec->envs, exec->envs_num, defaultPath) < 0) {
 		fprintf(stderr, "setup env failed\n");
 		goto exit;
 	}

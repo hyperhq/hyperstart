@@ -18,7 +18,7 @@ struct env;
 #endif
 
 char *read_cmdline(void);
-int hyper_setup_env(struct env *envs, int num);
+int hyper_setup_env(struct env *envs, int num, bool setPATH);
 int hyper_find_sd(char *addr, char **dev);
 int hyper_list_dir(char *path);
 int hyper_copy_dir(char *src, char *dst);
