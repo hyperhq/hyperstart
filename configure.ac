@@ -73,6 +73,14 @@ AS_IF([test "x$enable_daemon" = "xno"],[SYSTEMD_SYSTEMUNIT=no])
 AC_SUBST(SYSTEMD_SYSTEMUNIT)
 AM_CONDITIONAL(SYSTEMD, test "x${SYSTEMD_SYSTEMUNIT}" != "xno" )
 
+AC_ARG_WITH([kmodules],
+	    AS_HELP_STRING([--without-kmodules],
+			   [Do not include kernel modules in the rootfs]), [],
+			   [])
+# by default kernel modules are included
+AS_IF([test "x$with_kmodules" = "x"],[with_kmodules=yes])
+AM_CONDITIONAL([WITH_KMODULES], [test "x$with_kmodules" = "xyes"])
+
 AC_CHECK_FILE([/usr/include/linux/vm_sockets.h],
 	      [have_vsock=yes], [have_vsock=no])
 if test "x$have_vsock" == "xyes"; then
@@ -94,6 +102,7 @@ AC_MSG_RESULT([
 
 	with-vbox:	${with_vbox}
 	with-aarch64:	${with_aarch64}
+	with-kmodules:  ${with_kmodules}
 
 	vsock-support:  ${have_vsock}
 
