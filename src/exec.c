@@ -207,7 +207,12 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 		struct passwd *pwd = hyper_getpwnam(user);
 		if (pwd == NULL) {
 			perror("can't find the user");
-			return -1;
+			unsigned long id;
+			if (!hyper_name_to_id(user, &id))
+				return -1;
+			uid = id;
+			gid = 0;
+			goto setup;
 		}
 		uid = pwd->pw_uid;
 		gid = pwd->pw_gid;
@@ -279,6 +284,7 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 		ngroups++;
 	}
 
+setup:
 	// setup the owner of tty
 	if (exec->tty) {
 		char ptmx[512];
@@ -290,7 +296,7 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 	}
 
 	// apply
-	if (setgroups(ngroups, groups) < 0) {
+	if (groups && setgroups(ngroups, groups) < 0) {
 		perror("setgroups() fails");
 		goto fail;
 	}
@@ -303,9 +309,7 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 		goto fail;
 	}
 	free(groups);
-
 	return 0;
-
 fail:
 	free(groups);
 	return -1;
