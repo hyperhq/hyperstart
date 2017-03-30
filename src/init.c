@@ -36,11 +36,33 @@ struct hyper_pod global_pod = {
 
 #define MAXEVENTS	10
 
-struct hyper_ctl ctl;
+struct hyper_epoll hyper_epoll;
 
 sigset_t orig_mask;
 
 static int hyper_handle_exit(struct hyper_pod *pod);
+static int hyper_ctl_append_msg(struct hyper_event *he, uint32_t type, uint8_t *data, uint32_t len);
+
+int hyper_send_pod_finished(struct hyper_pod *pod)
+{
+	struct hyper_container *c;
+	uint8_t *data = NULL, *new;
+	int c_num = 0;
+
+	list_for_each_entry(c, &pod->containers, list) {
+		c_num++;
+		new = realloc(data, c_num * 4);
+		if (new == NULL) {
+			free(data);
+			return -1;
+		}
+
+		hyper_set_be32(new + ((c_num - 1) * 4), c->exec.code);
+		data = new;
+	}
+
+	return hyper_ctl_append_msg(&hyper_epoll.ctl, PODFINISHED, data, c_num * 4);
+}
 
 static int hyper_set_win_size(char *json, int length)
 {
@@ -210,9 +232,9 @@ static int hyper_pod_init(void *data)
 	sigset_t mask;
 
 	close(arg->ctl_pipe[0]);
-	close(ctl.efd);
-	close(ctl.chan.fd);
-	close(ctl.tty.fd);
+	close(hyper_epoll.efd);
+	close(hyper_epoll.ctl.fd);
+	close(hyper_epoll.tty.fd);
 
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGCHLD);
@@ -519,10 +541,24 @@ static void hyper_print_uptime(void)
 	close(fd);
 }
 
+static void hyper_flush_channel()
+{
+	// Todo: remove this after we implement DESTROYVM message.
+	struct hyper_buf *ctl_buf = &hyper_epoll.ctl.wbuf;
+	struct hyper_buf *tty_buf = &hyper_epoll.tty.wbuf;
+
+	hyper_send_data_block(hyper_epoll.ctl.fd, ctl_buf->data, ctl_buf->get);
+	hyper_send_data_block(hyper_epoll.tty.fd, tty_buf->data, tty_buf->get);
+}
+
 void hyper_pod_destroyed(struct hyper_pod *pod, int failed)
 {
 	hyper_cleanup_mounts(pod);
-	hyper_send_msg_block(ctl.chan.fd, failed?ERROR:ACK, 0, NULL);
+	hyper_ctl_append_msg(&hyper_epoll.ctl, failed?ERROR:ACK, NULL, 0);
+	// Todo: this doesn't make sure peer receives the data
+	hyper_flush_channel();
+	// Todo: don't shutdown vm until hyperstart receives the DESTROYVM message,
+	// peer will send to DESTROYVM until receives the whole data of tty/ctl.
 	hyper_shutdown();
 }
 
@@ -869,13 +905,15 @@ void hyper_cleanup_pod(struct hyper_pod *pod)
 
 static int hyper_setup_ctl_channel(char *name)
 {
+	uint8_t buf[8];
 	int ret = hyper_open_channel(name, 0);
-
 	if (ret < 0)
 		return ret;
 
 	fprintf(stdout, "send ready message\n");
-	if (hyper_send_type(ret, READY) < 0) {
+	hyper_set_be32(buf, READY);
+	hyper_set_be32(buf + 4, 8);
+	if (hyper_send_data_block(ret, buf, 8) < 0) {
 		perror("send READY MESSAGE failed\n");
 		goto out;
 	}
@@ -921,7 +959,7 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 		hyper_set_be32(wbuf->data + wbuf->get + 8, 12);
 		wbuf->get += 12;
 
-		if (hyper_modify_event(ctl.efd, de, EPOLLIN | EPOLLOUT) < 0) {
+		if (hyper_modify_event(hyper_epoll.efd, de, EPOLLIN | EPOLLOUT) < 0) {
 			fprintf(stderr, "modify ctl tty event to in & out failed\n");
 			return -1;
 		}
@@ -944,7 +982,7 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 		exec->close_stdin_request = 1;
 		fprintf(stdout, "get close stdin request\n");
 		/* we can't hup the stdinev here, force hup on next write */
-		if (hyper_modify_event(ctl.efd, &exec->stdinev, EPOLLOUT) < 0) {
+		if (hyper_modify_event(hyper_epoll.efd, &exec->stdinev, EPOLLOUT) < 0) {
 			fprintf(stderr, "modify exec pts event to in & out failed\n");
 			return -1;
 		}
@@ -959,7 +997,7 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 	if (size > 0) {
 		memcpy(wbuf->data + wbuf->get, rbuf->data + 12, size);
 		wbuf->get += size;
-		if (hyper_modify_event(ctl.efd, &exec->stdinev, EPOLLOUT) < 0) {
+		if (hyper_modify_event(hyper_epoll.efd, &exec->stdinev, EPOLLOUT) < 0) {
 			fprintf(stderr, "modify exec pts event to in & out failed\n");
 			return -1;
 		}
@@ -968,7 +1006,28 @@ static int hyper_ttyfd_handle(struct hyper_event *de, uint32_t len)
 	return 0;
 }
 
-static int hyper_ttyfd_read(struct hyper_event *he, int efd)
+static ssize_t hyper_channel_read(struct hyper_event *he, int efd, int len, int events)
+{
+	struct hyper_buf *buf = &he->rbuf;
+	ssize_t size;
+
+	size = nonblock_read(he->fd, buf->data + buf->get, len);
+	if (size < 0)
+		goto out;
+
+	// check if peer is dissapeared
+	if ((size == 0) && (events & EPOLLHUP)) {
+		he->hup = 1;
+		fprintf(stdout, "peer is disappeared\n");
+		// use EPOLLOUT| EPOLLET event to check if peer disappeared
+		hyper_modify_event(efd, he, EPOLLOUT| EPOLLET);
+	}
+
+out:
+	return size;
+}
+
+static int hyper_ttyfd_read(struct hyper_event *he, int efd, int events)
 {
 	struct hyper_buf *buf = &he->rbuf;
 	uint32_t len;
@@ -976,10 +1035,11 @@ static int hyper_ttyfd_read(struct hyper_event *he, int efd)
 	int ret;
 
 	if (buf->get < STREAM_HEADER_SIZE) {
-		size = nonblock_read(he->fd, buf->data + buf->get, STREAM_HEADER_SIZE - buf->get);
+		size = hyper_channel_read(he, efd, STREAM_HEADER_SIZE - buf->get, events);
 		if (size < 0) {
 			return size;
 		}
+
 		buf->get += size;
 		if (buf->get < STREAM_HEADER_SIZE) {
 			return 0;
@@ -993,7 +1053,7 @@ static int hyper_ttyfd_read(struct hyper_event *he, int efd)
 		return -1;
 	}
 
-	size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
+	size = hyper_channel_read(he, efd, len - buf->get, events);
 	if (size < 0) {
 		return size;
 	}
@@ -1009,15 +1069,36 @@ static int hyper_ttyfd_read(struct hyper_event *he, int efd)
 	return ret == 0 ? 0 : -1;
 }
 
-static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
+static int hyper_ctl_append_msg(struct hyper_event *he, uint32_t type, uint8_t *data, uint32_t len)
 {
-	struct hyper_buf *buf = &de->rbuf;
-	struct hyper_pod *pod = de->ptr;
+	int ret = -1;
+	fprintf(stdout, "hyper ctl append type %d, len %d\n", type, len);
+
+	uint8_t *new_data = realloc(data, len + 8);
+	if (new_data == NULL) {
+		new_data = data;
+		goto out;
+	}
+
+	memmove(new_data + 8, new_data, len);
+	hyper_set_be32(new_data, type);
+	hyper_set_be32(new_data + 4, len + 8);
+
+	ret = hyper_wbuf_append_msg(he, new_data, len + 8);
+out:
+	free(new_data);
+	return ret;
+}
+
+static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
+{
+	struct hyper_buf *buf = &he->rbuf;
+	struct hyper_pod *pod = he->ptr;
 	uint32_t type = 0, datalen = 0;
 	uint8_t *data = NULL;
 	int i, ret = 0;
 
-	// append a null byte to it. hyper_channel_read() left this room for us.
+	// append a null byte to it. hyper_ctlfd_read() left this room for us.
 	buf->data[buf->get] = 0;
 	for (i = 0; i < buf->get; i++)
 		fprintf(stdout, "%0x ", buf->data[i]);
@@ -1087,34 +1168,28 @@ static int hyper_channel_handle(struct hyper_event *de, uint32_t len)
 		break;
 	}
 
-	if (ret < 0)
-		hyper_send_msg_block(de->fd, ERROR, 0, NULL);
-	else
-		hyper_send_msg_block(de->fd, ACK, datalen, data);
-
-	free(data);
-	return 0;
+	return hyper_ctl_append_msg(he, ret < 0 ? ERROR: ACK, data, datalen);
 }
 
-static int hyper_channel_read(struct hyper_event *he, int efd)
+static int hyper_ctlfd_read(struct hyper_event *he, int efd, int events)
 {
 	struct hyper_buf *buf = &he->rbuf;
 	uint32_t len;
-	uint8_t data[4];
 	int size;
 	int ret;
 
 	fprintf(stdout, "%s\n", __func__);
 
 	if (buf->get < CONTROL_HEADER_SIZE) {
-		size = nonblock_read(he->fd, buf->data + buf->get, CONTROL_HEADER_SIZE - buf->get);
+		size = hyper_channel_read(he, efd, CONTROL_HEADER_SIZE - buf->get, events);
 		if (size < 0) {
 			return size;
 		}
 		if (size > 0) {
+			uint8_t *data = malloc(4);
 			/* control channel, need ack */
 			hyper_set_be32(data, size);
-			hyper_send_msg(he->fd, NEXT, 4, data);
+			hyper_ctl_append_msg(&hyper_epoll.ctl, NEXT, data, 4);
 		}
 		buf->get += size;
 		if (buf->get < CONTROL_HEADER_SIZE) {
@@ -1124,8 +1199,8 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 
 	len = hyper_get_be32(buf->data + CONTROL_HEADER_LENGTH_OFFSET);
 	fprintf(stdout, "get length %" PRIu32"\n", len);
-	// test it with '>=' to leave at least one byte in hyper_channel_handle(),
-	// so that hyper_channel_handle() can convert the data to c-string inplace.
+	// test it with '>=' to leave at least one byte in hyper_ctlfd_handle(),
+	// so that hyper_ctlfd_handle() can convert the data to c-string inplace.
 	if (len >= buf->size) {
 		uint8_t *new_data;
 		fprintf(stderr, "get length %" PRIu32", too long, extend buffer\n", len);
@@ -1138,14 +1213,15 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 		buf->size = len + 1;
 	}
 
-	size = nonblock_read(he->fd, buf->data + buf->get, len - buf->get);
+	size = hyper_channel_read(he, efd, len - buf->get, events);
 	if (size < 0) {
 		return size;
 	}
 	if (size > 0) {
+		uint8_t *data = malloc(4);
 		/* control channel, need ack */
 		hyper_set_be32(data, size);
-		hyper_send_msg(he->fd, NEXT, 4, data);
+		hyper_ctl_append_msg(&hyper_epoll.ctl, NEXT, data, 4);
 	}
 	buf->get += size;
 	if (buf->get < len) {
@@ -1153,20 +1229,34 @@ static int hyper_channel_read(struct hyper_event *he, int efd)
 	}
 
 	/* get and consume the whole data */
-	ret = hyper_channel_handle(he, len);
+	ret = hyper_ctlmsg_handle(he, len);
 	buf->get = 0;
 
 	return ret == 0 ? 0 : -1;
 }
 
-static struct hyper_event_ops hyper_channel_ops = {
-	.read		= hyper_channel_read,
+static int hyper_channel_write(struct hyper_event *he, int efd, int events)
+{
+	// virtio serial port receives writable event, it means peer appears
+	if (he->hup){
+		he->hup = 0;
+		fprintf(stdout, "peer is appeared\n");
+		hyper_modify_event(efd, he, EPOLLIN| EPOLLOUT);
+	}
+
+	return hyper_event_write(he, efd, events);
+}
+
+static struct hyper_event_ops hyper_ctlfd_ops = {
+	.read		= hyper_ctlfd_read,
+	.write		= hyper_channel_write,
 	.rbuf_size	= 10240,
+	.wbuf_size	= 4096,
 };
 
 static struct hyper_event_ops hyper_ttyfd_ops = {
 	.read		= hyper_ttyfd_read,
-	.write		= hyper_event_write,
+	.write		= hyper_channel_write,
 	.rbuf_size	= 4096,
 	.wbuf_size	= 10240,
 };
@@ -1222,30 +1312,30 @@ static int hyper_loop(void)
 		return -1;
 	}
 
-	ctl.efd = epoll_create1(EPOLL_CLOEXEC);
-	if (ctl.efd < 0) {
+	hyper_epoll.efd = epoll_create1(EPOLL_CLOEXEC);
+	if (hyper_epoll.efd < 0) {
 		perror("epoll_create failed");
 		return -1;
 	}
 
-	fprintf(stdout, "hyper_init_event hyper channel event %p, ops %p, fd %d\n",
-		&ctl.chan, &hyper_channel_ops, ctl.chan.fd);
-	if (hyper_init_event(&ctl.chan, &hyper_channel_ops, pod) < 0 ||
-	    hyper_add_event(ctl.efd, &ctl.chan, EPOLLIN) < 0) {
+	fprintf(stdout, "hyper_init_event hyper ctlfd event %p, ops %p, fd %d\n",
+		&hyper_epoll.ctl, &hyper_ctlfd_ops, hyper_epoll.ctl.fd);
+	if (hyper_init_event(&hyper_epoll.ctl, &hyper_ctlfd_ops, pod) < 0 ||
+	    hyper_add_event(hyper_epoll.efd, &hyper_epoll.ctl, EPOLLIN) < 0) {
 		return -1;
 	}
 
 	fprintf(stdout, "hyper_init_event hyper ttyfd event %p, ops %p, fd %d\n",
-		&ctl.tty, &hyper_ttyfd_ops, ctl.tty.fd);
-	if (hyper_init_event(&ctl.tty, &hyper_ttyfd_ops, pod) < 0 ||
-	    hyper_add_event(ctl.efd, &ctl.tty, EPOLLIN) < 0) {
+		&hyper_epoll.tty, &hyper_ttyfd_ops, hyper_epoll.tty.fd);
+	if (hyper_init_event(&hyper_epoll.tty, &hyper_ttyfd_ops, pod) < 0 ||
+	    hyper_add_event(hyper_epoll.efd, &hyper_epoll.tty, EPOLLIN) < 0) {
 		return -1;
 	}
 
 	events = calloc(MAXEVENTS, sizeof(*events));
 
 	while (1) {
-		n = epoll_pwait(ctl.efd, events, MAXEVENTS, -1, &omask);
+		n = epoll_pwait(hyper_epoll.efd, events, MAXEVENTS, -1, &omask);
 		if (n < 0) {
 			if (errno == EINTR)
 				continue;
@@ -1255,13 +1345,13 @@ static int hyper_loop(void)
 		fprintf(stdout, "%s epoll_wait %d\n", __func__, n);
 
 		for (i = 0; i < n; i++) {
-			if (hyper_handle_event(ctl.efd, &events[i]) < 0)
+			if (hyper_handle_event(hyper_epoll.efd, &events[i]) < 0)
 				return -1;
 		}
 	}
 
 	free(events);
-	close(ctl.efd);
+	close(hyper_epoll.efd);
 	return 0;
 }
 
@@ -1318,23 +1408,23 @@ int main(int argc, char *argv[])
 
 	setenv("PATH", "/bin:/sbin/:/usr/bin/:/usr/sbin/", 1);
 
-	ctl.chan.fd = hyper_setup_ctl_channel(ctl_serial);
-	if (ctl.chan.fd < 0) {
+	hyper_epoll.ctl.fd = hyper_setup_ctl_channel(ctl_serial);
+	if (hyper_epoll.ctl.fd < 0) {
 		fprintf(stderr, "fail to setup hyper control serial port\n");
 		goto out1;
 	}
 
-	ctl.tty.fd = hyper_setup_tty_channel(tty_serial);
-	if (ctl.tty.fd < 0) {
+	hyper_epoll.tty.fd = hyper_setup_tty_channel(tty_serial);
+	if (hyper_epoll.tty.fd < 0) {
 		fprintf(stderr, "fail to setup hyper tty serial port\n");
 		goto out2;
 	}
 
 	hyper_loop();
 
-	close(ctl.tty.fd);
+	close(hyper_epoll.tty.fd);
 out2:
-	close(ctl.chan.fd);
+	close(hyper_epoll.ctl.fd);
 out1:
 	free(cmdline);
 

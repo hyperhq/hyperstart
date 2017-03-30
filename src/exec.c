@@ -33,31 +33,22 @@ static void hyper_exec_process(struct hyper_exec *exec, struct stdio_config *io)
 
 static int send_exec_finishing(uint64_t seq, int len, int code)
 {
-	struct hyper_buf *buf = &ctl.tty.wbuf;
-
-	if (buf->get + len > buf->size) {
-		uint8_t *data;
-		fprintf(stdout, "%s: tty buf full\n", __func__);
-
-		data = realloc(buf->data, buf->size + len);
-		if (data == NULL) {
-			perror("realloc failed");
-			return -1;
-		}
-		buf->data = data;
-		buf->size += len;
+	int ret = -1;
+	uint8_t *data = malloc(len);
+	if (data == NULL) {
+		goto fail;
 	}
 
 	/* no in event, no more data, send eof */
-	hyper_set_be64(buf->data + buf->get, seq);
-	hyper_set_be32(buf->data + buf->get + 8, len);
+	hyper_set_be64(data, seq);
+	hyper_set_be32(data + 8, len);
 	if (len > 12)
-		buf->data[buf->get + 12] = code;
+		data[12] = code;
 
-	buf->get += len;
-	hyper_modify_event(ctl.efd, &ctl.tty, EPOLLIN | EPOLLOUT);
-
-	return 0;
+	ret = hyper_wbuf_append_msg(&hyper_epoll.tty, data, len);
+fail:
+	free(data);
+	return ret;
 }
 
 static int hyper_send_exec_eof(struct hyper_exec *exec) {
@@ -102,7 +93,7 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_
 {
 	int size = -1;
 	int flag = de->flag | EPOLLOUT;
-	struct hyper_buf *buf = &ctl.tty.wbuf;
+	struct hyper_buf *buf = &hyper_epoll.tty.wbuf;
 
 	if (FULL(buf)) {
 		goto out;
@@ -137,23 +128,23 @@ static int pts_loop(struct hyper_event *de, uint64_t seq, int efd, struct hyper_
 	if (FULL(buf)) {
 		/* del & add event to move event to tail, this gives
 		 * other event a chance to write data to wbuf of tty. */
-		hyper_requeue_event(ctl.efd, de);
+		hyper_requeue_event(hyper_epoll.efd, de);
 	}
 out:
-	if (hyper_modify_event(ctl.efd, &ctl.tty, flag) < 0) {
-		fprintf(stderr, "modify ctl tty event to %d failed\n", flag);
+	if (hyper_modify_event(hyper_epoll.efd, &hyper_epoll.tty, flag) < 0) {
+		fprintf(stderr, "modify tty event to %d failed\n", flag);
 		return -1;
 	}
 
 	return 0;
 }
 
-static int write_to_stdin(struct hyper_event *de, int efd)
+static int write_to_stdin(struct hyper_event *de, int efd, int events)
 {
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdinev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
 
-	if (hyper_event_write(de, efd) < 0 || (de->wbuf.get == 0 && exec->close_stdin_request))
+	if (hyper_event_write(de, efd, events) < 0 || (de->wbuf.get == 0 && exec->close_stdin_request))
 		pts_hup(de, efd, exec);
 
 	return 0;
@@ -165,7 +156,7 @@ struct hyper_event_ops in_ops = {
 	.wbuf_size	= 512,
 };
 
-static int stdout_loop(struct hyper_event *de, int efd)
+static int stdout_loop(struct hyper_event *de, int efd, int events)
 {
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, stdoutev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->seq);
@@ -180,7 +171,7 @@ struct hyper_event_ops out_ops = {
 	/* don't need write buff, the stdout data is one way */
 };
 
-static int stderr_loop(struct hyper_event *de, int efd)
+static int stderr_loop(struct hyper_event *de, int efd, int events)
 {
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, stderrev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->errseq);
@@ -439,7 +430,7 @@ static int hyper_setup_stdio_events(struct hyper_exec *exec, struct stdio_config
 		&exec->stdinev, &in_ops, io->stdinevfd);
 	exec->stdinev.fd = io->stdinevfd;
 	if (hyper_init_event(&exec->stdinev, &in_ops, NULL) < 0 ||
-	    hyper_add_event(ctl.efd, &exec->stdinev, EPOLLOUT) < 0) {
+	    hyper_add_event(hyper_epoll.efd, &exec->stdinev, EPOLLOUT) < 0) {
 		fprintf(stderr, "add container stdin event failed\n");
 		return -1;
 	}
@@ -449,7 +440,7 @@ static int hyper_setup_stdio_events(struct hyper_exec *exec, struct stdio_config
 		&exec->stdoutev, &out_ops, io->stdoutevfd);
 	exec->stdoutev.fd = io->stdoutevfd;
 	if (hyper_init_event(&exec->stdoutev, &out_ops, NULL) < 0 ||
-	    hyper_add_event(ctl.efd, &exec->stdoutev, EPOLLIN) < 0) {
+	    hyper_add_event(hyper_epoll.efd, &exec->stdoutev, EPOLLIN) < 0) {
 		fprintf(stderr, "add container stdout event failed\n");
 		return -1;
 	}
@@ -459,7 +450,7 @@ static int hyper_setup_stdio_events(struct hyper_exec *exec, struct stdio_config
 		&exec->stderrev, &err_ops, io->stderrevfd);
 	exec->stderrev.fd = io->stderrevfd;
 	if (hyper_init_event(&exec->stderrev, &err_ops, NULL) < 0 ||
-	    hyper_add_event(ctl.efd, &exec->stderrev, EPOLLIN) < 0) {
+	    hyper_add_event(hyper_epoll.efd, &exec->stderrev, EPOLLIN) < 0) {
 		fprintf(stderr, "add container stderr event failed\n");
 		return -1;
 	}
@@ -666,29 +657,6 @@ close_tty:
 	close(io.stdoutevfd);
 	close(io.stderrevfd);
 	goto out;
-}
-
-static int hyper_send_pod_finished(struct hyper_pod *pod)
-{
-	int ret = -1;
-	struct hyper_container *c;
-	uint8_t *data = NULL, *new;
-	int c_num = 0;
-
-	list_for_each_entry(c, &pod->containers, list) {
-		c_num++;
-		new = realloc(data, c_num * 4);
-		if (new == NULL)
-			goto out;
-
-		hyper_set_be32(new + ((c_num - 1) * 4), c->exec.code);
-		data = new;
-	}
-
-	ret = hyper_send_msg_block(ctl.chan.fd, PODFINISHED, c_num * 4, data);
-out:
-	free(data);
-	return ret;
 }
 
 static int hyper_release_exec(struct hyper_exec *exec)
