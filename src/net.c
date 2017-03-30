@@ -677,10 +677,61 @@ out:
 	return ret;
 }
 
+int hyper_write_dns_file(int fd, char *field, char **data, int num)
+{
+	int i = 0, len = 0, ret = -1, size;
+	char *buf = NULL;
+
+	if (num == 0)
+		return 0;
+
+	size = strlen(field);
+	buf = malloc(size);
+	if (buf == NULL) {
+		fprintf(stderr, "fail to malloc buff for %s\n", field);
+		goto out;
+	}
+	memcpy(buf, field, size);
+	for (i = 0; i < num; i++) {
+		int new_len = strlen(data[i]) + 1 + 1;
+		char *format = " %s";
+		if (i + 1 == num) {
+			new_len += 1;
+			format = " %s\n";
+		}
+		buf = realloc(buf, size + new_len);
+		if (buf == NULL) {
+			fprintf(stderr, "fail to realloc buff for %s\n", field);
+			goto out;
+		}
+		if (snprintf(buf + size, new_len, format, data[i]) < 0) {
+			fprintf(stderr, "sprintf search entry failed\n");
+			goto out;
+		}
+		fprintf(stdout, "%s: data: %s\n", field, buf);
+		size += new_len;
+	}
+
+	while (len < size) {
+		i = write(fd, buf + len, size - len);
+		if (i < 0) {
+			perror("fail to write resolv.conf");
+			goto out;
+		}
+		len += i;
+	}
+
+	ret = 0;
+out:
+	free(buf);
+	return ret;
+}
+
 int hyper_setup_dns(struct hyper_pod *pod)
 {
 	int i, fd, ret = -1;
 	char buf[28];
+	int len = 0, size = 0;
 
 	if (pod->dns == NULL)
 		return 0;
@@ -693,9 +744,9 @@ int hyper_setup_dns(struct hyper_pod *pod)
 	}
 
 	for (i = 0; i < pod->d_num; i++) {
-		int size = snprintf(buf, sizeof(buf), "nameserver %s\n", pod->dns[i]);
-		int len = 0, l;
-
+		int l;
+		len = 0;
+		size = snprintf(buf, sizeof(buf), "nameserver %s\n", pod->dns[i]);
 		if (size < 0) {
 			fprintf(stderr, "sprintf resolv.conf entry failed\n");
 			goto out;
@@ -709,6 +760,11 @@ int hyper_setup_dns(struct hyper_pod *pod)
 			}
 			len += l;
 		}
+	}
+
+	if (hyper_write_dns_file(fd, "search", pod->dns_search, pod->dsearch_num) < 0 ||
+	    hyper_write_dns_file(fd, "options", pod->dns_option, pod->doption_num) < 0) {
+		goto out;
 	}
 
 	ret = 0;

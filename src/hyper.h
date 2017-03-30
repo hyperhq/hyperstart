@@ -23,6 +23,8 @@ struct hyper_pod {
 	struct hyper_route	*rt;
 	struct portmapping_white_list	*portmap_white_lists;
 	char			**dns;
+	char			**dns_search;
+	char			**dns_option;
 	struct list_head	containers;
 	struct list_head	exec_head;
 	char			*hostname;
@@ -31,6 +33,8 @@ struct hyper_pod {
 	uint32_t		i_num;
 	uint32_t		r_num;
 	uint32_t		d_num;
+	uint32_t		dsearch_num;
+	uint32_t		doption_num;
 	/* how many containers are running */
 	uint32_t		remains;
 	int			req_destroy;
