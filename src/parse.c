@@ -1060,30 +1060,33 @@ out:
 	return ret;
 }
 
-static int hyper_parse_dns(struct hyper_pod *pod, char *json, jsmntok_t *toks)
+static int hyper_parse_string_array(char *json, jsmntok_t *toks, char *field,
+				    char ***data, unsigned int *num)
 {
 	int i = 0, j;
+	char **values;
 
 	if (toks[i].type != JSMN_ARRAY) {
-		dbg_pr(stdout, "Dns format incorrect\n");
+		dbg_pr(stdout, "%s format incorrect\n", field);
 		return -1;
 	}
 
-	pod->d_num = toks[i].size;
-	dbg_pr(stdout, "dns count %d\n", pod->d_num);
+	*num = toks[i].size;
+	dbg_pr(stdout, "%s count %d\n", field, *num);
 
-	pod->dns = calloc(pod->d_num, sizeof(*pod->dns));
-	if (pod->dns == NULL) {
-		dbg_pr(stdout, "alloc memory for dns failed\n");
+	values = calloc(*num, sizeof(*values));
+	if (data == NULL) {
+		dbg_pr(stdout, "alloc memory for %s failed\n", field);
 		return -1;
 	}
 
 	i++;
-	for (j = 0; j < pod->d_num; j++, i++) {
-		pod->dns[j] = json_token_str(json, &toks[i]);
-		dbg_pr(stdout, "pod dns %d: %s\n", j, pod->dns[j]);
+	for (j = 0; j < *num; j++, i++) {
+		values[j] = json_token_str(json, &toks[i]);
+		dbg_pr(stdout, "%s option %d: %s\n", field, j, values[j]);
 	}
 
+	*data = values;
 	return i;
 }
 
@@ -1247,25 +1250,34 @@ realloc:
 			next = hyper_parse_containers(pod, json, &toks[++i]);
 			if (next < 0)
 				goto out;
-
 			i += next;
 		} else if (json_token_streq(json, t, "interfaces") && t->size == 1) {
 			next = hyper_parse_interfaces(pod, json, &toks[++i]);
 			if (next < 0)
 				goto out;
-
 			i += next;
 		} else if (json_token_streq(json, t, "routes") && t->size == 1) {
 			next = hyper_parse_routes(&pod->rt, &pod->r_num, json, &toks[++i]);
 			if (next < 0)
 				goto out;
-
 			i += next;
 		} else if (json_token_streq(json, t, "dns") && t->size == 1) {
-			next = hyper_parse_dns(pod, json, &toks[++i]);
+			next = hyper_parse_string_array(json, &toks[++i], "dns",
+							&pod->dns, &pod->d_num);
 			if (next < 0)
 				goto out;
-
+			i += next;
+		} else if (json_token_streq(json, t, "dnsSearch") && t->size == 1) {
+			next = hyper_parse_string_array(json, &toks[++i], "dns search",
+							&pod->dns_search, &pod->dsearch_num);
+			if (next < 0)
+				goto out;
+			i += next;
+		} else if (json_token_streq(json, t, "dnsOptions") && t->size == 1) {
+			next = hyper_parse_string_array(json, &toks[++i], "dns option",
+							&pod->dns_option, &pod->doption_num);
+			if (next < 0)
+				goto out;
 			i += next;
 		} else if (json_token_streq(json, t, "shareDir") && t->size == 1) {
 			pod->share_tag = (json_token_str(json, &toks[++i]));
@@ -1282,7 +1294,6 @@ realloc:
 			next = hyper_parse_portmapping_whitelist(pod, json, &toks[++i]);
 			if (next < 0)
 				goto out;
-
 			i += next;
 		} else {
 			hyper_print_unknown_key(json, &toks[i]);
@@ -1290,7 +1301,6 @@ realloc:
 			break;
 		}
 	}
-
 out:
 	free(toks);
 	return next;
