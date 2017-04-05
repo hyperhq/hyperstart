@@ -29,7 +29,7 @@ struct stdio_config {
 };
 
 static int hyper_release_exec(struct hyper_exec *);
-static void hyper_exec_process(struct hyper_exec *exec, struct stdio_config *io);
+static void hyper_exec_process(struct hyper_exec *exec, int pipe, struct stdio_config *io);
 
 static int send_exec_finishing(uint64_t seq, int len, int code)
 {
@@ -464,7 +464,6 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, int pipe, struct stdio_con
 
 	if (hyper_enter_sandbox(exec->pod, pipe) < 0) {
 		perror("enter pidns of pod init failed");
-		hyper_send_type(pipe, -1);
 		goto out;
 	}
 
@@ -503,14 +502,14 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, int pipe, struct stdio_con
 			goto out;
 		}
 	}
-	hyper_exec_process(exec, io);
-
+	hyper_exec_process(exec, pipe, io);
 out:
+	hyper_send_type(pipe, -1);
 	_exit(125);
 }
 
 // do the exec, no return
-static void hyper_exec_process(struct hyper_exec *exec, struct stdio_config *io)
+static void hyper_exec_process(struct hyper_exec *exec, int pipe, struct stdio_config *io)
 {
 	if (sigprocmask(SIG_SETMASK, &orig_mask, NULL) < 0) {
 		perror("sigprocmask restore mask failed");
@@ -535,9 +534,12 @@ static void hyper_exec_process(struct hyper_exec *exec, struct stdio_config *io)
 
 	setsid();
 
+	//send success notification before stdio was installed, otherwise the debug log in hyper_send_type() will be sent to user tty.
+	hyper_send_type(pipe, 0);
+
 	if (hyper_install_process_stdio(exec, io) < 0) {
 		fprintf(stderr, "dup pts to exec stdio failed\n");
-		goto exit;
+		goto exit_nosend;
 	}
 
 	if (execvp(exec->argv[0], exec->argv) < 0) {
@@ -553,6 +555,8 @@ static void hyper_exec_process(struct hyper_exec *exec, struct stdio_config *io)
 	}
 
 exit:
+	hyper_send_type(pipe, -1);
+exit_nosend:
 	fflush(NULL);
 	_exit(125);
 }
@@ -596,7 +600,7 @@ int hyper_run_process(struct hyper_exec *exec)
 {
 	int pipe[2] = {-1, -1};
 	int pid, ret = -1;
-	uint32_t type;
+	uint32_t cpid, type;
 	struct stdio_config io = {-1, -1,-1, -1,-1, -1};
 
 	if (exec->argv == NULL || exec->seq == 0 || exec->container_id == NULL || strlen(exec->container_id) == 0) {
@@ -624,7 +628,7 @@ int hyper_run_process(struct hyper_exec *exec)
 	}
 	fprintf(stdout, "prerequisite process pid %d\n", pid);
 
-	if (hyper_get_type(pipe[0], &type) < 0 || (int)type < 0) {
+	if (hyper_get_type(pipe[0], &cpid) < 0 || (int)cpid < 0) {
 		fprintf(stderr, "run process failed\n");
 		goto close_tty;
 	}
@@ -634,7 +638,13 @@ int hyper_run_process(struct hyper_exec *exec)
 		goto close_tty;
 	}
 
-	exec->pid = type;
+	if (hyper_get_type(pipe[0], &type) < 0 || (int)type < 0) {
+		fprintf(stderr, "container process %u exec failed\n", cpid);
+		goto close_tty;
+	}
+
+	//two message may come back in reversed sequence
+	exec->pid = (type == 0) ? cpid : type;
 	list_add_tail(&exec->list, &exec->pod->exec_head);
 	exec->ref++;
 	fprintf(stdout, "%s process pid %d\n", __func__, exec->pid);
