@@ -268,47 +268,6 @@ void hyper_filize(char *hyper_path)
 	}
 }
 
-static int hyper_create_parent_dir(const char *hyper_path)
-{
-	char *p, *path = strdup(hyper_path);
-	int ret = 0;
-
-	if (path == NULL)
-		return -1;
-	p = strrchr(path, '/');
-	if (p != NULL && p != path) {
-		*p = '\0';
-		ret = hyper_mkdir(path, 0777);
-	}
-	free(path);
-
-	return ret;
-}
-
-/* hyper_path must point to a file rather than a directory, e.g., having trailing '/' */
-int hyper_create_file(const char *hyper_path)
-{
-	int fd;
-	struct stat stbuf;
-
-	if (stat(hyper_path, &stbuf) >= 0) {
-		if (S_ISREG(stbuf.st_mode))
-			return 0;
-		errno = S_ISDIR(stbuf.st_mode) ? EISDIR : EINVAL;
-		return -1;
-	}
-
-	if (hyper_create_parent_dir(hyper_path) < 0)
-		return -1;
-
-	fd = open(hyper_path, O_CREAT|O_WRONLY, 0666);
-	if (fd < 0)
-		return -1;
-	close(fd);
-	fprintf(stdout, "created file %s\n", hyper_path);
-	return 0;
-}
-
 static char *hyper_resolve_link(char *path)
 {
 	char buf[512];
@@ -333,19 +292,24 @@ static char *hyper_resolve_link(char *path)
  * 			     as if we were in a chroot jail.
  *
  * @root: chroot jail path.
- * @parent: what's already created to the target directory.
  * @path: target directory. It is always relative to @root even if it starts with /.
- * @mode: directory mode.
+ * @parent: what's already created to the target directory.
  * @link_max: max number of symlinks to follow.
- * @depth: number of components resolved.
+ * @create_file: create last component of @path as a normal file
  *
  * Upon success, @parent is changed to point to resolved path name.
  */
-static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
-				   mode_t mode, int *link_max, int *depth)
+static int hyper_mkdir_follow_link(const char *root, const char *path, char *parent,
+				   int *link_max, bool create_file)
 {
-	char *comp, *prev, *link, *dummy, *npath, *delim = "/";
+	char *comp, *next, *prev, *last, *link, *dummy, *npath, *delim = "/";
 	struct stat st;
+	int fd;
+
+	if (strncmp(root, parent, strlen(root)) != 0) {
+		errno = EINVAL;
+		return -1;
+	}
 
 	npath = strdup(path);
 	if (npath == NULL)
@@ -356,8 +320,28 @@ static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
 		goto out;
 
 	do {
+		last = comp;
+		next = strtok_r(NULL, delim, &dummy);
+
 		if (!strcmp(comp, "."))
 			continue;
+
+		if (!strcmp(comp, "..")) {
+			/* *NOTE* this works iff:
+			 * 1. parent is initialized as root when entering for the first time.
+			 * 2. comp is never appended to parent with trailing '/'.
+			 * 3. comp is always appended to parent with *one* prefix '/'.
+			 */
+			char *p = strrchr(parent, '/');
+			if (p == NULL) {
+				/* no comp appended, do nothing */
+			} else if (p - parent >= strlen(root)) {
+				/* go back one level */
+				*p = '\0';
+			}
+			/* no need to check parent directory */
+			continue;
+		}
 
 		if (strlen(parent) + strlen(comp) + 1 >= 512) {
 			errno = ENAMETOOLONG;
@@ -366,20 +350,10 @@ static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
 		prev = &parent[strlen(parent)];
 		strcat(parent, "/");
 		strcat(parent, comp);
-		if (!strcmp(comp, "..")) {
-			if (--(*depth) <= 0) {
-				/* points to root */
-				sprintf(parent, "%s", root);
-				*depth = 0;
-			}
-			/* no need to check parent directory */
-			continue;
-		} else {
-			(*depth)++;
-		}
 
 		if (lstat(parent, &st) >= 0) {
-			if (S_ISDIR(st.st_mode)) {
+			if ((S_ISDIR(st.st_mode) && (next != NULL || !create_file)) ||
+			    (S_ISREG(st.st_mode) && next == NULL && create_file)) {
 				continue;
 			} else if (S_ISLNK(st.st_mode)) {
 				if (--(*link_max) <= 0) {
@@ -391,12 +365,10 @@ static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
 					goto out;
 				if (link[0] == '/') {
 					sprintf(parent, "%s", root);
-					*depth = 0;
 				} else {
 					*prev = '\0'; /* drop current comp */
-					(*depth)--;
 				}
-				if (hyper_mkdir_follow_link(root, parent, link, mode, link_max, depth) < 0) {
+				if (hyper_mkdir_follow_link(root, link, parent, link_max, next == NULL && create_file) < 0) {
 					free(link);
 					goto out;
 				}
@@ -408,39 +380,73 @@ static int hyper_mkdir_follow_link(char *root, char *parent, char *path,
 			}
 		}
 
-		fprintf(stdout, "create directory %s\n", parent);
-		if (mkdir(parent, mode) < 0 && errno != EEXIST) {
-			perror("failed to create directory");
-			goto out;
+		if (next == NULL && create_file) {
+			fprintf(stdout, "create file %s\n", parent);
+			fd = open(parent, O_CREAT|O_WRONLY, 0666);
+			if (fd < 0)
+				goto out;
+			close(fd);
+		} else {
+			fprintf(stdout, "create directory %s\n", parent);
+			if (mkdir(parent, 0755) < 0 && errno != EEXIST) {
+				perror("failed to create directory");
+				goto out;
+			}
 		}
-	} while((comp = strtok_r(NULL, delim, &dummy)) != NULL);
+	} while((comp = next) != NULL);
 
-	/* reset errno to mark success */
-	errno = 0;
+	if (create_file && (!strcmp(last, ".") || !strcmp(last, "..")))
+		errno = ENOTDIR;
+	else
+		/* reset errno to mark success */
+		errno = 0;
 out:
 	free(npath);
-	printf("parent is %s errno %d\n", parent, errno);
 	return errno ? -1 : 0;
+}
+
+static int hyper_create_target_at(const char *root, char *hyper_path, int size, bool create_file)
+{
+	char result[512];
+	int max_link = 40;
+
+	sprintf(result, "%s", root);
+	if (hyper_mkdir_follow_link(root, hyper_path, result, &max_link, create_file) < 0)
+		return -1;
+
+	if (strlen(result) + 1 > size) {
+		errno = ENAMETOOLONG;
+		return -1;
+	}
+	sprintf(hyper_path, "%s", result);
+	return 0;
 }
 
 /*
  * hyper_mkdir_at() is similar to hyper_mkdir() with the exception that
  * when there are symlinks in the path components, it acts as if we created
- * directories in a chroot jail. @path is always considered relative to root
- * even if it starts with a leading stash ('/').
+ * directories in a chroot jail. @hyper_path is always considered relative
+ * to root even if it starts with a leading stash ('/').
  *
- * Upon success, return symlink expanded result.
+ * Upon success, @hyper_path is modified to save resolved path in chroot jail.
  */
-char *hyper_mkdir_at(char *root, char *path, mode_t mode)
+int hyper_mkdir_at(const char *root, char *hyper_path, int size)
 {
-	char result[512];
-	int depth = 0, max_link = 40;
+	return hyper_create_target_at(root, hyper_path, size, false);
+}
 
-	sprintf(result, "%s", root);
-	if (hyper_mkdir_follow_link(root, result, path, mode, &max_link, &depth) < 0)
-		return NULL;
-
-	return strdup(result);
+/**
+ * hyper_create_file_at - create a file in @root chroot jail.
+ *
+ * @root: chroot jail path.
+ * @hyper_path: must point to a file rather than a directory, e.g., having trailing '/'
+ * @size: size of @hyper_path storage.
+ *
+ * Upon success, @hyper_path is modified to point to the path resolved in chroot jail.
+ */
+int hyper_create_file_at(const char* root, char *hyper_path, int size)
+{
+	return hyper_create_target_at(root, hyper_path, size, true);
 }
 
 int hyper_mkdir(char *path, mode_t mode)

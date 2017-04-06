@@ -102,7 +102,6 @@ static int container_setup_volume(struct hyper_container *container)
 	for (i = 0; i < container->vols_num; i++) {
 		char volume[512];
 		char mountpoint[512];
-		char *expath;
 		char *options = NULL;
 		const char *filevolume = NULL;
 		vol = &container->vols[i];
@@ -145,14 +144,9 @@ static int container_setup_volume(struct hyper_container *container)
 			return -1;
 
 		if (filevolume == NULL) {
-			expath = hyper_mkdir_at(".", mountpoint, 0755);
-			if (expath == NULL) {
-				perror("create volume dir failed");
+			if (hyper_mkdir_at(".", mountpoint, sizeof(mountpoint)) < 0) {
+				perror("create map dir failed");
 				return -1;
-			} else {
-				/* ensure mountpoint is reachable */
-				sprintf(mountpoint, "%s", expath);
-				free(expath);
 			}
 			if (vol->docker) {
 				if (container->initialize &&
@@ -166,8 +160,7 @@ static int container_setup_volume(struct hyper_container *container)
 				return -1;
 			}
 		} else {
-			hyper_filize(mountpoint);
-			if (hyper_create_file(mountpoint) < 0) {
+			if (hyper_create_file_at(".", mountpoint, sizeof(mountpoint)) < 0) {
 				perror("create volume file failed");
 				return -1;
 			}
@@ -195,7 +188,7 @@ static int container_setup_volume(struct hyper_container *container)
 
 	for (i = 0; i < container->maps_num; i++) {
 		struct stat st;
-		char *src, *expath, path[512], volume[512];
+		char *src, path[512], volume[512];
 		struct fsmap *map = &container->maps[i];
 		char mountpoint[512];
 
@@ -207,14 +200,9 @@ static int container_setup_volume(struct hyper_container *container)
 		stat(src, &st);
 
 		if (st.st_mode & S_IFDIR) {
-			expath = hyper_mkdir_at(".", mountpoint, 0755);
-			if (expath == NULL) {
+			if (hyper_mkdir_at(".", mountpoint, sizeof(mountpoint)) < 0) {
 				perror("create map dir failed");
 				return -1;
-			} else {
-				/* ensure mountpoint is reachable */
-				sprintf(mountpoint, "%s", expath);
-				free(expath);
 			}
 			if (map->docker) {
 				/* converted from volume */
@@ -227,12 +215,10 @@ static int container_setup_volume(struct hyper_container *container)
 				}
 			}
 		} else {
-			int fd = open(mountpoint, O_CREAT|O_WRONLY, 0755);
-			if (fd < 0) {
-				perror("create map file failed");
+			if (hyper_create_file_at(".", mountpoint, sizeof(mountpoint)) < 0) {
+				perror("create volume file failed");
 				return -1;
 			}
-			close(fd);
 		}
 
 		if (mount(src, mountpoint, NULL, MS_BIND, NULL) < 0) {
