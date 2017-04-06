@@ -510,7 +510,12 @@ static int hyper_setup_pod(struct hyper_pod *pod)
 	}
 
 	if (hyper_setup_dns(pod) < 0) {
-		fprintf(stderr, "setup network failed\n");
+		fprintf(stderr, "setup dns file failed\n");
+		return -1;
+	}
+
+	if (hyper_setup_hostname(pod) < 0) {
+		fprintf(stderr, "setup hostname file failed\n");
 		return -1;
 	}
 
