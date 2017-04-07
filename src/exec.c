@@ -8,6 +8,7 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <sys/eventfd.h>
 #include <dirent.h>
 #include <sched.h>
 #include <errno.h>
@@ -494,11 +495,11 @@ static int hyper_setup_stdio_events(struct hyper_exec *exec, struct stdio_config
 	return 0;
 }
 
-static int hyper_do_exec_cmd(struct hyper_exec *exec, int pipe, struct stdio_config *io)
+static int hyper_do_exec_cmd(struct hyper_exec *exec, int pid_efd, int process_inited_efd, struct stdio_config *io)
 {
 	struct hyper_container *c;
 
-	if (hyper_enter_sandbox(exec->pod, pipe) < 0) {
+	if (hyper_enter_sandbox(exec->pod, pid_efd) < 0) {
 		perror("enter pidns of pod init failed");
 		goto out;
 	}
@@ -529,14 +530,15 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, int pipe, struct stdio_con
 	else
 		unsetenv("TERM");
 
-	hyper_exec_process(exec, pipe, io);
+	hyper_exec_process(exec, process_inited_efd, io);
 out:
-	hyper_send_type(pipe, -1);
+	fprintf(stderr, "hyper send process inited event: error\n");
+	hyper_eventfd_send(process_inited_efd, HYPER_EVENTFD_ERROR);
 	_exit(125);
 }
 
 // do the exec, no return
-static void hyper_exec_process(struct hyper_exec *exec, int pipe, struct stdio_config *io)
+static void hyper_exec_process(struct hyper_exec *exec, int process_inited_fd, struct stdio_config *io)
 {
 	bool defaultPath = false;
 	if (sigprocmask(SIG_SETMASK, &orig_mask, NULL) < 0) {
@@ -564,7 +566,8 @@ static void hyper_exec_process(struct hyper_exec *exec, int pipe, struct stdio_c
 	setsid();
 
 	//send success notification before stdio was installed, otherwise the debug log in hyper_send_type() will be sent to user tty.
-	hyper_send_type(pipe, 0);
+	fprintf(stdout, "hyper send process inited event: normal\n");
+	hyper_eventfd_send(process_inited_fd, HYPER_EVENTFD_NORMAL);
 
 	if (hyper_install_process_stdio(exec, io) < 0) {
 		fprintf(stderr, "dup pts to exec stdio failed\n");
@@ -584,7 +587,8 @@ static void hyper_exec_process(struct hyper_exec *exec, int pipe, struct stdio_c
 	}
 
 exit:
-	hyper_send_type(pipe, -1);
+	fprintf(stderr, "hyper send process inited event: error\n");
+	hyper_eventfd_send(process_inited_fd, HYPER_EVENTFD_ERROR);
 exit_nosend:
 	fflush(NULL);
 	_exit(125);
@@ -629,9 +633,9 @@ int hyper_exec_cmd(struct hyper_pod *pod, char *json, int length)
 
 int hyper_run_process(struct hyper_exec *exec)
 {
-	int pipe[2] = {-1, -1};
+	int pid_efd = -1, process_inited_efd = -1;
 	int pid, ret = -1;
-	uint32_t cpid, type;
+	int64_t cpid;
 	struct stdio_config io = {-1, -1,-1, -1,-1, -1};
 
 	if (exec->argv == NULL || exec->seq == 0 || exec->container_id == NULL || strlen(exec->container_id) == 0) {
@@ -645,8 +649,11 @@ int hyper_run_process(struct hyper_exec *exec)
 		goto out;
 	}
 
-	if (pipe2(pipe, O_CLOEXEC) < 0) {
-		perror("create pipe between pod init execcmd failed");
+
+	pid_efd = eventfd(0, EFD_CLOEXEC);
+	process_inited_efd = eventfd(0, EFD_CLOEXEC);
+	if (pid_efd < 0 || process_inited_efd < 0) {
+		perror("create eventfd between pod init execcmd failed");
 		goto close_tty;
 	}
 
@@ -656,15 +663,17 @@ int hyper_run_process(struct hyper_exec *exec)
 		goto close_tty;
 	} else if (pid == 0) {
 		if (strcmp(exec->container_id, HYPERSTART_EXEC_CONTAINER) == 0) {
-			hyper_send_type(pipe[1], getpid());
-			hyper_exec_process(exec, pipe[1], &io);
+			fprintf(stdout, "hyper send process pid: normal\n");
+			hyper_eventfd_send(pid_efd, getpid());
+			hyper_exec_process(exec, process_inited_efd, &io);
 			_exit(125);
 		}
-		hyper_do_exec_cmd(exec, pipe[1], &io);
+		hyper_do_exec_cmd(exec, pid_efd, process_inited_efd, &io);
 	}
 	fprintf(stdout, "prerequisite process pid %d\n", pid);
 
-	if (hyper_get_type(pipe[0], &cpid) < 0 || (int)cpid < 0) {
+	cpid = hyper_eventfd_recv(pid_efd);
+	if (cpid < 0) {
 		fprintf(stderr, "run process failed\n");
 		goto close_tty;
 	}
@@ -674,13 +683,12 @@ int hyper_run_process(struct hyper_exec *exec)
 		goto close_tty;
 	}
 
-	if (hyper_get_type(pipe[0], &type) < 0 || (int)type < 0) {
-		fprintf(stderr, "container process %u exec failed\n", cpid);
+	if (hyper_eventfd_recv(process_inited_efd) < 0) {
+		fprintf(stderr, "container process %u exec failed\n", (unsigned int)cpid);
 		goto close_tty;
 	}
 
-	//two message may come back in reversed sequence
-	exec->pid = (type == 0) ? cpid : type;
+	exec->pid = cpid;
 	list_add_tail(&exec->list, &exec->pod->exec_head);
 	exec->ref++;
 	fprintf(stdout, "%s process pid %d\n", __func__, exec->pid);
@@ -689,8 +697,8 @@ out:
 	close(io.stdinfd);
 	close(io.stdoutfd);
 	close(io.stderrfd);
-	close(pipe[0]);
-	close(pipe[1]);
+	close(pid_efd);
+	close(process_inited_efd);
 	return ret;
 close_tty:
 	hyper_reset_event(&exec->stdinev);

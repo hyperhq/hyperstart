@@ -68,37 +68,6 @@ int hyper_send_data(int fd, uint8_t *data, uint32_t len)
 	return 0;
 }
 
-int hyper_send_type(int fd, uint32_t type)
-{
-	uint8_t buf[4];
-
-	fprintf(stdout, "hyper send type %d\n", type);
-
-	hyper_set_be32(buf, type);
-
-	return hyper_send_data(fd, buf, 4);
-}
-
-int hyper_get_type(int fd, uint32_t *type)
-{
-	int len = 0, size;
-	uint8_t buf[4];
-
-	while (len < 4) {
-		size = read(fd, buf + len, 4 - len);
-		if (size <= 0) {
-			if (errno == EINTR)
-				continue;
-			perror("hyper_get_type failed");
-			return -1;
-		}
-		len += size;
-	}
-
-	*type = hyper_get_be32(buf);
-	return 0;
-}
-
 int hyper_send_data_block(int fd, uint8_t *data, uint32_t len)
 {
 	int ret, flags;

@@ -874,3 +874,42 @@ int hyper_mount_nfs(char *server, char *mountpoint)
 
 	return hyper_cmd(cmd);
 }
+
+int64_t hyper_eventfd_recv(int fd)
+{
+	int64_t type;
+	int size;
+
+	while (1) {
+		size = read(fd, &type, sizeof(type));
+		if (size != sizeof(type)) {
+			if (errno == EINTR)
+				continue;
+
+			perror("hyper_eventfd_recv failed");
+			return -1;
+		}
+		break;
+	}
+
+	return type;
+}
+
+int hyper_eventfd_send(int fd, int64_t type)
+{
+	int size;
+
+	while (1) {
+		size = write(fd, &type, sizeof(type));
+		if (size != sizeof(type)) {
+			if (errno == EINTR)
+				continue;
+
+			perror("hyper_eventfd_send failed");
+			return -1;
+		}
+		break;
+	}
+
+	return 0;
+}
