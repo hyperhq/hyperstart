@@ -429,23 +429,31 @@ static int container_binding_file(char *src, char *dest)
 
 	if (stat(src, &st) < 0) {
 		if (errno == ENOENT) {
-			fprintf(stdout, "no dns configured\n");
+			fprintf(stdout, "can not find %s\n", src);
 			return 0;
 		}
 
-		fprintf(stderr, "stat %s failed", src);
+		fprintf(stderr, "stat %s failed: %s\n", src, strerror(errno));
 		return -1;
 	}
 
-	fd = open(dest, O_CREAT| O_WRONLY, 0644);
-	if (fd < 0) {
-		fprintf(stderr, "create %s failed", dest);
-		return -1;
+	if (stat(dest, &st) < 0) {
+		if (errno != ENOENT) {
+			fprintf(stderr, "stat %s failed: %s\n", dest, strerror(errno));
+			return 0;
+		}
+		fprintf(stdout, "can not find %s\n", dest);
+		fd = open(dest, O_CREAT| O_WRONLY, 0644);
+		if (fd < 0) {
+			// root filesystem may be read only, don't fail
+			fprintf(stderr, "create %s failed: %s\n", dest, strerror(errno));
+			return 0;
+		}
+		close(fd);
 	}
-	close(fd);
 
 	if (mount(src, dest, NULL, MS_BIND, NULL) < 0) {
-		fprintf(stderr, "bind to %s failed", dest);
+		fprintf(stderr, "bind to %s failed: %s\n", dest, strerror(errno));
 		return -1;
 	}
 
