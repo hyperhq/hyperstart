@@ -417,11 +417,10 @@ static int container_setup_sysctl(struct hyper_container *container)
 	return 0;
 }
 
-static int container_setup_dns(struct hyper_container *container)
+static int container_binding_file(char *src, char *dest)
 {
 	int fd;
 	struct stat st;
-	char *src = "/tmp/hyper/resolv.conf";
 
 	if (stat(src, &st) < 0) {
 		if (errno == ENOENT) {
@@ -429,25 +428,35 @@ static int container_setup_dns(struct hyper_container *container)
 			return 0;
 		}
 
-		perror("stat resolve.conf failed");
+		fprintf(stderr, "stat %s failed", src);
 		return -1;
 	}
 
-	hyper_mkdir("./etc", 0755);
-
-	fd = open("./etc/resolv.conf", O_CREAT| O_WRONLY, 0644);
+	fd = open(dest, O_CREAT| O_WRONLY, 0644);
 	if (fd < 0) {
-		perror("create /etc/resolv.conf failed");
+		fprintf(stderr, "create %s failed", dest);
 		return -1;
 	}
 	close(fd);
 
-	if (mount(src, "./etc/resolv.conf", NULL, MS_BIND, NULL) < 0) {
-		perror("bind to /etc/resolv.conf failed");
+	if (mount(src, dest, NULL, MS_BIND, NULL) < 0) {
+		fprintf(stderr, "bind to %s failed", dest);
 		return -1;
 	}
 
 	return 0;
+}
+
+static int container_setup_dns()
+{
+	hyper_mkdir("./etc", 0755);
+	return container_binding_file("/tmp/hyper/resolv.conf", "./etc/resolv.conf");
+}
+
+static int container_setup_hostname()
+{
+	hyper_mkdir("./etc", 0755);
+	return container_binding_file("/tmp/hyper/hostname", "./etc/hostname");
 }
 
 static int container_setup_workdir(struct hyper_container *container)
@@ -623,8 +632,13 @@ static int hyper_setup_container_rootfs(void *data)
 		goto fail;
 	}
 
-	if (container_setup_dns(container) < 0) {
+	if (container_setup_dns() < 0) {
 		fprintf(stderr, "container sets up dns failed\n");
+		goto fail;
+	}
+
+	if (container_setup_hostname() < 0) {
+		fprintf(stderr, "container sets up hostname failed\n");
 		goto fail;
 	}
 

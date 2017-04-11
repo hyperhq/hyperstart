@@ -49,6 +49,7 @@ int hyper_setup_network(struct hyper_pod *pod);
 int hyper_cmd_setup_interface(char *json, int length);
 int hyper_cmd_setup_route(char *json, int length);
 int hyper_setup_dns(struct hyper_pod *pod);
+int hyper_setup_hostname(struct hyper_pod *pod);
 int hyper_get_type(int fd, uint32_t *type);
 int hyper_send_type(int fd, uint32_t type);
 int hyper_send_data_block(int fd, uint8_t *data, uint32_t len);

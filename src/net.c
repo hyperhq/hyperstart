@@ -677,6 +677,40 @@ out:
 	return ret;
 }
 
+int hyper_setup_hostname(struct hyper_pod *pod)
+{
+	int l, fd, ret = -1, len = 0, size = 0;
+	char buf[512];
+
+	if (pod->hostname == NULL)
+		return 0;
+
+	fd = open("/tmp/hyper/hostname", O_CREAT| O_TRUNC| O_WRONLY, 0644);
+	if (fd < 0) {
+		perror("create /tmp/hostname failed");
+		return -1;
+	}
+
+	size = snprintf(buf, sizeof(buf), "%s\n", pod->hostname);
+	if (size < 0) {
+		fprintf(stderr, "sprintf hostname failed\n");
+		goto out;
+	}
+
+	while (len < size) {
+		l = write(fd, buf + len, size - len);
+		if (l < 0) {
+			perror("fail to write hostname");
+			goto out;
+		}
+		len += l;
+	}
+	ret = 0;
+out:
+	close(fd);
+	return ret;
+}
+
 int hyper_write_dns_file(int fd, char *field, char **data, int num)
 {
 	int i = 0, len = 0, ret = -1, size;
