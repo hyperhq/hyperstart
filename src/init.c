@@ -20,6 +20,7 @@
 #include <inttypes.h>
 #include <ctype.h>
 #include <sys/prctl.h>
+#include <sys/eventfd.h>
 
 #include "../config.h"
 #include "hyper.h"
@@ -211,7 +212,7 @@ static void hyper_init_sigchld(int sig)
 
 struct hyper_pod_arg {
 	struct hyper_pod	*pod;
-	int		ctl_pipe[2];
+	int		pod_inited_efd;
 };
 
 static int hyper_pod_init(void *data)
@@ -220,7 +221,6 @@ static int hyper_pod_init(void *data)
 	struct hyper_pod *pod = arg->pod;
 	sigset_t mask;
 
-	close(arg->ctl_pipe[0]);
 	close(hyper_epoll.efd);
 	close(hyper_epoll.ctl.fd);
 	close(hyper_epoll.tty.fd);
@@ -249,12 +249,13 @@ static int hyper_pod_init(void *data)
 		goto fail;
 	}
 
-	if (hyper_send_type(arg->ctl_pipe[1], READY) < 0) {
+	fprintf(stdout, "hyper send pod inited event: normal\n");
+	if (hyper_eventfd_send(arg->pod_inited_efd, HYPER_EVENTFD_NORMAL) < 0) {
 		fprintf(stderr, "pod init send ready message failed\n");
 		goto fail;
 	}
 
-	close(arg->ctl_pipe[1]);
+	close(arg->pod_inited_efd);
 
 	for (;;)
 		pause(); /* infinite loop and handle SIGCHLD */
@@ -262,8 +263,9 @@ out:
 	_exit(-1);
 
 fail:
-	hyper_send_type(arg->ctl_pipe[1], ERROR);
-	close(arg->ctl_pipe[1]);
+	fprintf(stderr, "hyper send pod inited event: error\n");
+	hyper_eventfd_send(arg->pod_inited_efd, HYPER_EVENTFD_ERROR);
+	close(arg->pod_inited_efd);
 
 	goto out;
 }
@@ -293,15 +295,15 @@ static int hyper_setup_pod_init(struct hyper_pod *pod)
 
 	struct hyper_pod_arg arg = {
 		.pod		= NULL,
-		.ctl_pipe	= {-1, -1},
+		.pod_inited_efd	= -1,
 	};
 
-	uint32_t type;
 	void *stack;
 	int ret = -1, init_pid;
 
-	if (pipe2(arg.ctl_pipe, O_CLOEXEC) < 0) {
-		perror("create pipe between hyper init and pod init failed");
+	arg.pod_inited_efd = eventfd(0, EFD_CLOEXEC);
+	if (arg.pod_inited_efd < 0) {
+		perror("create eventfd between hyper init and pod init failed");
 		goto out;
 	}
 
@@ -322,26 +324,20 @@ static int hyper_setup_pod_init(struct hyper_pod *pod)
 	fprintf(stdout, "pod init pid %d\n", init_pid);
 
 	/* Wait for pod init start */
-	if (hyper_get_type(arg.ctl_pipe[0], &type) < 0) {
+	if (hyper_eventfd_recv(arg.pod_inited_efd) < 0) {
 		perror("get pod init ready message failed");
-		goto out;
-	}
-
-	if (type != READY) {
-		fprintf(stderr, "get incorrect message type %d, expect READY\n", type);
 		goto out;
 	}
 
 	pod->init_pid = init_pid;
 	ret = 0;
 out:
-	close(arg.ctl_pipe[1]);
-	close(arg.ctl_pipe[0]);
+	close(arg.pod_inited_efd);
 	return ret;
 }
 
 // enter the sanbox and pass to the child, shouldn't call from the init process
-int hyper_enter_sandbox(struct hyper_pod *pod, int pidpipe)
+int hyper_enter_sandbox(struct hyper_pod *pod, int pid_efd)
 {
 	int ret = -1, pidns = -1, utsns = -1, ipcns = -1;
 	char path[512];
@@ -379,12 +375,17 @@ int hyper_enter_sandbox(struct hyper_pod *pod, int pidpipe)
 	 * the pidns, see man 2 setns */
 	ret = fork();
 	if (ret < 0) {
+		if (pid_efd > 0) {
+			fprintf(stderr, "hyper send exec process pid: error\n");
+			hyper_eventfd_send(pid_efd, HYPER_EVENTFD_ERROR);
+		}
 		perror("fail to fork");
 		goto out;
 	} else if (ret > 0) {
 		fprintf(stdout, "create child process pid=%d in the sandbox\n", ret);
-		if (pidpipe > 0) {
-			hyper_send_type(pidpipe, ret);
+		if (pid_efd > 0) {
+			fprintf(stdout, "hyper send exec process pid: normal\n");
+			hyper_eventfd_send(pid_efd, ret);
 		}
 		_exit(0);
 	}

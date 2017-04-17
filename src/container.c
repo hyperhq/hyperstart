@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <sys/eventfd.h>
 
 #include "util.h"
 #include "hyper.h"
@@ -525,8 +526,8 @@ static int hyper_rescan_scsi(void)
 struct hyper_container_arg {
 	struct hyper_container	*c;
 	struct hyper_pod	*pod;
-	int			pipe[2];
-	int			pipens[2];
+	int			mntns_referenced_efd;
+	int			container_inited_efd;
 };
 
 static int hyper_setup_container_rootfs(void *data)
@@ -535,10 +536,9 @@ static int hyper_setup_container_rootfs(void *data)
 	struct hyper_container *container = arg->c;
 	char root[512], rootfs[512];
 	int setup_dns;
-	uint32_t type;
 
 	/* wait for ns-opened ready message */
-	if (hyper_get_type(arg->pipens[0], &type) < 0 || type != READY) {
+	if (hyper_eventfd_recv(arg->mntns_referenced_efd) < 0) {
 		fprintf(stderr, "wait for /proc/self/ns/mnt opened failed\n");
 		goto fail;
 	}
@@ -677,12 +677,14 @@ static int hyper_setup_container_rootfs(void *data)
 		goto fail;
 	}
 
-	hyper_send_type(arg->pipe[1], READY);
+	fprintf(stdout, "hyper send container inited event: normal\n");
+	hyper_eventfd_send(arg->container_inited_efd, HYPER_EVENTFD_NORMAL);
 	fflush(NULL);
 	_exit(0);
 
 fail:
-	hyper_send_type(arg->pipe[1], ERROR);
+	fprintf(stderr, "hyper send container inited event: error\n");
+	hyper_eventfd_send(arg->container_inited_efd, HYPER_EVENTFD_ERROR);
 	_exit(125);
 }
 
@@ -712,19 +714,20 @@ int hyper_setup_container(struct hyper_container *container, struct hyper_pod *p
 	struct hyper_container_arg arg = {
 		.c	= container,
 		.pod	= pod,
-		.pipe	= {-1, -1},
-		.pipens = {-1, -1},
+		.mntns_referenced_efd	= -1,
+		.container_inited_efd 	= -1,
 	};
 	int flags = CLONE_NEWNS | SIGCHLD;
 	char path[128];
 	void *stack;
-	uint32_t type;
 	int pid;
 
 	container->exec.pod = pod;
 
-	if (pipe2(arg.pipe, O_CLOEXEC) < 0 || pipe2(arg.pipens, O_CLOEXEC) < 0) {
-		perror("create pipe between pod init execcmd failed");
+	arg.mntns_referenced_efd = eventfd(0, EFD_CLOEXEC);
+	arg.container_inited_efd = eventfd(0, EFD_CLOEXEC);
+	if (arg.mntns_referenced_efd < 0 || arg.container_inited_efd < 0) {
+		perror("create eventfd between pod init execcmd failed");
 		goto fail;
 	}
 
@@ -757,26 +760,23 @@ int hyper_setup_container(struct hyper_container *container, struct hyper_pod *p
 		perror("open container mount ns failed");
 		goto fail;
 	}
-	hyper_send_type(arg.pipens[1], READY);
+	fprintf(stdout, "hyper send mntns referenced event: normal\n");
+	hyper_eventfd_send(arg.mntns_referenced_efd, HYPER_EVENTFD_NORMAL);
 
 	/* wait for ready message */
-	if (hyper_get_type(arg.pipe[0], &type) < 0 || type != READY) {
+	if (hyper_eventfd_recv(arg.container_inited_efd) < 0) {
 		fprintf(stderr, "wait for setup container rootfs failed\n");
 		goto fail;
 	}
 
-	close(arg.pipe[0]);
-	close(arg.pipe[1]);
-	close(arg.pipens[0]);
-	close(arg.pipens[1]);
+	close(arg.mntns_referenced_efd);
+	close(arg.container_inited_efd);
 	return 0;
 fail:
 	close(container->ns);
 	container->ns = -1;
-	close(arg.pipe[0]);
-	close(arg.pipe[1]);
-	close(arg.pipens[0]);
-	close(arg.pipens[1]);
+	close(arg.mntns_referenced_efd);
+	close(arg.container_inited_efd);
 	return -1;
 }
 
@@ -799,10 +799,11 @@ struct hyper_container *hyper_find_container(struct hyper_pod *pod, const char *
 
 static void hyper_cleanup_container_mounts(struct hyper_container *container, struct hyper_pod *pod)
 {
-	int pid, pipe[2] = {-1, -1};
+	int pid, efd = -1;
 
-	if (pipe2(pipe, O_CLOEXEC) < 0) {
-		perror("create pipe for unmount failed");
+	efd = eventfd(0, EFD_CLOEXEC);
+	if (efd < 0) {
+		perror("create eventfd for unmount failed");
 		return;
 	}
 
@@ -812,23 +813,25 @@ static void hyper_cleanup_container_mounts(struct hyper_container *container, st
 		goto out;
 	} else if (pid == 0) {
 		if (hyper_enter_sandbox(pod, -1) < 0) {
-			hyper_send_type(pipe[1], -1);
+			fprintf(stderr, "hyper send enter sandbox event: error\n");
+			hyper_eventfd_send(efd, HYPER_EVENTFD_ERROR);
 			_exit(-1);
 		}
 		if (setns(container->ns, CLONE_NEWNS) < 0) {
 			perror("fail to enter container ns");
-			hyper_send_type(pipe[1], -1);
+			fprintf(stderr, "hyper send enter container ns event: error\n");
+			hyper_eventfd_send(efd, HYPER_EVENTFD_ERROR);
 			_exit(-1);
 		}
 		hyper_unmount_all();
-		hyper_send_type(pipe[1], 0);
+		fprintf(stdout, "hyper send cleanup container mounts event: normal\n");
+		hyper_eventfd_send(efd, HYPER_EVENTFD_NORMAL);
 		_exit(0);
 	}
-	hyper_get_type(pipe[0], (uint32_t *)&pid);
+	hyper_eventfd_recv(efd);
 
 out:
-	close(pipe[0]);
-	close(pipe[1]);
+	close(efd);
 }
 
 void hyper_cleanup_container(struct hyper_container *c, struct hyper_pod *pod)
