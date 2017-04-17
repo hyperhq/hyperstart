@@ -12,7 +12,8 @@ env:
 
 before_install:
   - sudo apt-get update -qq
-  - sudo apt-get install -y -qq autoconf automake pkg-config libdevmapper-dev libsqlite3-dev libvirt-dev qemu libvirt-bin linux-headers-$(uname -r)
+  - sudo apt-get install -y -qq autoconf automake pkg-config libdevmapper-dev libsqlite3-dev libvirt-dev libvirt-bin linux-headers-$(uname -r) wget libaio1 libpixman-1-0
+  - wget https://s3-us-west-1.amazonaws.com/hypercontainer-download/qemu-hyper/qemu-hyper_2.4.1-1_amd64.deb && sudo dpkg -i --force-all qemu-hyper_2.4.1-1_amd64.deb
   - sudo mkdir -p /usr/include/linux
   - sudo cp /usr/src/linux-headers-$(uname -r)/include/uapi/linux/vm_sockets.h /usr/include/linux
   - cd `mktemp -d`
