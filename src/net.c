@@ -689,32 +689,29 @@ int hyper_write_dns_file(int fd, char *field, char **data, int num)
 		return 0;
 
 	size = strlen(field);
-	buf = malloc(size);
+	// 1 for last '\n'
+	buf = malloc(size + 1);
 	if (buf == NULL) {
 		fprintf(stderr, "fail to malloc buff for %s\n", field);
 		goto out;
 	}
 	memcpy(buf, field, size);
 	for (i = 0; i < num; i++) {
-		int new_len = strlen(data[i]) + 1 + 1;
-		char *format = " %s";
-		if (i + 1 == num) {
-			new_len += 1;
-			format = " %s\n";
-		}
-		buf = realloc(buf, size + new_len);
+		// 1 for space
+		int new_size = size + strlen(data[i]) + 1;
+		buf = realloc(buf, new_size);
 		if (buf == NULL) {
 			fprintf(stderr, "fail to realloc buff for %s\n", field);
 			goto out;
 		}
-		if (snprintf(buf + size, new_len, format, data[i]) < 0) {
-			fprintf(stderr, "sprintf search entry failed\n");
-			goto out;
-		}
+		buf[size]= ' ';
+		memcpy(buf + size + 1, data[i], strlen(data[i]));
 		fprintf(stdout, "%s: data: %s\n", field, buf);
-		size += new_len;
+		size = new_size;
 	}
 
+	buf[size] = '\n';
+	size += 1;
 	while (len < size) {
 		i = write(fd, buf + len, size - len);
 		if (i < 0) {
