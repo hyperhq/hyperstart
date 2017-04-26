@@ -574,7 +574,7 @@ static int hyper_setup_container_rootfs(void *data)
 
 	if (container->fstype) {
 		char dev[128];
-		char *options = NULL;
+		char options[128];
 		unsigned long flags = 0;
 
 		/* wait for rootfs ready message */
@@ -594,8 +594,11 @@ static int hyper_setup_container_rootfs(void *data)
 		if (container->readonly)
 			flags = MS_RDONLY;
 
+		memset(options, 0, sizeof(options));
+		if (strncmp(container->image, "pmem", 4) == 0)
+			strcat(options, ",dax");
 		if (!strncmp(container->fstype, "xfs", strlen("xfs")))
-			options = "nouuid";
+			strcat(options, ",nouuid");
 
 		if (mount(dev, root, container->fstype, flags, options) < 0) {
 			perror("mount device failed");
