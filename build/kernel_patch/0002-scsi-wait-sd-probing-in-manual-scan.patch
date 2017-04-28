@@ -1,0 +1,47 @@
+From c5c80f1874b68a64fb6e4d889db237ec63a37976 Mon Sep 17 00:00:00 2001
+From: Peng Tao <bergwolf@gmail.com>
+Date: Fri, 28 Apr 2017 15:07:53 +0800
+Subject: [PATCH] scsi: wait sd probing in manual scan
+
+sd probing uses async_schedule. If a user issues manual host scan,
+he/she may expect devices to be ready to use when host scan finishes.
+Wait sd probing in such case so that we don't leave user random device
+state when host scan returns.
+
+Signed-off-by: Peng Tao <bergwolf@gmail.com>
+---
+ drivers/scsi/scsi_scan.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/drivers/scsi/scsi_scan.c b/drivers/scsi/scsi_scan.c
+index 6f7128f..0208f40 100644
+--- a/drivers/scsi/scsi_scan.c
++++ b/drivers/scsi/scsi_scan.c
+@@ -1077,6 +1077,11 @@ static int scsi_probe_and_add_lun(struct scsi_target *starget,
+ 			SCSI_LOG_SCAN_BUS(3, sdev_printk(KERN_INFO, sdev,
+ 				"scsi scan: device exists on %s\n",
+ 				dev_name(&sdev->sdev_gendev)));
++			/* sd probing uses async_schedule.  Wait until it finishes if this
++			 * is a user requested rescan.
++			 */
++			if (rescan == SCSI_SCAN_MANUAL && scsi_is_sdev_device(&sdev->sdev_gendev))
++				async_synchronize_full_domain(&scsi_sd_probe_domain);
+ 			if (sdevp)
+ 				*sdevp = sdev;
+ 			else
+@@ -1176,6 +1181,12 @@ static int scsi_probe_and_add_lun(struct scsi_target *starget,
+ 		}
+ 	}
+ 
++	/* sd probing uses async_schedule.  Wait until it finishes if this
++	 * is a user requested rescan.
++	 */
++	if (rescan == SCSI_SCAN_MANUAL && scsi_is_sdev_device(&sdev->sdev_gendev))
++		async_synchronize_full_domain(&scsi_sd_probe_domain);
++
+  out_free_result:
+ 	kfree(result);
+  out_free_sdev:
+-- 
+2.7.4
+
