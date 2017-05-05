@@ -102,15 +102,22 @@ int hyper_find_sd(char *addr, char **dev)
 	struct dirent **list;
 	struct dirent *dir;
 	char path[512];
-	int i, num;
+	int i, num, retry = 5;
 
 	sprintf(path, "/sys/class/scsi_disk/0:0:%s/device/block/", addr);
 	fprintf(stdout, "orig dev %s, scan path %s\n", *dev, path);
 
-	num = scandir(path, &list, NULL, NULL);
-	if (num < 0) {
-		perror("scan path failed");
-		return -1;
+	for (i = 0;; i++) {
+		num = scandir(path, &list, NULL, NULL);
+		if (num < 0) {
+			if (errno != ENOENT || i >= retry) {
+				perror("scan path failed");
+				return -1;
+			}
+			usleep(20000);
+			continue;
+		}
+		break;
 	}
 
 	for (i = 0; i < num; i++) {
@@ -912,4 +919,22 @@ int hyper_eventfd_send(int fd, int64_t type)
 	}
 
 	return 0;
+}
+
+/* block device might not be present when we call mount. Sleep a bit in such case */
+int hyper_mount_blockdev(const char *dev, const char *root, const char *fstype, const char *options)
+{
+	int i, retry = 5;
+
+	for (i = 0; i < retry; i++) {
+		if (mount(dev, root, fstype, 0, options) < 0) {
+			if (errno != ENOENT)
+				return -1;
+			usleep(20000);
+			continue;
+		}
+		return 0;
+	}
+
+	return -1;
 }
