@@ -134,7 +134,7 @@ static int container_setup_volume(struct hyper_container *container)
 			if (!strcmp(vol->fstype, "xfs"))
 				options = "nouuid";
 
-			if (mount(dev, path, vol->fstype, 0, options) < 0) {
+			if (hyper_mount_blockdev(dev, path, vol->fstype, options) < 0) {
 				perror("mount volume device failed");
 				return -1;
 			}
@@ -588,7 +588,7 @@ static int hyper_setup_container_rootfs(void *data)
 		if (!strncmp(container->fstype, "xfs", strlen("xfs")))
 			options = "nouuid";
 
-		if (mount(dev, root, container->fstype, 0, options) < 0) {
+		if (hyper_mount_blockdev(dev, root, container->fstype, options) < 0) {
 			perror("mount device failed");
 			goto fail;
 		}
