@@ -1075,7 +1075,7 @@ static int hyper_parse_string_array(char *json, jsmntok_t *toks, char *field,
 	dbg_pr(stdout, "%s count %d\n", field, *num);
 
 	values = calloc(*num, sizeof(*values));
-	if (data == NULL) {
+	if (values == NULL) {
 		dbg_pr(stdout, "alloc memory for %s failed\n", field);
 		return -1;
 	}

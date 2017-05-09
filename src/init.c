@@ -132,7 +132,7 @@ static void hyper_term_all(struct hyper_pod *pod)
 	int pid;
 	DIR *dp;
 	struct dirent *de;
-	pid_t *pids = NULL;
+	pid_t *pidsnew, *pids = NULL;
 	struct hyper_exec *e;
 	pid_t hyperstart_pid;
 
@@ -152,9 +152,13 @@ static void hyper_term_all(struct hyper_pod *pod)
 		if (pid == hyperstart_pid)
 			continue;
 		if (index <= npids) {
-			pids = realloc(pids, npids + 16384);
-			if (pids == NULL)
+			pidsnew = realloc(pids, npids + 16384);
+			if (pidsnew == NULL) {
+				free(pids);
+				closedir(dp);
 				return;
+			}
+			pids = pidsnew;
 			npids += 16384;
 		}
 
@@ -546,12 +550,15 @@ static void hyper_print_uptime(void)
 {
 	char buf[128];
 	int fd = open("/proc/uptime", O_RDONLY);
+	int n;
 
 	if (fd < 0)
 		return;
-	memset(buf, 0, sizeof(buf));
-	if (read(fd, buf, sizeof(buf)))
+	n = read(fd, buf, sizeof(buf)-1);
+	if (n > 0) {
+		buf[n] = 0;
 		fprintf(stdout, "uptime %s\n", buf);
+	}
 
 	close(fd);
 }

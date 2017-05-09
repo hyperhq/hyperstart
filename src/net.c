@@ -683,7 +683,7 @@ out:
 int hyper_write_dns_file(int fd, char *field, char **data, int num)
 {
 	int i = 0, len = 0, ret = -1, size;
-	char *buf = NULL;
+	char *newbuf, *buf = NULL;
 
 	if (num == 0)
 		return 0;
@@ -699,11 +699,12 @@ int hyper_write_dns_file(int fd, char *field, char **data, int num)
 	for (i = 0; i < num; i++) {
 		// 1 for space
 		int new_size = size + strlen(data[i]) + 1;
-		buf = realloc(buf, new_size);
-		if (buf == NULL) {
+		newbuf = realloc(buf, new_size + 1);
+		if (newbuf == NULL) {
 			fprintf(stderr, "fail to realloc buff for %s\n", field);
 			goto out;
 		}
+		buf = newbuf;
 		buf[size]= ' ';
 		memcpy(buf + size + 1, data[i], strlen(data[i]));
 		fprintf(stdout, "%s: data: %s\n", field, buf);
