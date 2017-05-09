@@ -775,9 +775,6 @@ void hyper_unmount_all(void)
 {
 	FILE *mtab;
 	struct mntent *mnt;
-	char *mntlist[128];
-	int i, n = 0;
-	char *filesys;
 
 	mtab = setmntent("/proc/mounts", "r");
 	if (mtab == NULL) {
@@ -785,7 +782,7 @@ void hyper_unmount_all(void)
 		return;
 	}
 
-	while (n < 128) {
+	while (true) {
 		mnt = getmntent(mtab);
 		if (mnt == NULL)
 			break;
@@ -799,22 +796,20 @@ void hyper_unmount_all(void)
 		    strcmp(mnt->mnt_type, "devpts") == 0)
 			continue;
 
-		mntlist[n++] = strdup(mnt->mnt_dir);
+		fprintf(stdout, "umount %s\n", mnt->mnt_dir);
+		/*
+		 * Umounting root w/o MNT_DETACH will make it readonly.
+		 * While it is ok for block devices, we do want to reuse
+		 * the same 9p share mount when the container is restarted.
+		 *
+		 * Just do MNT_DETACH umount because we call sync() afterwards.
+		 */
+		if (umount2(mnt->mnt_dir, MNT_DETACH) < 0)
+			fprintf(stderr, ("umount %s: %s failed\n"),
+				mnt->mnt_dir, strerror(errno));
 	}
 
 	endmntent(mtab);
-
-	for (i = n - 1; i >= 0; i--) {
-		filesys = mntlist[i];
-		fprintf(stdout, "umount %s\n", filesys);
-		if ((umount(mntlist[i]) < 0) && (umount2(mntlist[i], MNT_DETACH) < 0)) {
-			fprintf(stdout, ("umount %s: %s failed\n"),
-				filesys, strerror(errno));
-		}
-		free(filesys);
-		mntlist[i] = NULL;
-	}
-
 	sync();
 }
 
