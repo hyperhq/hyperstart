@@ -550,12 +550,15 @@ static void hyper_print_uptime(void)
 {
 	char buf[128];
 	int fd = open("/proc/uptime", O_RDONLY);
+	int n;
 
 	if (fd < 0)
 		return;
-	memset(buf, 0, sizeof(buf));
-	if (read(fd, buf, sizeof(buf)))
+	n = read(fd, buf, sizeof(buf)-1);
+	if (n > 0) {
+		buf[n] = 0;
 		fprintf(stdout, "uptime %s\n", buf);
+	}
 
 	close(fd);
 }
