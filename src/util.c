@@ -676,8 +676,12 @@ int hyper_open_channel(char *channel, int mode)
 		fd = open(path, O_RDONLY);
 
 		memset(name, 0, sizeof(name));
-		if (fd < 0 || read(fd, name, sizeof(name)) < 0)
+		if (fd < 0)
 			continue;
+		if (read(fd, name, sizeof(name)) < 0) {
+			close(fd);
+			continue;
+		}
 
 		close(fd);
 		fd = -1;

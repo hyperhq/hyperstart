@@ -132,7 +132,7 @@ static void hyper_term_all(struct hyper_pod *pod)
 	int pid;
 	DIR *dp;
 	struct dirent *de;
-	pid_t *pids = NULL;
+	pid_t *pidsnew, *pids = NULL;
 	struct hyper_exec *e;
 	pid_t hyperstart_pid;
 
@@ -152,9 +152,13 @@ static void hyper_term_all(struct hyper_pod *pod)
 		if (pid == hyperstart_pid)
 			continue;
 		if (index <= npids) {
-			pids = realloc(pids, npids + 16384);
-			if (pids == NULL)
+			pidsnew = realloc(pids, npids + 16384);
+			if (pidsnew == NULL) {
+				free(pids);
+				closedir(dp);
 				return;
+			}
+			pids = pidsnew;
 			npids += 16384;
 		}
 
