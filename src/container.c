@@ -708,6 +708,17 @@ static int hyper_setup_pty(struct hyper_container *c)
 	return 0;
 }
 
+static void hyper_cleanup_pty(struct hyper_container *c)
+{
+	char root[512];
+
+	sprintf(root, "/tmp/hyper/%s/devpts/", c->id);
+
+	if (umount(root) < 0 && umount2(root, MNT_DETACH) < 0) {
+		perror("umount devpts failed");
+	}
+}
+
 int hyper_setup_container(struct hyper_container *container, struct hyper_pod *pod)
 {
 	int stacksize = getpagesize() * 42;
@@ -834,10 +845,14 @@ out:
 	close(efd);
 }
 
-void hyper_cleanup_container(struct hyper_container *c, struct hyper_pod *pod)
+void hyper_cleanup_container(struct hyper_container *c, struct hyper_pod *pod, bool sync_only)
 {
-	hyper_cleanup_container_mounts(c, pod);
+	if (sync_only)
+		sync();
+	else
+		hyper_cleanup_container_mounts(c, pod);
 	close(c->ns);
+	hyper_cleanup_pty(c);
 	hyper_cleanup_container_portmapping(c, pod);
 	hyper_free_container(c);
 }

@@ -643,7 +643,7 @@ static int hyper_new_container(struct hyper_pod *pod, char *json, int length)
 
 	if (hyper_has_container(pod, c->id)) {
 		fprintf(stderr, "container id conflicts");
-		hyper_cleanup_container(c, pod);
+		hyper_cleanup_container(c, pod, false);
 		return -1;
 	}
 
@@ -654,7 +654,7 @@ static int hyper_new_container(struct hyper_pod *pod, char *json, int length)
 
 	if (ret < 0) {
 		//TODO full grace cleanup
-		hyper_cleanup_container(c, pod);
+		hyper_cleanup_container(c, pod, false);
 	} else {
 		pod->remains++;
 	}
@@ -733,7 +733,7 @@ static int hyper_remove_container(struct hyper_pod *pod, char *json, int length)
 		goto out;
 	}
 
-	hyper_cleanup_container(c, pod);
+	hyper_cleanup_container(c, pod, true);
 
 	ret = 0;
 out:
