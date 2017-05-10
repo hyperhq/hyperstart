@@ -746,7 +746,7 @@ static int hyper_release_exec(struct hyper_exec *exec)
 			/* shutdown vm manually, hyper doesn't care the pod finished codes */
 			hyper_pod_destroyed(exec->pod, 0);
 		}
-		hyper_cleanup_container(container_of(exec, struct hyper_container, exec), exec->pod);
+		hyper_cleanup_container(container_of(exec, struct hyper_container, exec), exec->pod, true);
 		return 0;
 	}
 
