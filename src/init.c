@@ -147,7 +147,7 @@ static void hyper_term_all(struct hyper_pod *pod)
 	int pid;
 	DIR *dp;
 	struct dirent *de;
-	pid_t *pids = NULL;
+	pid_t *newpids, *pids = NULL;
 	struct hyper_exec *e;
 
 	dp = opendir("/proc");
@@ -161,9 +161,11 @@ static void hyper_term_all(struct hyper_pod *pod)
 		if (pid == 1)
 			continue;
 		if (index <= npids) {
-			pids = realloc(pids, npids + 16384);
-			if (pids == NULL)
-				return;
+			newpids = realloc(pids, npids + 16384);
+			if (newpids == NULL) {
+				goto out;
+			}
+			pids = newpids;
 			npids += 16384;
 		}
 
@@ -176,7 +178,7 @@ static void hyper_term_all(struct hyper_pod *pod)
 		fprintf(stdout, "kill process %d\n", pids[index]);
 		kill(pids[index], SIGTERM);
 	}
-
+out:
 	free(pids);
 	closedir(dp);
 
