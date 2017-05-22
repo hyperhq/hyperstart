@@ -527,18 +527,19 @@ int hyper_open_channel(char *channel, int mode)
 			continue;
 		}
 
-		fd = open(path, O_RDONLY);
-
 		memset(name, 0, sizeof(name));
-		if (fd < 0 || read(fd, name, sizeof(name)) < 0)
+		fd = open(path, O_RDONLY);
+		if (fd < 0)
 			continue;
-
+		if (read(fd, name, sizeof(name)) < 0) {
+			close(fd);
+			continue;
+		}
 		close(fd);
 		fd = -1;
 
-		if (strncmp(name, channel, strlen(channel))) {
+		if (strncmp(name, channel, strlen(channel)))
 			continue;
-		}
 
 		if (snprintf(path, sizeof(path), "/dev/%s", dir->d_name) < 0) {
 			fprintf(stderr, "get channel device %s path failed\n", dir->d_name);

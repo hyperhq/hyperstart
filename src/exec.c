@@ -380,8 +380,13 @@ static int hyper_install_process_stdio(struct hyper_exec *e, struct stdio_config
 
 		sprintf(ptmx, "/dev/pts/%d", e->ptyno);
 		ptyslave = open(ptmx, O_RDWR | O_CLOEXEC);
-		if (ptyslave < 0 || ioctl(ptyslave, TIOCSCTTY, NULL) < 0) {
+		if (ptyslave < 0) {
+			perror("open pty device for execcmd failed");
+			goto out;
+		}
+		if (ioctl(ptyslave, TIOCSCTTY, NULL) < 0) {
 			perror("ioctl pty device for execcmd failed");
+			close(ptyslave);
 			goto out;
 		}
 		io->stdinfd = ptyslave;
