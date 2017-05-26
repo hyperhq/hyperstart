@@ -32,6 +32,7 @@
 #include "container.h"
 #include "syscall.h"
 #include "vsock.h"
+#include "netlink.h"
 
 static struct hyper_pod global_pod = {
 	.containers	=	LIST_HEAD_INIT(global_pod.containers),
@@ -1442,6 +1443,11 @@ static int hyper_loop(void)
 			return -1;
 		}
 	}
+
+	if (hyper_setup_netlink_listener(&hyper_epoll.dev) < 0 ||
+	    hyper_add_event(hyper_epoll.efd, &hyper_epoll.dev, EPOLLIN))
+		return -1;
+	pod->ueventfd = hyper_epoll.dev.fd;
 
 	events = calloc(MAXEVENTS, sizeof(*events));
 

@@ -102,22 +102,15 @@ int hyper_find_sd(char *addr, char **dev)
 	struct dirent **list;
 	struct dirent *dir;
 	char path[512];
-	int i, num, retry = 5;
+	int i, num;
 
 	sprintf(path, "/sys/class/scsi_disk/0:0:%s/device/block/", addr);
 	fprintf(stdout, "orig dev %s, scan path %s\n", *dev, path);
 
-	for (i = 0;; i++) {
-		num = scandir(path, &list, NULL, NULL);
-		if (num < 0) {
-			if (errno != ENOENT || i >= retry) {
-				perror("scan path failed");
-				return -1;
-			}
-			usleep(20000);
-			continue;
-		}
-		break;
+	num = scandir(path, &list, NULL, NULL);
+	if (num < 0) {
+		perror("scan path failed");
+		return -1;
 	}
 
 	for (i = 0; i < num; i++) {
