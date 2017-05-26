@@ -1192,10 +1192,10 @@ static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
 		hyper_cmd_online_cpu_mem();
 		break;
 	case SETUPINTERFACE:
-		ret = hyper_cmd_setup_interface((char *)buf->data + 8, len - 8);
+		ret = hyper_cmd_setup_interface((char *)buf->data + 8, len - 8, pod);
 		break;
 	case SETUPROUTE:
-		ret = hyper_cmd_setup_route((char *)buf->data + 8, len - 8);
+		ret = hyper_cmd_setup_route((char *)buf->data + 8, len - 8, pod);
 		break;
 	case SIGNALPROCESS:
 		ret = hyper_signal_process(pod, (char *)buf->data + 8, len - 8);

@@ -13,6 +13,7 @@
 #include "hyper.h"
 #include "util.h"
 #include "parse.h"
+#include "netlink.h"
 #include "../config.h"
 
 void hyper_set_be32(uint8_t *buf, uint32_t val)
@@ -131,7 +132,7 @@ static int addattr_l(struct nlmsghdr *n, int maxlen, int type, void *data, int a
 	return 0;
 }
 
-static int hyper_get_ifindex(char *nic)
+static int hyper_get_ifindex(char *nic, struct hyper_pod *pod)
 {
 	int fd, ifindex = -1;
 	char path[512], buf[8];
@@ -139,8 +140,11 @@ static int hyper_get_ifindex(char *nic)
 	sprintf(path, "/sys/class/net/%s/ifindex", nic);
 	fprintf(stdout, "net device sys path is %s\n", path);
 
-	while (access(path, R_OK) < 0) {
-		sched_yield();
+	if (access(path, R_OK) < 0) {
+		sprintf(path, "/net/%s/", nic);
+		if (hyper_netlink_wait_dev(pod->ueventfd, path) < 0)
+			return -1;
+		sprintf(path, "/sys/class/net/%s/ifindex", nic);
 	}
 
 	fd = open(path, O_RDONLY);
@@ -291,7 +295,8 @@ get_addr:
 }
 
 static int hyper_setup_route(struct rtnl_handle *rth,
-			   struct hyper_route *rt)
+			     struct hyper_route *rt,
+			     struct hyper_pod *pod)
 {
 	uint32_t data;
 	struct {
@@ -330,7 +335,7 @@ static int hyper_setup_route(struct rtnl_handle *rth,
 	}
 
 	if (rt->device) {
-		int ifindex = hyper_get_ifindex(rt->device);
+		int ifindex = hyper_get_ifindex(rt->device, pod);
 		if (ifindex < 0) {
 			fprintf(stderr, "failed to get the ifindix of %s\n", rt->device);
 			return -1;
@@ -444,7 +449,8 @@ static int hyper_set_interface_mtu(struct rtnl_handle *rth,
 }
 
 static int hyper_setup_interface(struct rtnl_handle *rth,
-			       struct hyper_interface *iface)
+			         struct hyper_interface *iface,
+				 struct hyper_pod *pod)
 {
 	uint8_t data[4];
 	unsigned mask;
@@ -467,7 +473,7 @@ static int hyper_setup_interface(struct rtnl_handle *rth,
 	req.n.nlmsg_type = RTM_NEWADDR;
 	req.ifa.ifa_family = AF_INET;
 
-	ifindex = hyper_get_ifindex(iface->device);
+	ifindex = hyper_get_ifindex(iface->device, pod);
 	if (ifindex < 0) {
 		fprintf(stderr, "failed to get the ifindix of %s\n", iface->device);
 		return -1;
@@ -557,7 +563,7 @@ int hyper_setup_network(struct hyper_pod *pod)
 	for (i = 0; i < pod->i_num; i++) {
 		iface = &pod->iface[i];
 
-		ret = hyper_setup_interface(&rth, iface);
+		ret = hyper_setup_interface(&rth, iface, pod);
 		if (ret < 0) {
 			fprintf(stderr, "link up device %s failed\n", iface->device);
 			goto out;
@@ -573,7 +579,7 @@ int hyper_setup_network(struct hyper_pod *pod)
 	for (i = 0; i < pod->r_num; i++) {
 		rt = &pod->rt[i];
 
-		ret = hyper_setup_route(&rth, rt);
+		ret = hyper_setup_route(&rth, rt, pod);
 		if (ret < 0) {
 			fprintf(stderr, "setup route failed\n");
 			goto out;
@@ -585,7 +591,7 @@ out:
 	return ret;
 }
 
-int hyper_cmd_setup_interface(char *json, int length)
+int hyper_cmd_setup_interface(char *json, int length, struct hyper_pod *pod)
 {
 	int ret = -1;
 	struct hyper_interface *iface;
@@ -603,7 +609,7 @@ int hyper_cmd_setup_interface(char *json, int length)
 		fprintf(stderr, "parse interface failed\n");
 		goto out;
 	}
-	ret = hyper_setup_interface(&rth, iface);
+	ret = hyper_setup_interface(&rth, iface, pod);
 	if (ret < 0) {
 		fprintf(stderr, "link up device %s failed\n", iface->device);
 		goto out1;
@@ -617,7 +623,8 @@ out:
 	return ret;
 }
 
-int hyper_cmd_setup_route(char *json, int length) {
+int hyper_cmd_setup_route(char *json, int length, struct hyper_pod *pod)
+{
 	struct hyper_route *rts = NULL;
 	int i, ret = -1;
 	uint32_t r_num;
@@ -632,7 +639,7 @@ int hyper_cmd_setup_route(char *json, int length) {
 	}
 
 	for (i = 0; i < r_num; i++) {
-		ret = hyper_setup_route(&rth, &rts[i]);
+		ret = hyper_setup_route(&rth, &rts[i], pod);
 		if (ret < 0) {
 			fprintf(stderr, "setup route failed\n");
 			goto out;
