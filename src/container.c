@@ -20,6 +20,7 @@
 #include "hyper.h"
 #include "parse.h"
 #include "syscall.h"
+#include "netlink.h"
 
 static int container_populate_volume(char *src, char *dest)
 {
@@ -134,7 +135,7 @@ static int container_setup_volume(struct hyper_container *container)
 			if (!strcmp(vol->fstype, "xfs"))
 				options = "nouuid";
 
-			if (hyper_mount_blockdev(dev, path, vol->fstype, options) < 0) {
+			if (mount(dev, path, vol->fstype, 0, options) < 0) {
 				perror("mount volume device failed");
 				return -1;
 			}
@@ -528,6 +529,7 @@ struct hyper_container_arg {
 	struct hyper_pod	*pod;
 	int			mntns_referenced_efd;
 	int			container_inited_efd;
+	int			container_root_dev_efd;
 };
 
 static int hyper_setup_container_rootfs(void *data)
@@ -551,11 +553,6 @@ static int hyper_setup_container_rootfs(void *data)
 	/* To create files/directories accessible for all users. */
 	umask(0);
 
-	if (container->fstype && hyper_rescan_scsi() < 0) {
-		fprintf(stdout, "rescan scsi failed\n");
-		goto fail;
-	}
-
 	if (mount("", "/", NULL, MS_SLAVE|MS_REC, NULL) < 0) {
 		perror("mount SLAVE failed");
 		goto fail;
@@ -576,19 +573,24 @@ static int hyper_setup_container_rootfs(void *data)
 		char dev[128];
 		char *options = NULL;
 
+		/* wait for rootfs ready message */
+		if (hyper_eventfd_recv(arg->container_root_dev_efd) < 0) {
+			fprintf(stderr, "wait for /proc/self/ns/mnt opened failed\n");
+			goto fail;
+		}
+
 		if (container->scsiaddr) {
 			free(container->image);
 			container->image = NULL;
 			hyper_find_sd(container->scsiaddr, &container->image);
 		}
-
 		sprintf(dev, "/dev/%s", container->image);
 		fprintf(stdout, "device %s\n", dev);
 
 		if (!strncmp(container->fstype, "xfs", strlen("xfs")))
 			options = "nouuid";
 
-		if (hyper_mount_blockdev(dev, root, container->fstype, options) < 0) {
+		if (mount(dev, root, container->fstype, 0, options) < 0) {
 			perror("mount device failed");
 			goto fail;
 		}
@@ -717,6 +719,36 @@ static void hyper_cleanup_pty(struct hyper_container *c)
 		perror("clean up container pty failed");
 }
 
+int container_prepare_rootfs_dev(struct hyper_container *container, struct hyper_pod *pod)
+{
+	char dev[512];
+
+	if (container->fstype == NULL)
+		return 0;
+
+	if (hyper_rescan_scsi() < 0) {
+		fprintf(stderr, "failed to issue scsi rescan\n");
+		return -1;
+	}
+
+	if (container->scsiaddr) {
+		free(container->image);
+		container->image = NULL;
+		hyper_find_sd(container->scsiaddr, &container->image);
+	}
+
+	if (container->image) {
+		sprintf(dev, "/dev/%s", container->image);
+		if (access(dev, R_OK) == 0)
+			return 0;
+		sprintf(dev, "/block/%s", container->image);
+	} else {
+		sprintf(dev, "/0:0:%s/block/", container->scsiaddr);
+	}
+
+	return hyper_netlink_wait_dev(pod->ueventfd, dev);
+}
+
 int hyper_setup_container(struct hyper_container *container, struct hyper_pod *pod)
 {
 	int stacksize = getpagesize() * 42;
@@ -725,6 +757,7 @@ int hyper_setup_container(struct hyper_container *container, struct hyper_pod *p
 		.pod	= pod,
 		.mntns_referenced_efd	= -1,
 		.container_inited_efd 	= -1,
+		.container_root_dev_efd = -1,
 	};
 	int flags = CLONE_NEWNS | SIGCHLD;
 	char path[128];
@@ -735,7 +768,9 @@ int hyper_setup_container(struct hyper_container *container, struct hyper_pod *p
 
 	arg.mntns_referenced_efd = eventfd(0, EFD_CLOEXEC);
 	arg.container_inited_efd = eventfd(0, EFD_CLOEXEC);
-	if (arg.mntns_referenced_efd < 0 || arg.container_inited_efd < 0) {
+	arg.container_root_dev_efd = eventfd(0, EFD_CLOEXEC);
+	if (arg.mntns_referenced_efd < 0 || arg.container_inited_efd < 0 ||
+	    arg.container_root_dev_efd < 0) {
 		perror("create eventfd between pod init execcmd failed");
 		goto fail;
 	}
@@ -772,6 +807,13 @@ int hyper_setup_container(struct hyper_container *container, struct hyper_pod *p
 	fprintf(stdout, "hyper send mntns referenced event: normal\n");
 	hyper_eventfd_send(arg.mntns_referenced_efd, HYPER_EVENTFD_NORMAL);
 
+	if (container_prepare_rootfs_dev(container, pod) < 0) {
+		fprintf(stderr, "fail to prepare container rootfs dev\n");
+		goto fail;
+	}
+	fprintf(stdout, "hyper send root dev ready event: normal\n");
+	hyper_eventfd_send(arg.container_root_dev_efd, HYPER_EVENTFD_NORMAL);
+
 	/* wait for ready message */
 	if (hyper_eventfd_recv(arg.container_inited_efd) < 0) {
 		fprintf(stderr, "wait for setup container rootfs failed\n");
@@ -780,12 +822,14 @@ int hyper_setup_container(struct hyper_container *container, struct hyper_pod *p
 
 	close(arg.mntns_referenced_efd);
 	close(arg.container_inited_efd);
+	close(arg.container_root_dev_efd);
 	return 0;
 fail:
 	close(container->ns);
 	container->ns = -1;
 	close(arg.mntns_referenced_efd);
 	close(arg.container_inited_efd);
+	close(arg.container_root_dev_efd);
 	return -1;
 }
 

@@ -39,6 +39,7 @@ struct hyper_pod {
 	uint32_t		remains;
 	int			req_destroy;
 	int			efd;
+	int			ueventfd;
 };
 
 struct portmapping_white_list {
@@ -65,6 +66,7 @@ struct hyper_epoll {
 	struct hyper_event	tty;
 	struct hyper_event	vsock_ctl_listener;
 	struct hyper_event	vsock_msg_listener;
+	struct hyper_event	dev;
 };
 
 static inline int hyper_symlink(char *oldpath, char *newpath)
