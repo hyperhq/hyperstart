@@ -627,7 +627,7 @@ static int hyper_start_pod(struct hyper_pod *pod, char *json, int length)
 static int hyper_new_container(struct hyper_pod *pod, char *json, int length)
 {
 	int ret;
-	struct hyper_container *c;
+	struct hyper_container *c, *ec;
 
 	fprintf(stdout, "call hyper_new_container, json %s, len %d\n", json, length);
 
@@ -642,13 +642,26 @@ static int hyper_new_container(struct hyper_pod *pod, char *json, int length)
 		return -1;
 	}
 
-	if (hyper_has_container(pod, c->id)) {
-		fprintf(stderr, "container id conflicts");
-		hyper_cleanup_container(c, pod);
-		return -1;
+	ec = hyper_find_container(pod, c->id);
+	if (ec != NULL) {
+		if (ec->exec.ref > 0) {
+			//container still running
+			fprintf(stderr, "container id conflicts\n");
+			hyper_free_container(c);
+			return -1;
+		}
+		//reset exec status
+		ec->exec.seq = c->exec.seq;
+		ec->exec.errseq = c->exec.errseq;
+		ec->exec.exit = 0;
+		ec->exec.code = 0;
+		ec->exec.close_stdin_request = 0;
+		hyper_free_container(c);
+		c = ec;
+	} else {
+		list_add_tail(&c->list, &pod->containers);
 	}
 
-	list_add_tail(&c->list, &pod->containers);
 	ret = hyper_setup_container(c, pod);
 	if (ret >= 0)
 		ret = hyper_run_process(&c->exec);
@@ -798,7 +811,7 @@ static int hyper_cmd_rw_file(struct hyper_pod *pod, char *json, int length, uint
 	fprintf(stdout, "%s: %s\n", __func__, rw == WRITEFILE ? "write" : "read");
 
 	if (rw == WRITEFILE) {
-		// TODO: send the data via hyperstream rather than append it at the end of the command	
+		// TODO: send the data via hyperstream rather than append it at the end of the command
 		data = strchr(json, '}');
 		if (data == NULL) {
 			goto out;
