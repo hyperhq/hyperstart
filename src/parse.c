@@ -716,6 +716,12 @@ static int hyper_parse_container(struct hyper_pod *pod, struct hyper_container *
 				dbg_pr(stdout, "need to initialize container\n");
 			}
 			i++;
+		} else if (json_token_streq(json, t, "readOnly") && t->size == 1) {
+			if (!json_token_streq(json, &toks[++i], "false")) {
+				c->readonly = 1;
+				dbg_pr(stdout, "container rootfs is readonly\n");
+			}
+			i++;
 		} else if (json_token_streq(json, t, "ports") && t->size == 1) {
 			next = container_parse_ports(c, json, &toks[++i]);
 			if (next < 0)

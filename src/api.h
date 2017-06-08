@@ -2,7 +2,7 @@
 #define _HYPERSTART_API_H_
 
 // when APIVERSION < 1000000, the version MUST be exactly matched on both sides
-#define APIVERSION 4243
+#define APIVERSION 4244
 
 // control command id
 enum {
