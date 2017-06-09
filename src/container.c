@@ -287,10 +287,13 @@ static int container_setup_mount(struct hyper_container *container)
 	char src[512];
 
 	// current dir is container rootfs, the operations on "./PATH" are the operations on container's "/PATH"
-	hyper_mkdir("./proc", 0755);
-	hyper_mkdir("./sys", 0755);
-	hyper_mkdir("./dev", 0755);
-	hyper_mkdir("./lib/modules", 0755);
+	if (!container->readonly) {
+		hyper_mkdir("./proc", 0755);
+		hyper_mkdir("./sys", 0755);
+		hyper_mkdir("./dev", 0755);
+		hyper_mkdir("./lib/modules", 0755);
+
+	}
 
 	if (mount("proc", "./proc", "proc", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
 	    mount("sysfs", "./sys", "sysfs", MS_NOSUID| MS_NODEV| MS_NOEXEC, NULL) < 0 ||
@@ -377,7 +380,7 @@ static int container_recreate_symlink(char *oldpath, char *newpath)
 static int container_setup_init_layer(struct hyper_container *container,
 				      int setup_dns)
 {
-	if (!container->initialize)
+	if (!container->initialize || container->readonly)
 		return 0;
 
 	hyper_mkdir("./etc/", 0755);
@@ -471,7 +474,7 @@ static int container_setup_hostname()
 
 static int container_setup_workdir(struct hyper_container *container)
 {
-	if (container->initialize) {
+	if (container->initialize && !container->readonly) {
 		// create workdir
 		return hyper_mkdir(container->exec.workdir, 0755);
 	}
@@ -572,6 +575,7 @@ static int hyper_setup_container_rootfs(void *data)
 	if (container->fstype) {
 		char dev[128];
 		char *options = NULL;
+		unsigned long flags = 0;
 
 		/* wait for rootfs ready message */
 		if (hyper_eventfd_recv(arg->container_root_dev_efd) < 0) {
@@ -587,10 +591,13 @@ static int hyper_setup_container_rootfs(void *data)
 		sprintf(dev, "/dev/%s", container->image);
 		fprintf(stdout, "device %s\n", dev);
 
+		if (container->readonly)
+			flags = MS_RDONLY;
+
 		if (!strncmp(container->fstype, "xfs", strlen("xfs")))
 			options = "nouuid";
 
-		if (mount(dev, root, container->fstype, 0, options) < 0) {
+		if (mount(dev, root, container->fstype, flags, options) < 0) {
 			perror("mount device failed");
 			goto fail;
 		}
@@ -602,6 +609,10 @@ static int hyper_setup_container_rootfs(void *data)
 
 		if (mount(path, root, NULL, MS_BIND, NULL) < 0) {
 			perror("mount src dir failed");
+			goto fail;
+		}
+		if (container->readonly && mount(NULL, root, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
+			perror("mount src dir readonly failed");
 			goto fail;
 		}
 	}

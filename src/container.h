@@ -51,6 +51,7 @@ struct hyper_container {
 	int			sys_num;
 	int			ports_num;
 	int			initialize;
+	int			readonly;
 };
 
 struct hyper_pod;
