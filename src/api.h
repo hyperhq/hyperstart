@@ -64,4 +64,8 @@ enum {
 #define HYPER_VSOCK_CTL_PORT		2718
 #define HYPER_VSOCK_MSG_PORT		2719
 
+/*
+ * use serial as channel passed through kernel cmdline
+ */
+#define HYPER_USE_SERAIL	"hyper_use_serial"
 #endif /* _HYPERSTART_API_H_ */

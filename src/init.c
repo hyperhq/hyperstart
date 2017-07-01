@@ -924,13 +924,12 @@ static int hyper_ctl_send_ready(int fd)
 	return 0;
 }
 
-static int hyper_setup_ctl_channel(char *name)
+static int hyper_setup_ctl_channel(char *name, bool is_serial)
 {
-	int fd;
-
-	fd = hyper_open_channel(name, 0);
+	int fd = hyper_open_channel(name, 0, is_serial);
 	if (fd < 0)
 		return fd;
+
 	if (hyper_ctl_send_ready(fd) < 0) {
 		close(fd);
 		return -1;
@@ -939,9 +938,9 @@ static int hyper_setup_ctl_channel(char *name)
 	return fd;
 }
 
-static int hyper_setup_tty_channel(char *name)
+static int hyper_setup_tty_channel(char *name, bool is_serial)
 {
-	int ret = hyper_open_channel(name, O_NONBLOCK);
+	int ret = hyper_open_channel(name, O_NONBLOCK, is_serial);
 	if (ret < 0)
 		return -1;
 
@@ -1061,8 +1060,7 @@ static int hyper_ttyfd_read(struct hyper_event *he, int efd, int events)
 {
 	struct hyper_buf *buf = &he->rbuf;
 	uint32_t len;
-	int size;
-	int ret;
+	int size, ret;
 
 	if (buf->get < STREAM_HEADER_SIZE) {
 		size = hyper_channel_read(he, efd, STREAM_HEADER_SIZE - buf->get, events);
@@ -1524,10 +1522,34 @@ static int hyper_setup_init_process(void)
 	return 0;
 }
 
+void read_cmdline(bool *use_serial)
+{
+	char buf[512];
+	int size;
+
+	int fd = open("/proc/cmdline", O_RDONLY| O_CLOEXEC);
+	if (fd < 0) {
+		perror("fail to open /proc/cmdline");
+		return;
+	}
+	size = read(fd, buf, sizeof(buf));
+	if (size < 0) {
+		perror("fail to read /proc/cmdline");
+		goto out;
+	}
+
+	if (strstr(buf, HYPER_USE_SERAIL))
+		*use_serial= true;
+
+out:
+	close(fd);
+	return;
+}
+
 int main(int argc, char *argv[])
 {
-	char *binary_name, *cmdline, *ctl_serial, *tty_serial;
-	bool is_init, has_vsock = false;
+	char *binary_name, *ctl_serial = NULL, *tty_serial = NULL;
+	bool is_init, has_vsock = false, is_serial = false;
 
 	binary_name = basename(argv[0]);
 	is_init = strncmp(binary_name, "init", 5) == 0;
@@ -1536,11 +1558,11 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	cmdline = read_cmdline();
-
+	read_cmdline(&is_serial);
 #ifdef WITH_VBOX
 	ctl_serial = "/dev/ttyS0";
 	tty_serial = "/dev/ttyS1";
+	is_serial = true;
 
 	if (hyper_insmod("/vboxguest.ko") < 0 ||
 	    hyper_insmod("/vboxsf.ko") < 0) {
@@ -1548,8 +1570,14 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 #else
-	ctl_serial = "sh.hyper.channel.0";
-	tty_serial = "sh.hyper.channel.1";
+	if (is_serial) {
+		ctl_serial = "/dev/ttyS1";
+		tty_serial = "/dev/ttyS2";
+	} else {
+		ctl_serial = strdup("sh.hyper.channel.0");
+		tty_serial = strdup("sh.hyper.channel.1");
+	}
+
 	if (probe_vsock_device() <= 0) {
 		fprintf(stderr, "cannot find vsock device\n");
 	} else if (hyper_cmd("modprobe vmw_vsock_virtio_transport") < 0) {
@@ -1558,20 +1586,19 @@ int main(int argc, char *argv[])
 		has_vsock = true;
 	}
 #endif
-
 	if (has_vsock) {
 		if (hyper_setup_vsock_channel() < 0) {
 			fprintf(stderr, "fail to setup hyper vsock listener\n");
 			goto out;
 		}
 	} else {
-		hyper_epoll.ctl.fd = hyper_setup_ctl_channel(ctl_serial);
+		hyper_epoll.ctl.fd = hyper_setup_ctl_channel(ctl_serial, is_serial);
 		if (hyper_epoll.ctl.fd < 0) {
 			fprintf(stderr, "fail to setup hyper control serial port\n");
 			goto out;
 		}
 
-		hyper_epoll.tty.fd = hyper_setup_tty_channel(tty_serial);
+		hyper_epoll.tty.fd = hyper_setup_tty_channel(tty_serial, is_serial);
 		if (hyper_epoll.tty.fd < 0) {
 			fprintf(stderr, "fail to setup hyper tty serial port\n");
 			goto out;
@@ -1589,7 +1616,6 @@ out:
 		close(hyper_epoll.tty.fd);
 	if (hyper_epoll.ctl.fd > 0)
 		close(hyper_epoll.ctl.fd);
-	free(cmdline);
 
 	return 0;
 }
