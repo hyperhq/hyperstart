@@ -423,6 +423,64 @@ static int hyper_set_interface_attr(struct rtnl_handle *rth,
 	return 0;
 }
 
+static int hyper_set_interface_ipaddrs(struct rtnl_handle *rth,
+				int ifindex,
+				struct list_head* ipaddresses){
+	uint8_t data[4];
+	unsigned mask;
+	struct {
+		struct nlmsghdr n;
+		struct ifaddrmsg ifa;
+		char buf[256];
+	} req;
+	struct hyper_ipaddress *ip;
+
+	memset(&req, 0, sizeof(req));
+	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifaddrmsg));
+	req.ifa.ifa_family = AF_INET;
+	req.ifa.ifa_index = ifindex;
+	req.ifa.ifa_scope = 0;
+
+	list_for_each_entry(ip, ipaddresses, list) {
+		if (ip->addr[0]=='\0'){
+			continue;
+		} else if (ip->addr[0]=='-') {
+			//start with '-' means delete an existing address
+			req.n.nlmsg_flags = NLM_F_REQUEST;
+			req.n.nlmsg_type = RTM_DELADDR;;
+			if (get_addr_ipv4((uint8_t *)&data, &ip->addr[1]) <= 0) {
+				fprintf(stderr, "get addr failed\n");
+				return -1;
+			}
+		} else{
+			req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
+			req.n.nlmsg_type = RTM_NEWADDR;
+			if (get_addr_ipv4((uint8_t *)&data, ip->addr) <= 0) {
+				fprintf(stderr, "get addr failed\n");
+				return -1;
+			}
+		}
+
+		if (addattr_l(&req.n, sizeof(req), IFA_LOCAL, &data, 4)) {
+			fprintf(stderr, "setup attr failed\n");
+			return -1;
+		}
+
+		if (get_netmask(&mask, ip->mask) < 0) {
+			fprintf(stderr, "get netamsk failed\n");
+			return -1;
+		}
+
+		req.ifa.ifa_prefixlen = mask;
+		fprintf(stdout, "interface get netamsk %d %s\n", req.ifa.ifa_prefixlen, ip->mask);
+		if (rtnl_talk(rth, &req.n, 0, 0, NULL) < 0) {
+			perror("rtnl_talk failed");
+			return -1;
+		}
+	}
+	return 0;
+}
+
 static int hyper_set_interface_name(struct rtnl_handle *rth,
 				int ifindex,
 				char *new_device_name)
@@ -452,26 +510,11 @@ static int hyper_setup_interface(struct rtnl_handle *rth,
 			         struct hyper_interface *iface,
 				 struct hyper_pod *pod)
 {
-	uint8_t data[4];
-	unsigned mask;
-	struct {
-		struct nlmsghdr n;
-		struct ifaddrmsg ifa;
-		char buf[256];
-	} req;
 	int ifindex;
-	struct hyper_ipaddress *ip;
-
-	if (!iface->device || list_empty(&iface->ipaddresses)) {
-		fprintf(stderr, "interface information incorrect\n");
+	if (!iface->device) {
+		fprintf(stderr, "device name can't be empty\n");
 		return -1;
 	}
-
-	memset(&req, 0, sizeof(req));
-	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifaddrmsg));
-	req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
-	req.n.nlmsg_type = RTM_NEWADDR;
-	req.ifa.ifa_family = AF_INET;
 
 	ifindex = hyper_get_ifindex(iface->device, pod);
 	if (ifindex < 0) {
@@ -479,29 +522,10 @@ static int hyper_setup_interface(struct rtnl_handle *rth,
 		return -1;
 	}
 
-	req.ifa.ifa_index = ifindex;
-	req.ifa.ifa_scope = 0;
-
-	list_for_each_entry(ip, &iface->ipaddresses, list) {
-		if (get_addr_ipv4((uint8_t *)&data, ip->addr) <= 0) {
-			fprintf(stderr, "get addr failed\n");
-			return -1;
-		}
-
-		if (addattr_l(&req.n, sizeof(req), IFA_LOCAL, &data, 4)) {
-			fprintf(stderr, "setup attr failed\n");
-			return -1;
-		}
-
-		if (get_netmask(&mask, ip->mask) < 0) {
-			fprintf(stderr, "get netamsk failed\n");
-			return -1;
-		}
-
-		req.ifa.ifa_prefixlen = mask;
-		fprintf(stdout, "interface get netamsk %d %s\n", req.ifa.ifa_prefixlen, ip->mask);
-		if (rtnl_talk(rth, &req.n, 0, 0, NULL) < 0) {
-			perror("rtnl_talk failed");
+	if (!list_empty(&iface->ipaddresses)) {
+		if (hyper_set_interface_ipaddrs(rth, ifindex, &iface->ipaddresses) < 0) {
+			fprintf(stderr, "set ip addresses failed for interface %s\n", 
+					iface->device);
 			return -1;
 		}
 	}
@@ -603,7 +627,6 @@ int hyper_cmd_setup_interface(char *json, int length, struct hyper_pod *pod)
 	if (netlink_open(&rth) < 0)
 		return -1;
 
-
 	iface = hyper_parse_setup_interface(json, length);
 	if (iface == NULL) {
 		fprintf(stderr, "parse interface failed\n");
@@ -657,6 +680,7 @@ static int hyper_remove_nic(char *device)
 	close(fd);
 	return 0;
 }
+
 int hyper_cmd_delete_interface(char *json, int length)
 {
 	int ret = -1;
