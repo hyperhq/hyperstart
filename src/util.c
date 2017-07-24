@@ -19,16 +19,12 @@
 #include <grp.h>
 #include <pwd.h>
 #include <libgen.h>
+#include <termios.h>
 
 #include "util.h"
 #include "hyper.h"
 #include "container.h"
 #include "../config.h"
-
-char *read_cmdline(void)
-{
-	return NULL;
-}
 
 int hyper_setup_env(struct env *envs, int num, bool setPATH)
 {
@@ -554,10 +550,7 @@ void online_memory(void)
 	closedir(dir);
 }
 
-#if WITH_VBOX
-
-#include <termios.h>
-int hyper_open_channel(char *channel, int mode)
+static int hyper_open_serial(char *channel, int mode)
 {
 	struct termios term;
 	int fd = open(channel, O_RDWR | O_CLOEXEC | mode);
@@ -647,8 +640,8 @@ err:
 	ret = -1;
 	goto out;
 }
-#else
-int hyper_open_channel(char *channel, int mode)
+
+static int hyper_open_virtio_port(char *channel, int mode)
 {
 	struct dirent **list;
 	struct dirent *dir;
@@ -707,11 +700,13 @@ int hyper_open_channel(char *channel, int mode)
 	return fd;
 }
 
-int hyper_insmod(char *module)
+int hyper_open_channel(char *channel, int mode, bool is_serial)
 {
-	return 0;
+	if (is_serial)
+		return hyper_open_serial(channel, mode);
+
+	return hyper_open_virtio_port(channel, mode);
 }
-#endif
 
 int hyper_setfd_cloexec(int fd)
 {
