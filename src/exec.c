@@ -206,13 +206,13 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 		fprintf(stdout, "try to find the user: %s\n", user);
 		struct passwd *pwd = hyper_getpwnam(user);
 		if (pwd == NULL) {
-			perror("can't find the user");
 			unsigned long id;
-			if (!hyper_name_to_id(user, &id))
+			if (!hyper_name_to_id(user, &id)) {
+				perror("can't find the user");
 				return -1;
+			}
 			uid = id;
-			gid = 0;
-			goto setup;
+			goto get_gid;
 		}
 		uid = pwd->pw_uid;
 		gid = pwd->pw_gid;
@@ -251,15 +251,21 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 		}
 	}
 
+get_gid:
 	// get gid
 	if (group) {
 		fprintf(stdout, "try to find the group: %s\n", group);
 		struct group *gr = hyper_getgrnam(group);
 		if (gr == NULL) {
-			perror("can't find the group");
-			goto fail;
+			unsigned long id;
+			if (!hyper_name_to_id(group, &id)) {
+				perror("can't find the group");
+				goto fail;
+			}
+			gid = id;
+		} else {
+			gid = gr->gr_gid;
 		}
-		gid = gr->gr_gid;
 	}
 
 	// append additional groups to supplementary groups
@@ -284,7 +290,6 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 		ngroups++;
 	}
 
-setup:
 	// setup the owner of tty
 	if (exec->tty) {
 		char ptmx[512];
