@@ -304,15 +304,15 @@ get_gid:
 	}
 
 	// apply
-	if (groups && setgroups(ngroups, groups) < 0) {
+	if (ngroups > 0 && setgroups(ngroups, groups) < 0) {
 		perror("setgroups() fails");
 		goto fail;
 	}
-	if (setgid(gid) < 0) {
+	if (gid > 0 && setgid(gid) < 0) {
 		perror("setgid() fails");
 		goto fail;
 	}
-	if (setuid(uid) < 0) {
+	if (uid > 0 && setuid(uid) < 0) {
 		perror("setuid() fails");
 		goto fail;
 	}
