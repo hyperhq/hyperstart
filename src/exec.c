@@ -192,7 +192,7 @@ struct hyper_event_ops err_ops = {
 
 static int hyper_setup_exec_user(struct hyper_exec *exec)
 {
-	char *user = exec->user == NULL || strlen(exec->user) == 0 ? NULL : exec->user;
+	char *user = exec->user == NULL || strlen(exec->user) == 0 ? "0" : exec->user;
 	char *group = exec->group == NULL || strlen(exec->group) == 0 ? NULL : exec->group;
 
 	uid_t uid = 0;
@@ -200,24 +200,10 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 	int ngroups = 0;
 	gid_t *reallocgroups, *groups = NULL;
 
-	// check the config
-	if (!user && !group && exec->nr_additional_groups == 0) {
-		return 0;
-	}
-
 	// get uid
-	if (user) {
-		fprintf(stdout, "try to find the user: %s\n", user);
-		struct passwd *pwd = hyper_getpwnam(user);
-		if (pwd == NULL) {
-			unsigned long id;
-			if (!hyper_name_to_id(user, &id)) {
-				perror("can't find the user");
-				return -1;
-			}
-			uid = id;
-			goto get_gid;
-		}
+	fprintf(stdout, "try to find the user(or uid): %s\n", user);
+	struct passwd *pwd = hyper_getpwnam(user);
+	if (pwd != NULL) {
 		uid = pwd->pw_uid;
 		gid = pwd->pw_gid;
 		fprintf(stdout, "found the user: %s, uid:%d, gid:%d\n", user, uid, gid);
@@ -244,21 +230,14 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 		setenv("USER", pwd->pw_name, 1);
 		setenv("HOME", pwd->pw_dir, 1);
 	} else {
-		ngroups = getgroups(0, NULL);
-		if (ngroups < 0) {
-			goto fail;
+		unsigned long id;
+		if (!hyper_name_to_id(user, &id)) {
+			perror("can't find the user");
+			return -1;
 		}
-		groups = malloc(sizeof(gid_t) * ngroups);
-		if (groups == NULL) {
-			goto fail;
-		}
-		ngroups = getgroups(ngroups, groups);
-		if (ngroups < 0) {
-			goto fail;
-		}
+		uid = id;
 	}
 
-get_gid:
 	// get gid
 	if (group) {
 		fprintf(stdout, "try to find the group: %s\n", group);
