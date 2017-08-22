@@ -278,9 +278,15 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 
 	// setup the owner of tty
 	if (exec->tty) {
+		gid_t tty_gid = gid;
 		char ptmx[512];
 		sprintf(ptmx, "/dev/pts/%d", exec->ptyno);
-		if (chown(ptmx, uid, gid) < 0) {
+
+		struct group *gr = hyper_getgrnam("tty");
+		if (gr != NULL) {
+			tty_gid = gr->gr_gid;
+		}
+		if (chown(ptmx, uid, tty_gid) < 0) {
 			perror("failed to change the owner for the slave pty file");
 			goto fail;
 		}
