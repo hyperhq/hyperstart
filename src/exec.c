@@ -216,9 +216,11 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 		}
 		uid = pwd->pw_uid;
 		gid = pwd->pw_gid;
+		fprintf(stdout, "found the user: %s, uid:%d, gid:%d\n", user, uid, gid);
 
 		// get groups of user
-		groups = malloc(sizeof(gid_t) * 10);
+		ngroups = 10;
+		groups = malloc(sizeof(gid_t) * ngroups);
 		if (groups == NULL) {
 			goto fail;
 		}
@@ -232,6 +234,7 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 				goto fail;
 			}
 		}
+		fprintf(stdout, "get %d groups from /etc/group\n", ngroups);
 
 		// set user related envs. the container env config can overwrite it
 		setenv("USER", pwd->pw_name, 1);
