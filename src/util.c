@@ -209,7 +209,8 @@ int hyper_getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroup
 		int j;
 		for (j = 0; gr->gr_mem && gr->gr_mem[j]; j++) {
 			if (!strcmp(gr->gr_mem[j], user)) {
-				if (nr + 1 < *ngroups)
+				fprintf(stdout, "hyper_getgrouplist() found matched group for user %s, grname: %s, gid: %d\n", user, gr->gr_name, gr->gr_gid);
+				if (nr < *ngroups)
 					groups[nr] = gr->gr_gid;
 				nr++;
 			}
@@ -217,7 +218,8 @@ int hyper_getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroup
 	}
 	fclose(file);
 	if (nr == 0) {
-		if (nr + 1 < *ngroups)
+		fprintf(stdout, "hyper_getgrouplist() adds the default group to list, gid:%d\n", group);
+		if (nr < *ngroups)
 			groups[nr] = group;
 		nr++;
 	}
