@@ -403,6 +403,30 @@ out:
 	return ret;
 }
 
+/*
+ * All containers in the pod share the same ipc namespace. However,
+ * posix ipc primitives are shm_open() family whose behaviors
+ * implemented in glibc are to create&share the shm objects within
+ * /dev/shm (or scans /proceed/mounts for any tmpfs if /dev/shm
+ * is not tmpfs).
+ * So we have to create the only one tmpfs mount and share it
+ * to all the containers.
+ */
+static int hyper_setup_shm(struct hyper_pod *pod)
+{
+	if (hyper_mkdir("/tmp/hyper/shm", 0755) < 0) {
+		perror("create shared shm directory failed");
+		return -1;
+	}
+
+	if (mount("tmpfs", "/tmp/hyper/shm", "tmpfs", MS_NOSUID| MS_NODEV, NULL) < 0) {
+		perror("mount shm failed");
+		return -1;
+	}
+
+	return 0;
+}
+
 #ifdef WITH_VBOX
 
 #define MAX_HOST_NAME  256
@@ -532,6 +556,11 @@ static int hyper_setup_pod(struct hyper_pod *pod)
 
 	if (hyper_setup_portmapping(pod) < 0) {
 		fprintf(stderr, "setup port mapping failed\n");
+		return -1;
+	}
+
+	if (hyper_setup_shm(pod) < 0) {
+		fprintf(stderr, "setup shared shm failed\n");
 		return -1;
 	}
 
