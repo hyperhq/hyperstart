@@ -1521,6 +1521,16 @@ static int hyper_setup_init_process(void)
 		return -1;
 	}
 
+	if (hyper_mkdir("/dev/shm", 0755) < 0) {
+		fprintf(stderr, "create basic directory /dev/shm failed\n");
+		return -1;
+	}
+
+	if (mount("tmpfs", "/dev/shm/", "tmpfs", MS_NOSUID| MS_NODEV, NULL) < 0) {
+		perror("mount shm failed");
+		return -1;
+	}
+
 	if (hyper_mkdir("/dev/pts", 0755) < 0) {
 		perror("create basic directory failed");
 		return -1;
