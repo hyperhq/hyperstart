@@ -307,8 +307,8 @@ static int container_setup_mount(struct hyper_container *container)
 		return -1;
 	}
 
-	if (mount("tmpfs", "./dev/shm/", "tmpfs", MS_NOSUID| MS_NODEV, NULL) < 0) {
-		perror("mount shm failed");
+	if (mount("/tmp/hyper/shm", "./dev/shm/", "tmpfs", MS_BIND, NULL) < 0) {
+		perror("bind mount shared shm failed");
 		return -1;
 	}
 
