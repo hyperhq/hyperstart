@@ -7,6 +7,7 @@
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
+#include <sys/mount.h>
 #include <sys/socket.h>
 #include <sys/eventfd.h>
 #include <dirent.h>
@@ -514,6 +515,20 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, int pid_efd, int process_i
 	if (chdir("/") < 0) {
 		perror("fail to change to the root of the rootfs");
 		goto out;
+	}
+
+	// from runtime-spec:
+	//   [`/dev/console`][console.4] is set up if terminal is enabled
+	//   in the config by bind mounting the pseudoterminal slave
+	//   to /dev/console.
+	if (exec->init && exec->tty) {
+		char ptyslave[32];
+
+		sprintf(ptyslave, "/dev/pts/%d", exec->ptyno);
+		if (mount(ptyslave, "/dev/console", NULL, MS_BIND, NULL) < 0) {
+			perror("fail to bind mount /dev/console");
+			goto out;
+		}
 	}
 
 	// Make sure we start with a clean environment
