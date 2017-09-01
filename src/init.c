@@ -229,6 +229,7 @@ static int hyper_pod_init(void *data)
 	close(hyper_epoll.efd);
 	close(hyper_epoll.ctl.fd);
 	close(hyper_epoll.tty.fd);
+	close(hyper_epoll.dev.fd);
 
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGCHLD);
