@@ -44,7 +44,7 @@ int hyper_setup_netlink_listener(struct hyper_event *e)
 	memset(&sa, 0, sizeof(sa));
 	sa.nl_family = AF_NETLINK;
 	sa.nl_groups = 0xffffffff;
-	fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_KOBJECT_UEVENT);
+	fd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_KOBJECT_UEVENT);
 	if (fd < 0) {
 		perror("failed to create netlink socket");
 		return -1;
