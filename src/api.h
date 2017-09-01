@@ -68,4 +68,5 @@ enum {
  * use serial as channel passed through kernel cmdline
  */
 #define HYPER_USE_SERAIL	"hyper_use_serial"
+#define HYPER_P9_USE_XEN	"hyper_p9_xen"
 #endif /* _HYPERSTART_API_H_ */

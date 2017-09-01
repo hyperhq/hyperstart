@@ -552,7 +552,7 @@ void online_memory(void)
 	closedir(dir);
 }
 
-static int hyper_open_serial(char *channel, int mode)
+int hyper_open_channel(char *channel, int mode, bool is_serial)
 {
 	struct termios term;
 	int fd = open(channel, O_RDWR | O_CLOEXEC | mode);
@@ -562,18 +562,19 @@ static int hyper_open_serial(char *channel, int mode)
 	}
 
 	fprintf(stdout, "open %s get %d\n", channel, fd);
-	bzero(&term, sizeof(term));
+	if (is_serial) {
+		bzero(&term, sizeof(term));
 
-	cfmakeraw(&term);
-	term.c_cflag |= CLOCAL | CREAD| CRTSCTS;
-	term.c_cc[VTIME] = 0;
-	term.c_cc[VMIN] = 0;
+		cfmakeraw(&term);
+		term.c_cflag |= CLOCAL | CREAD| CRTSCTS;
+		term.c_cc[VTIME] = 0;
+		term.c_cc[VMIN] = 0;
 
-	cfsetispeed(&term, B115200);
-	cfsetospeed(&term, B115200);
+		cfsetispeed(&term, B115200);
+		cfsetospeed(&term, B115200);
 
-	tcsetattr(fd, TCSANOW, &term);
-
+		tcsetattr(fd, TCSANOW, &term);
+	}
 	return fd;
 }
 
@@ -643,7 +644,7 @@ err:
 	goto out;
 }
 
-static int hyper_open_virtio_port(char *channel, int mode)
+char* hyper_find_virtio_port(char *channel)
 {
 	struct dirent **list;
 	struct dirent *dir;
@@ -653,7 +654,7 @@ static int hyper_open_virtio_port(char *channel, int mode)
 	num = scandir("/sys/class/virtio-ports/", &list, NULL, NULL);
 	if (num < 0) {
 		perror("scan /sys/class/virtio-ports/ failed");
-		return -1;
+		return NULL;
 	}
 
 	memset(path, 0, sizeof(path));
@@ -677,9 +678,7 @@ static int hyper_open_virtio_port(char *channel, int mode)
 			close(fd);
 			continue;
 		}
-
 		close(fd);
-		fd = -1;
 
 		if (strncmp(name, channel, strlen(channel))) {
 			continue;
@@ -690,24 +689,13 @@ static int hyper_open_virtio_port(char *channel, int mode)
 			continue;
 		}
 
-		fprintf(stdout, "open hyper channel %s\n", path);
-		fd = open(path, O_RDWR | O_CLOEXEC | mode);
-		if (fd < 0)
-			perror("fail to open channel device");
-
-		break;
+		fprintf(stdout, "find hyper channel %s\n", path);
+		free(list);
+		return strdup(path);
 	}
 
 	free(list);
-	return fd;
-}
-
-int hyper_open_channel(char *channel, int mode, bool is_serial)
-{
-	if (is_serial)
-		return hyper_open_serial(channel, mode);
-
-	return hyper_open_virtio_port(channel, mode);
+	return NULL;
 }
 
 int hyper_setfd_cloexec(int fd)
