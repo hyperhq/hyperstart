@@ -649,7 +649,7 @@ char* hyper_find_virtio_port(char *channel)
 	struct dirent **list;
 	struct dirent *dir;
 	int fd = -1, i, num;
-	char path[256], name[128];
+	char path[256], name[128], *ret = NULL;
 
 	num = scandir("/sys/class/virtio-ports/", &list, NULL, NULL);
 	if (num < 0) {
@@ -690,12 +690,13 @@ char* hyper_find_virtio_port(char *channel)
 		}
 
 		fprintf(stdout, "find hyper channel %s\n", path);
-		free(list);
-		return strdup(path);
+		ret = strdup(path);
 	}
 
+	for (i = 0; i < num; i++)
+		free(list[i]);
 	free(list);
-	return NULL;
+	return ret;
 }
 
 int hyper_setfd_cloexec(int fd)
