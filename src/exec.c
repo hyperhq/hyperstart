@@ -90,7 +90,7 @@ static void stdout_hup(struct hyper_event *de, int efd)
 static void stderr_hup(struct hyper_event *de, int efd)
 {
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, stderrev);
-	fprintf(stdout, "%s, seq %" PRIu64", id %s\n", __func__, exec->seq, exec->id);
+	fprintf(stdout, "%s, seq %" PRIu64", id %s\n", __func__, exec->errseq, exec->id);
 	return pts_hup(de, efd, exec);
 }
 
@@ -181,7 +181,7 @@ static int stderr_loop(struct hyper_event *de, int efd, int events)
 	struct hyper_exec *exec = container_of(de, struct hyper_exec, stderrev);
 	fprintf(stdout, "%s, seq %" PRIu64"\n", __func__, exec->errseq);
 
-	return pts_loop(de, exec->errseq ? exec->errseq : exec->seq, efd, exec);
+	return pts_loop(de, exec->errseq, efd, exec);
 }
 
 struct hyper_event_ops err_ops = {
@@ -455,10 +455,6 @@ static int hyper_setup_stdio_events(struct hyper_exec *exec, struct stdio_config
 		hyper_setfd_cloexec(io->stdinevfd);
 		io->stdoutevfd = dup(exec->ptyfd);
 		hyper_setfd_cloexec(io->stdoutevfd);
-		if (exec->errseq == 0) {
-			io->stderrevfd = dup(exec->ptyfd);
-			hyper_setfd_cloexec(io->stderrevfd);
-		}
 	}
 
 	fprintf(stdout, "hyper_init_event exec stdin event %p, ops %p, fd %d\n",
@@ -480,6 +476,10 @@ static int hyper_setup_stdio_events(struct hyper_exec *exec, struct stdio_config
 		return -1;
 	}
 	exec->ref++;
+
+	if (exec->errseq == 0) {
+		return 0;
+	}
 
 	fprintf(stdout, "hyper_init_event exec stderr event %p, ops %p, fd %d\n",
 		&exec->stderrev, &err_ops, io->stderrevfd);
