@@ -35,6 +35,7 @@ int hyper_mkdir(char *path, mode_t mode);
 int hyper_mkdir_at(const char *root, char *path, int size);
 int hyper_write_file(const char *path, const char *value, size_t len);
 int hyper_open_channel(char *channel, int mode, bool is_serail);
+char* hyper_find_virtio_port(char *channel);
 int hyper_setfd_cloexec(int fd);
 int hyper_setfd_block(int fd);
 int hyper_setfd_nonblock(int fd);
