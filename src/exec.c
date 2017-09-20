@@ -193,7 +193,7 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 
 	uid_t uid = 0;
 	gid_t gid = 0;
-	int ngroups;
+	int ngroups = 0;
 	gid_t *reallocgroups, *groups = NULL;
 
 	// check the config
@@ -257,7 +257,7 @@ static int hyper_setup_exec_user(struct hyper_exec *exec)
 		struct group *gr = hyper_getgrnam(group);
 		if (gr == NULL) {
 			perror("can't find the group");
-			return -1;
+			goto fail;
 		}
 		gid = gr->gr_gid;
 	}
