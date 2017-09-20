@@ -95,7 +95,8 @@ static int container_check_file_volume(char *hyper_path, const char **filename)
 	return 0;
 }
 
-static int container_setup_volume(struct hyper_container *container)
+static int container_setup_volume(struct hyper_pod *pod,
+				  struct hyper_container *container)
 {
 	int i;
 	char dev[512], path[512];
@@ -134,6 +135,12 @@ static int container_setup_volume(struct hyper_container *container)
 
 			if (!strcmp(vol->fstype, "xfs"))
 				options = "nouuid";
+
+			if (access(dev, R_OK) < 0) {
+				char device[512];
+				sprintf(device, "/block/%s", vol->device);
+				hyper_netlink_wait_dev(pod->ueventfd, device);
+			}
 
 			if (mount(dev, path, vol->fstype, 0, options) < 0) {
 				perror("mount volume device failed");
@@ -648,7 +655,7 @@ static int hyper_setup_container_rootfs(void *data)
 	// ignore error of setup modules
 	container_setup_modules(container);
 
-	if (container_setup_volume(container) < 0) {
+	if (container_setup_volume(arg->pod, container) < 0) {
 		fprintf(stderr, "container sets up voulme failed\n");
 		goto fail;
 	}
