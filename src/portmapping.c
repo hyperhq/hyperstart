@@ -166,14 +166,21 @@ int hyper_setup_portmapping(struct hyper_pod *pod)
 
 int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_pod *pod)
 {
+	// only allow network request from internal white list
+	int i = 0, j = 0;
+	char rule[128] = {0};
+	char iptables_restore[512];
+
+	// restore iptables rules
+	if (sprintf(iptables_restore, "iptables-restore /tmp/hyper/shared/%s-iptables", c->id) > 0) {
+		hyper_cmd(iptables_restore);
+	}
+
 	if (pod->portmap_white_lists == NULL || (pod->portmap_white_lists->i_num == 0 &&
 			pod->portmap_white_lists->e_num == 0)) {
 		return 0;
 	}
 
-	// only allow network request from internal white list
-	int i = 0, j = 0;
-	char rule[128] = {0};
 	for (j=0; j<pod->portmap_white_lists->i_num; j++) {
 		sprintf(rule, "-s %s -j ACCEPT",
 			pod->portmap_white_lists->internal_networks[j]);
