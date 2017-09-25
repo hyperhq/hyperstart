@@ -188,98 +188,121 @@ struct hyper_event_ops err_ops = {
 
 static int hyper_setup_exec_user(struct hyper_exec *exec)
 {
-	char *user = exec->user == NULL || strlen(exec->user) == 0 ? NULL : exec->user;
+	char *user = exec->user == NULL || strlen(exec->user) == 0 ? "0" : exec->user;
 	char *group = exec->group == NULL || strlen(exec->group) == 0 ? NULL : exec->group;
 
-	// check the config
-	if (!user) {
-		if (group || exec->nr_additional_groups > 0) {
-			fprintf(stderr, "group or additional groups can only be set when user is set\n");
-			return -1;
-		}
-		return 0;
-	}
+	uid_t uid = 0;
+	gid_t gid = 0;
+	int ngroups = 0;
+	gid_t *reallocgroups, *groups = NULL;
 
 	// get uid
-	fprintf(stdout, "try to find the user: %s\n", user);
+	fprintf(stdout, "try to find the user(or uid): %s\n", user);
 	struct passwd *pwd = hyper_getpwnam(user);
-	if (pwd == NULL) {
-		perror("can't find the user");
-		return -1;
+	if (pwd != NULL) {
+		uid = pwd->pw_uid;
+		gid = pwd->pw_gid;
+		fprintf(stdout, "found the user: %s, uid:%d, gid:%d\n", user, uid, gid);
+
+		// get groups of user
+		ngroups = 10;
+		groups = malloc(sizeof(gid_t) * ngroups);
+		if (groups == NULL) {
+			goto fail;
+		}
+		if (hyper_getgrouplist(pwd->pw_name, gid, groups, &ngroups) < 0) {
+			reallocgroups = realloc(groups, sizeof(gid_t) * ngroups);
+			if (reallocgroups == NULL) {
+				goto fail;
+			}
+			groups = reallocgroups;
+			if (hyper_getgrouplist(pwd->pw_name, gid, groups, &ngroups) < 0) {
+				goto fail;
+			}
+		}
+		fprintf(stdout, "get %d groups from /etc/group\n", ngroups);
+
+		// set user related envs. the container env config can overwrite it
+		setenv("USER", pwd->pw_name, 1);
+		setenv("HOME", pwd->pw_dir, 1);
+	} else {
+		unsigned long id;
+		if (!hyper_name_to_id(user, &id)) {
+			perror("can't find the user");
+			return -1;
+		}
+		uid = id;
 	}
-	uid_t uid = pwd->pw_uid;
 
 	// get gid
-	gid_t gid = pwd->pw_gid;
 	if (group) {
 		fprintf(stdout, "try to find the group: %s\n", group);
 		struct group *gr = hyper_getgrnam(group);
 		if (gr == NULL) {
-			perror("can't find the group");
-			return -1;
+			unsigned long id;
+			if (!hyper_name_to_id(group, &id)) {
+				perror("can't find the group");
+				goto fail;
+			}
+			gid = id;
+		} else {
+			gid = gr->gr_gid;
 		}
-		gid = gr->gr_gid;
 	}
 
-	// get all gids
-	int i, ngroups = 10;
-	gid_t *reallocgroups, *groups = malloc(sizeof(gid_t) * ngroups);
-	if (groups == NULL)
-		goto fail;
-	if (hyper_getgrouplist(pwd->pw_name, gid, groups, &ngroups) < 0) {
-		reallocgroups = realloc(groups, sizeof(gid_t) * ngroups);
-		if (reallocgroups == NULL)
-			goto fail;
-		groups = reallocgroups;
-		if (hyper_getgrouplist(pwd->pw_name, gid, groups, &ngroups) < 0)
-			goto fail;
-	}
+	// append additional groups to supplementary groups
+	int i;
 	reallocgroups = realloc(groups, sizeof(gid_t) * (ngroups + exec->nr_additional_groups));
 	if (reallocgroups == NULL)
 		goto fail;
 	groups = reallocgroups;
 	for (i = 0; i < exec->nr_additional_groups; i++) {
+		unsigned long id;
 		fprintf(stdout, "try to find the group: %s\n", exec->additional_groups[i]);
-		struct group *gr = hyper_getgrnam(exec->additional_groups[i]);
-		if (gr == NULL) {
-			perror("can't find the group");
-			goto fail;
+		if (hyper_name_to_id(exec->additional_groups[i], &id)) {
+			groups[ngroups] = id;
+		} else {
+			struct group *gr = hyper_getgrnam(exec->additional_groups[i]);
+			if (gr == NULL) {
+				perror("can't find the group");
+				goto fail;
+			}
+			groups[ngroups] = gr->gr_gid;
 		}
-		groups[ngroups] = gr->gr_gid;
 		ngroups++;
 	}
 
 	// setup the owner of tty
 	if (exec->tty) {
+		gid_t tty_gid = gid;
 		char ptmx[512];
 		sprintf(ptmx, "/dev/pts/%d", exec->ptyno);
-		if (chown(ptmx, uid, gid) < 0) {
+
+		struct group *gr = hyper_getgrnam("tty");
+		if (gr != NULL) {
+			tty_gid = gr->gr_gid;
+		}
+		if (chown(ptmx, uid, tty_gid) < 0) {
 			perror("failed to change the owner for the slave pty file");
 			goto fail;
 		}
 	}
 
 	// apply
-	if (setgroups(ngroups, groups) < 0) {
+	if (ngroups > 0 && setgroups(ngroups, groups) < 0) {
 		perror("setgroups() fails");
 		goto fail;
 	}
-	if (setgid(gid) < 0) {
+	if (gid > 0 && setgid(gid) < 0) {
 		perror("setgid() fails");
 		goto fail;
 	}
-	if (setuid(uid) < 0) {
+	if (uid > 0 && setuid(uid) < 0) {
 		perror("setuid() fails");
 		goto fail;
 	}
 	free(groups);
-
-	// set user related envs. the container env config can overwrite it
-	setenv("USER", pwd->pw_name, 1);
-	setenv("HOME", pwd->pw_dir, 1);
-
 	return 0;
-
 fail:
 	free(groups);
 	return -1;
