@@ -52,4 +52,5 @@ int hyper_setup_dns(struct hyper_pod *pod);
 int hyper_setup_hostname(struct hyper_pod *pod);
 int hyper_send_data_block(int fd, uint8_t *data, uint32_t len);
 int hyper_send_data(int fd, uint8_t *data, uint32_t len);
+int hyper_cmd_delete_interface(char *json, int length);
 #endif
