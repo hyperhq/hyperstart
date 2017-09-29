@@ -16,11 +16,3 @@ If you want to run hyperstart with 64-bit ARM architecture, please reconfigure w
 
     > ./configure --with-aarch64
     > make
-
-If you want to get the boot disk file for VirtualBox, please reconfigure with flag --with-vbox,
-
-    > ./configure --with-vbox
-    > make
-
-Then you can find `hyper-vbox-bootimage.iso` in the build directory. Booting from this iso will
-bring you to the hyper world.

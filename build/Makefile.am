@@ -4,17 +4,12 @@ if WITH_KMODULES
 export INCLUDE_KMODULES=1
 endif
 
-if WITH_VBOX
-initrd-local:
-	bash ./make-initrd.sh vbox
-else
 if WITH_AARCH64
 initrd-local:
 	bash ./make-initrd.sh aarch64
 else
 initrd-local:
 	bash ./make-initrd.sh
-endif
 endif
 
 cbfs-local:
