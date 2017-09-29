@@ -431,66 +431,6 @@ static int hyper_setup_shm(struct hyper_pod *pod)
 static bool is_serial = false;
 static bool is_xen = false;
 
-#ifdef WITH_VBOX
-
-#define MAX_HOST_NAME  256
-#define MAX_NLS_NAME    32
-
-#define VBSF_MOUNT_SIGNATURE_BYTE_0 '\377'
-#define VBSF_MOUNT_SIGNATURE_BYTE_1 '\376'
-#define VBSF_MOUNT_SIGNATURE_BYTE_2 '\375'
-
-struct vbsf_mount_info_new
-{
-	char nullchar;			/* name cannot be '\0' -- we use this field
-					 to distinguish between the old structure
-					 and the new structure */
-	char signature[3];		/* signature */
-	int  length;			/* length of the whole structure */
-	char name[MAX_HOST_NAME];	/* share name */
-	char nls_name[MAX_NLS_NAME];	/* name of an I/O charset */
-	int  uid;			/* user ID for all entries, default 0=root */
-	int  gid;			/* group ID for all entries, default 0=root */
-	int  ttl;			/* time to live */
-	int  dmode;			/* mode for directories if != 0xffffffff */
-	int  fmode;			/* mode for regular files if != 0xffffffff */
-	int  dmask;			/* umask applied to directories */
-	int  fmask;			/* umask applied to regular files */
-};
-
-static int hyper_setup_shared(struct hyper_pod *pod)
-{
-	struct vbsf_mount_info_new mntinf;
-
-	if (pod->share_tag == NULL) {
-		fprintf(stdout, "no shared directory\n");
-		return 0;
-	}
-
-	if (hyper_mkdir(SHARED_DIR, 0755) < 0) {
-		perror("fail to create " SHARED_DIR);
-		return -1;
-	}
-
-	bzero(&mntinf, sizeof(mntinf));
-	mntinf.nullchar = '\0';
-	mntinf.signature[0]	= VBSF_MOUNT_SIGNATURE_BYTE_0;
-	mntinf.signature[1]	= VBSF_MOUNT_SIGNATURE_BYTE_1;
-	mntinf.signature[2]	= VBSF_MOUNT_SIGNATURE_BYTE_2;
-	mntinf.length		= sizeof(mntinf);
-	mntinf.dmode		= ~0U;
-	mntinf.fmode		= ~0U;
-	strcpy(mntinf.name, pod->share_tag);
-
-	if (mount(NULL, SHARED_DIR, "vboxsf",
-		  MS_NODEV, &mntinf) < 0) {
-		perror("fail to mount shared dir");
-		return -1;
-	}
-
-	return 0;
-}
-#else
 static int hyper_setup_shared(struct hyper_pod *pod)
 {
 	int ret;
@@ -517,7 +457,6 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 
 	return 0;
 }
-#endif
 
 static int hyper_setup_virtual_hyperstart_exec_container(struct hyper_pod *pod)
 {
@@ -1006,17 +945,6 @@ static int hyper_setup_normal_channel(void)
 {
 	char *ctl_serial = NULL, *tty_serial = NULL;
 
-#ifdef WITH_VBOX
-	ctl_serial = strdup("/dev/ttyS0");
-	tty_serial = strdup("/dev/ttyS1");
-	is_serial = true;
-
-	if (hyper_insmod("/vboxguest.ko") < 0 ||
-	    hyper_insmod("/vboxsf.ko") < 0) {
-		fprintf(stderr, "fail to load modules\n");
-		return -1;
-	}
-#else
 	if (is_serial) {
 		ctl_serial = strdup("/dev/ttyS1");
 		tty_serial = strdup("/dev/ttyS2");
@@ -1036,7 +964,7 @@ static int hyper_setup_normal_channel(void)
 			goto out;
 		}
 	}
-#endif
+
 	fprintf(stdout, "ctl: %s, tty: %s\n", ctl_serial, tty_serial);
 	hyper_epoll.ctl.fd = hyper_setup_ctl_channel(ctl_serial);
 	if (hyper_epoll.ctl.fd < 0) {
