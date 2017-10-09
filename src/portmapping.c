@@ -167,6 +167,11 @@ int hyper_setup_portmapping(struct hyper_pod *pod)
 int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_pod *pod)
 {
 	// only allow network request from internal white list
+
+	//disabling it for now
+	return 0;
+
+
 	int i = 0, j = 0;
 	char rule[128] = {0};
 	char iptables_restore[512];

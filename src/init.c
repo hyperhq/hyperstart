@@ -508,7 +508,8 @@ static int hyper_setup_shared(struct hyper_pod *pod)
 	if (is_xen)
 		ret = mount(pod->share_tag, SHARED_DIR, "9p", MS_NODEV, "trans=xen");
 	else
-		ret = mount(pod->share_tag, SHARED_DIR, "9p", MS_MGC_VAL| MS_NODEV, "trans=virtio");
+		//ret = mount(pod->share_tag, SHARED_DIR, "9p", MS_MGC_VAL| MS_NODEV, "trans=virtio");
+	    ret = 0;
 
 	if (ret < 0) {
 		perror("fail to mount shared dir");
@@ -791,6 +792,7 @@ static int hyper_open_container_file(void *data)
 {
 	struct hyper_file_arg *arg = data;
 	int fd = -1, ret = -1, size;
+
 
 	if (setns(arg->mntns, CLONE_NEWNS) < 0) {
 		perror("fail to enter container ns");

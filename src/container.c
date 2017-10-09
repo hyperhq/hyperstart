@@ -579,6 +579,7 @@ static int hyper_setup_container_rootfs(void *data)
 		goto fail;
 	}
 
+	sprintf(rootfs, "%s/%s/", root, container->rootfs);
 	if (container->fstype) {
 		char dev[128];
 		char *options = NULL;
@@ -614,10 +615,17 @@ static int hyper_setup_container_rootfs(void *data)
 		sprintf(path, "%s/%s/", SHARED_DIR, container->image);
 		fprintf(stdout, "src directory %s\n", path);
 
-		if (mount(path, root, NULL, MS_BIND, NULL) < 0) {
+		hyper_mkdir(rootfs, 0755);
+		if (mount("/dev/sda", rootfs, "ext4", MS_MGC_VAL| MS_NODEV, "") < 0) {
 			perror("mount src dir failed");
 			goto fail;
 		}
+
+//		if (mount(path, root, NULL, MS_BIND, NULL) < 0) {
+//			perror("mount src dir failed");
+//			goto fail;
+//		}
+
 		if (container->readonly && mount(NULL, root, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY, NULL) < 0) {
 			perror("mount src dir readonly failed");
 			goto fail;
@@ -627,7 +635,8 @@ static int hyper_setup_container_rootfs(void *data)
 	fprintf(stdout, "root directory for container is %s/%s, init task %s\n",
 		root, container->rootfs, container->exec.argv[0]);
 
-	sprintf(rootfs, "%s/%s/", root, container->rootfs);
+//	sprintf(rootfs, "%s/%s/", root, container->rootfs);
+
 	if (mount(rootfs, rootfs, NULL, MS_BIND|MS_REC, NULL) < 0) {
 		perror("failed to bind rootfs");
 		goto fail;
