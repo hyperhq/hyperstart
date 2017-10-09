@@ -51,17 +51,6 @@ fi
 
 AM_CONDITIONAL([WITH_AARCH64], [test "x$with_aarch64" != "xno"])
 
-AC_ARG_WITH([vbox],
-            [AS_HELP_STRING([--with-vbox],
-                            [run hyperstart on Virtualbox])],
-            [],[with_vbox=no])
-
-if test "x$with_vbox" != "xno" ; then
-    AC_DEFINE_UNQUOTED([WITH_VBOX], 1, [run hyperstart on Virtualbox])
-fi
-
-AM_CONDITIONAL([WITH_VBOX], [test "x$with_vbox" != "xno"])
-
 AC_ARG_WITH([systemdsystemunitdir],
             AS_HELP_STRING([--with-systemdsystemunitdir=SYSTEMD_SYSTEM_UNIT_DIR],
                            [path to install systemd system service]),
@@ -100,7 +89,6 @@ AC_MSG_RESULT([
 	${PACKAGE}  ${VERSION}
 	prefix:		${prefix}
 
-	with-vbox:	${with_vbox}
 	with-aarch64:	${with_aarch64}
 	with-kmodules:  ${with_kmodules}
 

@@ -60,9 +60,6 @@ int hyper_send_data(int fd, uint8_t *data, uint32_t len)
 			perror("send hyper data failed");
 			return -1;
 		}
-#if WITH_VBOX
-		tcdrain(fd);
-#endif
 		length += size;
 	}
 
