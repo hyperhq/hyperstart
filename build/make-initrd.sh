@@ -24,13 +24,7 @@ cp $ARCHPATH/binary/socat /tmp/hyperstart-rootfs/sbin/
 cp $ARCHPATH/binary/mount.nfs /tmp/hyperstart-rootfs/sbin/mount.nfs4
 
 if [ "$INCLUDE_KMODULES"x == "1"x ]; then
-	if [ "$1"x = "aarch64"x ]; then
-		echo "build hyperstart for aarch64"
-		tar -xf modules_aarch64.tar -C \
-			/tmp/hyperstart-rootfs/lib/modules
-	else
-		tar -xf modules.tar -C /tmp/hyperstart-rootfs/lib/modules
-	fi
+	tar -xf $ARCHPATH/modules.tar -C /tmp/hyperstart-rootfs/lib/modules
 fi
 
 # create symlinks to busybox and iptables
@@ -77,7 +71,7 @@ if [ "$1"x = "cbfs"x ]; then
 	mkdir .cbfs
 	dd if=/dev/zero of=.cbfs/boot.bin bs=4096 count=1
 	cbfstool .cbfs/cbfs.rom create -s 8128k -B .cbfs/boot.bin -m x86  0x1000
-	cbfstool .cbfs/cbfs.rom add -f kernel -n vmlinuz -t raw
+	cbfstool .cbfs/cbfs.rom add -f $ARCHPATH/kernel -n vmlinuz -t raw
 	cbfstool .cbfs/cbfs.rom add -f hyper-initrd.img -n initrd -t raw
 	echo 'console=ttyS0 panic=1 no_timer_check' > .cbfs/cmdline
 	cbfstool .cbfs/cbfs.rom add -f .cbfs/cmdline -n cmdline -t raw
