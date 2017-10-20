@@ -1,18 +1,15 @@
+AUTOMAKE_OPTIONS = -Wno-portability
+SHELL=/bin/bash
+ARCHPATH=arch/$(shell uname -m)
+
 all-local: initrd
 
 if WITH_KMODULES
 export INCLUDE_KMODULES=1
 endif
 
-if WITH_AARCH64
-ARCHPATH=arch/aarch64
-initrd-local:
-	bash ./make-initrd.sh aarch64
-else
-ARCHPATH=arch/x86_64
 initrd-local:
 	bash ./make-initrd.sh
-endif
 
 cbfs-local:
 	bash ./make-initrd.sh cbfs

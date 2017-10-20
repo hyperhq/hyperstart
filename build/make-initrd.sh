@@ -12,11 +12,8 @@ mkdir -m 0755 -p /tmp/hyperstart-rootfs/dev \
 	  /tmp/hyperstart-rootfs/proc
 
 cp ../src/hyperstart /tmp/hyperstart-rootfs/init
-if [ "$1"x == "aarch64"x ]; then
-	ARCHPATH="arch/aarch64"
-else
-	ARCHPATH="arch/x86_64"
-fi
+
+ARCHPATH=arch/$(uname -m)
 cp $ARCHPATH/binary/busybox /tmp/hyperstart-rootfs/sbin/
 cp $ARCHPATH/binary/iptables /tmp/hyperstart-rootfs/sbin/
 cp $ARCHPATH/binary/ipvsadm /tmp/hyperstart-rootfs/sbin/
