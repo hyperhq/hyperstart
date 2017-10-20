@@ -12,11 +12,16 @@ mkdir -m 0755 -p /tmp/hyperstart-rootfs/dev \
 	  /tmp/hyperstart-rootfs/proc
 
 cp ../src/hyperstart /tmp/hyperstart-rootfs/init
-cp busybox /tmp/hyperstart-rootfs/sbin/
-cp iptables /tmp/hyperstart-rootfs/sbin/
-cp ipvsadm /tmp/hyperstart-rootfs/sbin/
-cp socat /tmp/hyperstart-rootfs/sbin/
-cp mount.nfs /tmp/hyperstart-rootfs/sbin/mount.nfs4
+if [ "$1"x == "aarch64"x ]; then
+	ARCHPATH="arch/aarch64"
+else
+	ARCHPATH="arch/x86_64"
+fi
+cp $ARCHPATH/binary/busybox /tmp/hyperstart-rootfs/sbin/
+cp $ARCHPATH/binary/iptables /tmp/hyperstart-rootfs/sbin/
+cp $ARCHPATH/binary/ipvsadm /tmp/hyperstart-rootfs/sbin/
+cp $ARCHPATH/binary/socat /tmp/hyperstart-rootfs/sbin/
+cp $ARCHPATH/binary/mount.nfs /tmp/hyperstart-rootfs/sbin/mount.nfs4
 
 if [ "$INCLUDE_KMODULES"x == "1"x ]; then
 	if [ "$1"x = "aarch64"x ]; then
