@@ -302,7 +302,7 @@ static int hyper_setup_route(struct rtnl_handle *rth,
 		char buf[1024];
 	} req;
 
-	if (!rt->dst) {
+	if (!rt || !rt->dst) {
 		fprintf(stderr, "route dest is null\n");
 		return -1;
 	}
