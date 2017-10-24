@@ -168,9 +168,13 @@ int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_po
 {
 	// only allow network request from internal white list
 
-	//disabling it for now
-	return 0;
-
+	//Disabling it for now for no 9p case.
+	//TODO - iptables file is generated after VM is booted,
+	//so this needs to be addressed later by rearranging the way
+	//iptables file is generated.
+	if (pod->share_tag == NULL) {
+	    return 0;
+	}
 
 	int i = 0, j = 0;
 	char rule[128] = {0};
