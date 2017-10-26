@@ -9,7 +9,7 @@ set -o pipefail
 
 export HYPER_RUNTIME=/var/lib/hyper
 sudo mkdir -p ${HYPER_RUNTIME}
-sudo cp build/kernel ${HYPER_RUNTIME}/kernel
+sudo cp build/arch/x86_64/kernel ${HYPER_RUNTIME}/kernel
 sudo cp build/hyper-initrd.img ${HYPER_RUNTIME}/hyper-initrd.img
 
 mkdir -p ${GOPATH}/src/github.com/hyperhq
