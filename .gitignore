@@ -15,9 +15,10 @@ build/hyper-initrd.img
 data/hyperstart.service
 build/cbfs.rom
 build/root/*
-build/*iso
 build/daemon
-build/kernel_config.old
+build/Dockerfile
+build/arch/aarch64/kernel_config.old
+build/arch/x86_64/kernel_config.old
 build/.*
 src/.*
 Makefile
