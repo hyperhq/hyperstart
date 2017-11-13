@@ -1023,6 +1023,12 @@ int hyper_parse_setup_routes(struct hyper_route **routes, uint32_t *r_num, char 
 	jsmntok_t *toks = NULL;
 	int found = 0;
 
+	/*
+	 * If we could not find routes from JSON, we have to set r_num to 0,
+	 * this will avid returning a random number for r_num.
+	 */
+	*r_num = 0;
+
 realloc:
 	toks = realloc(toks, toks_num * sizeof(jsmntok_t));
 	if (toks == NULL) {
