@@ -1560,6 +1560,18 @@ static int hyper_setup_init_process(void)
 
 	setenv("PATH", "/bin:/sbin/:/usr/bin/:/usr/sbin/", 1);
 
+	// On ppc64le arch RTAS daemon needs to start for 
+	// NIC hot plugging to work 
+#ifdef _ARCH_PPC64
+        if(!fork()) {
+           if (hyper_cmd("/usr/sbin/rtas_errd -d") < 0)  {
+		perror("rtas start failed");
+		return -1;
+	   }
+           return 0;
+        }
+#endif
+
 	return 0;
 }
 

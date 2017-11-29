@@ -20,7 +20,17 @@ cp $ARCHPATH/binary/ipvsadm /tmp/hyperstart-rootfs/sbin/
 cp $ARCHPATH/binary/socat /tmp/hyperstart-rootfs/sbin/
 cp $ARCHPATH/binary/mount.nfs /tmp/hyperstart-rootfs/sbin/mount.nfs4
 
-if [ "$INCLUDE_KMODULES"x == "1"x ]; then
+# on ppc64le the RTAS binaries are required for NIC hot plugging
+if [ -e $ARCHPATH/binary/rtas.tar ]; then
+       tar -xf $ARCHPATH/binary/rtas.tar -C /tmp/hyperstart-rootfs/
+       mkdir -p /tmp/hyperstart-rootfs/var/lock
+       mkdir -p /tmp/hyperstart-rootfs/var/log
+       touch  /tmp/hyperstart-rootfs/var/log/messages
+       touch  /tmp/hyperstart-rootfs/var/log/platform
+fi
+
+
+if [ "$INCLUDE_KMODULES"x == "1"x ] && [ -e $ARCHPATH/modules.tar ]; then
 	tar -xf $ARCHPATH/modules.tar -C /tmp/hyperstart-rootfs/lib/modules
 fi
 
