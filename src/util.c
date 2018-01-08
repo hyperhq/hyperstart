@@ -26,6 +26,8 @@
 #include "container.h"
 #include "../config.h"
 
+#define INVALID_UGID (~0UL)
+
 int hyper_setup_env(struct env *envs, int num, bool setPATH)
 {
 	int i, ret = 0;
@@ -152,17 +154,22 @@ bool hyper_name_to_id(const char *name, unsigned long *val)
 // the same as getpwnam(), but it only parses /etc/passwd and allows name to be id string
 struct passwd *hyper_getpwnam(const char *name)
 {
-	uid_t uid = (uid_t)id_or_max(name);
-	FILE *file = fopen("/etc/passwd", "r");
+	uid_t uid;
+	FILE *file;
+	struct passwd *pwd;
+
+	uid = (uid_t)id_or_max(name);
+	file = fopen("/etc/passwd", "r");
 	if (!file) {
 		perror("faile to open /etc/passwd");
 		return NULL;
 	}
 	for (;;) {
-		struct passwd *pwd = fgetpwent(file);
+		pwd = fgetpwent(file);
 		if (!pwd)
 			break;
-		if (!strcmp(pwd->pw_name, name) || pwd->pw_uid == uid) {
+		if (pwd->pw_uid == uid ||
+		  (!strcmp(pwd->pw_name, name) && (uid_t)INVALID_UGID == uid)) {
 			fclose(file);
 			return pwd;
 		}
@@ -174,17 +181,22 @@ struct passwd *hyper_getpwnam(const char *name)
 // the same as getgrnam(), but it only parses /etc/group and allows the name to be id string
 struct group *hyper_getgrnam(const char *name)
 {
-	gid_t gid = (gid_t)id_or_max(name);
-	FILE *file = fopen("/etc/group", "r");
+	gid_t gid;
+	FILE *file;
+	struct group *gr = NULL;
+
+	gid = (gid_t)id_or_max(name);
+	file = fopen("/etc/group", "r");
 	if (!file) {
 		perror("faile to open /etc/group");
 		return NULL;
 	}
 	for (;;) {
-		struct group *gr = fgetgrent(file);
+		gr = fgetgrent(file);
 		if (!gr)
 			break;
-		if (!strcmp(gr->gr_name, name) || gr->gr_gid == gid) {
+		if (gr->gr_gid == gid ||
+		  (!strcmp(gr->gr_name, name) &&  (gid_t)INVALID_UGID == gid)) {
 			fclose(file);
 			return gr;
 		}
