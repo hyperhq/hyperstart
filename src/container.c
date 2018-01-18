@@ -264,12 +264,19 @@ static int container_setup_modules(struct hyper_container *container)
 	if (stat(dst, &st) == 0) {
 		struct dirent **list;
 		int num;
+		int i;
 
 		if (!S_ISDIR(st.st_mode)) {
 			return -1;
 		}
 
 		num = scandir(dst, &list, NULL, NULL);
+		if (num > 1) {
+			for (i = 0; i < num; i++) {
+				free(list[i]);
+			}
+			free(list);
+		}
 		if (num > 2) {
 			fprintf(stdout, "%s is not null, %d", dst, num);
 			return 0;
@@ -530,8 +537,11 @@ static int hyper_rescan_scsi(void)
 	}
 
 	fprintf(stdout, "finish scan scsi\n");
-	return 0;
+	for (i = 0; i < num; i++) {
+		free(list[i]);
+	}
 	free(list);
+	return 0;
 }
 
 struct hyper_container_arg {
