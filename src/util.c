@@ -735,7 +735,14 @@ ssize_t nonblock_read(int fd, void *buf, size_t count)
 int hyper_mount_nfs(char *server, char *mountpoint)
 {
 	char cmd[512];
+	int retry = 3;
 	snprintf(cmd, sizeof(cmd), "mount.nfs4 -n %s %s", server, mountpoint);
 
-	return hyper_cmd(cmd);
+	/* retry on failures, network glitches etc. */
+	while (retry-- > 0) {
+		if (hyper_cmd(cmd) >= 0)
+			return 0;
+	}
+
+	return -1;
 }
