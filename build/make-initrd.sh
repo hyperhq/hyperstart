@@ -49,6 +49,10 @@ do
 done
 
 LDD_BINARIES=(/init /sbin/ipvsadm /sbin/iptables)
+if [ -e $ARCHPATH/binary/rtas.tar ]; then
+  LDD_BINARIES=(/usr/sbin/rtas_errd)
+fi
+
 for bin in ${LDD_BINARIES[@]}
 do
     ldd /tmp/hyperstart-rootfs/${bin} | while read line
