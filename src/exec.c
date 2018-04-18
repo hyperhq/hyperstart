@@ -535,7 +535,7 @@ static int hyper_do_exec_cmd(struct hyper_exec *exec, int pid_efd, int process_i
 	clearenv();
 
 	// set early env. the container env config can overwrite it
-	setenv("HOME", "/root", 1);
+	setenv("HOME", "/", 1);
 	setenv("HOSTNAME", exec->pod->hostname, 1);
 	if (exec->tty)
 		setenv("TERM", "xterm", 1);
