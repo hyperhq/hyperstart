@@ -22,6 +22,8 @@
 #include "syscall.h"
 #include "netlink.h"
 
+#define MAX_PBUF 512
+
 static int container_populate_volume(char *src, char *dest)
 {
 	struct stat st;
@@ -99,12 +101,12 @@ static int container_setup_volume(struct hyper_pod *pod,
 				  struct hyper_container *container)
 {
 	int i;
-	char dev[512], path[512];
+	char dev[MAX_PBUF], path[MAX_PBUF];
 	struct volume *vol;
 
 	for (i = 0; i < container->vols_num; i++) {
-		char volume[512];
-		char mountpoint[512];
+		char volume[MAX_PBUF];
+		char mountpoint[MAX_PBUF];
 		char *options = NULL;
 		const char *filevolume = NULL;
 		vol = &container->vols[i];
@@ -128,7 +130,8 @@ static int container_setup_volume(struct hyper_pod *pod,
 			if (hyper_mount_nfs(vol->device, path) < 0)
 				return -1;
 			/* nfs export has implicitly included _data part of the volume */
-			sprintf(volume, "/%s/", path);
+			if (snprintf(volume, MAX_PBUF, "/%s/", path) >= MAX_PBUF)
+                                return -1;
 		} else {
 			fprintf(stdout, "mount %s to %s, tmp path %s\n",
 				dev, vol->mountpoint, path);
@@ -137,7 +140,7 @@ static int container_setup_volume(struct hyper_pod *pod,
 				options = "nouuid";
 
 			if (access(dev, R_OK) < 0) {
-				char device[512];
+				char device[MAX_PBUF];
 				sprintf(device, "/block/%s", vol->device);
 				hyper_netlink_wait_dev(pod->ueventfd, device);
 			}
@@ -146,7 +149,8 @@ static int container_setup_volume(struct hyper_pod *pod,
 				perror("mount volume device failed");
 				return -1;
 			}
-			sprintf(volume, "/%s/_data", path);
+			if (snprintf(volume, MAX_PBUF, "/%s/_data", path) >= MAX_PBUF)
+                                return -1;
 		}
 
 		if (container_check_file_volume(volume, &filevolume) < 0)
@@ -173,7 +177,8 @@ static int container_setup_volume(struct hyper_pod *pod,
 				perror("create volume file failed");
 				return -1;
 			}
-			sprintf(volume, "/%s/_data/%s", path, filevolume);
+			if (snprintf(volume, MAX_PBUF, "/%s/_data/%s", path, filevolume) >= MAX_PBUF)
+                                return -1;
 			/* 0777 so that any user can read/write the new file volume */
 			if (chmod(volume, 0777) < 0) {
 				fprintf(stderr, "fail to chmod directory %s\n", volume);
@@ -197,9 +202,9 @@ static int container_setup_volume(struct hyper_pod *pod,
 
 	for (i = 0; i < container->maps_num; i++) {
 		struct stat st;
-		char *src, path[512], volume[512];
+		char *src, path[MAX_PBUF], volume[MAX_PBUF];
 		struct fsmap *map = &container->maps[i];
-		char mountpoint[512];
+		char mountpoint[MAX_PBUF];
 
 		sprintf(path, "%s/%s", SHARED_DIR, map->source);
 		sprintf(mountpoint, "./%s", map->path);
@@ -215,7 +220,8 @@ static int container_setup_volume(struct hyper_pod *pod,
 			}
 			if (map->docker) {
 				/* converted from volume */
-				sprintf(volume, "%s/_data", path);
+				if (snprintf(volume, MAX_PBUF, "%s/_data", path) >= MAX_PBUF)
+                                        return -1;
 				src = volume;
 				if (container->initialize &&
 				    (container_populate_volume(mountpoint, volume) < 0)) {
@@ -251,7 +257,7 @@ static int container_setup_modules(struct hyper_container *container)
 {
 	struct stat st;
 	struct utsname uts;
-	char src[512], dst[512];
+	char src[MAX_PBUF], dst[MAX_PBUF];
 
 	if (uname(&uts) < 0) {
 		perror("fail to call uname");
@@ -259,7 +265,8 @@ static int container_setup_modules(struct hyper_container *container)
 	}
 
 	sprintf(src, "/lib/modules/%s", uts.release);
-	sprintf(dst, "./%s", src);
+	if (snprintf(dst, MAX_PBUF, "./%s", src) >= MAX_PBUF)
+        return -1;
 
 	if (stat(dst, &st) == 0) {
 		struct dirent **list;
@@ -298,7 +305,7 @@ static int container_setup_modules(struct hyper_container *container)
 
 static int container_setup_mount(struct hyper_container *container)
 {
-	char src[512];
+	char src[MAX_PBUF];
 
 	// current dir is container rootfs, the operations on "./PATH" are the operations on container's "/PATH"
 	if (!container->readonly) {
@@ -556,7 +563,7 @@ static int hyper_setup_container_rootfs(void *data)
 {
 	struct hyper_container_arg *arg = data;
 	struct hyper_container *container = arg->c;
-	char root[512], rootfs[512];
+	char root[MAX_PBUF], rootfs[MAX_PBUF];
 	int setup_dns;
 
 	/* wait for ns-opened ready message */
@@ -619,7 +626,7 @@ static int hyper_setup_container_rootfs(void *data)
 			goto fail;
 		}
 	} else {
-		char path[512];
+		char path[MAX_PBUF];
 
 		sprintf(path, "%s/%s/", SHARED_DIR, container->image);
 		fprintf(stdout, "src directory %s\n", path);
@@ -637,7 +644,9 @@ static int hyper_setup_container_rootfs(void *data)
 	fprintf(stdout, "root directory for container is %s/%s, init task %s\n",
 		root, container->rootfs, container->exec.argv[0]);
 
-	sprintf(rootfs, "%s/%s/", root, container->rootfs);
+	if (snprintf(rootfs, MAX_PBUF, "%s/%s/", root, container->rootfs) >= MAX_PBUF)
+        goto fail;
+    
 	if (mount(rootfs, rootfs, NULL, MS_BIND|MS_REC, NULL) < 0) {
 		perror("failed to bind rootfs");
 		goto fail;
@@ -720,7 +729,7 @@ fail:
 
 static int hyper_setup_pty(struct hyper_container *c)
 {
-	char root[512];
+	char root[MAX_PBUF];
 
 	sprintf(root, "/tmp/hyper/%s/devpts/", c->id);
 
@@ -740,7 +749,7 @@ static int hyper_setup_pty(struct hyper_container *c)
 
 static void hyper_cleanup_pty(struct hyper_container *c)
 {
-	char path[512];
+	char path[MAX_PBUF];
 
 	sprintf(path, "/tmp/hyper/%s/devpts/", c->id);
 	if (umount(path) < 0)
@@ -749,7 +758,7 @@ static void hyper_cleanup_pty(struct hyper_container *c)
 
 int container_prepare_rootfs_dev(struct hyper_container *container, struct hyper_pod *pod)
 {
-	char dev[512];
+	char dev[MAX_PBUF];
 
 	if (container->fstype == NULL)
 		return 0;
