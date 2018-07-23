@@ -27,18 +27,13 @@ static int container_populate_volume(char *src, char *dest)
 	struct stat st;
 
 	fprintf(stdout, "populate volumes from %s to %s\n", src, dest);
-	/* FIXME: check if has data in volume, (except lost+found) */
 
 	if (stat(dest, &st) == 0) {
 		if (!S_ISDIR(st.st_mode)) {
 			fprintf(stderr, "the _data in volume %s is not directory\n", dest);
 			return -1;
 		}
-
-		return 0;
-	}
-
-	if (errno != ENOENT) {
+	} else if (errno != ENOENT) {
 		perror("access to volume failed\n");
 		return -1;
 	}
@@ -53,7 +48,9 @@ static int container_populate_volume(char *src, char *dest)
 
 const char *INIT_VOLUME_FILENAME = ".hyper_file_volume_data_do_not_create_on_your_own";
 
-static int container_check_file_volume(char *hyper_path, const char **filename)
+const char *LOST_AND_FOUND_DIR = "lost+found";
+
+static int container_check_volume(char *hyper_path, const char **filename, bool *newvolume)
 {
 	struct dirent **list;
 	struct stat stbuf;
@@ -61,15 +58,19 @@ static int container_check_file_volume(char *hyper_path, const char **filename)
 	char path[PATH_MAX];
 
 	*filename = NULL;
+	*newvolume = false;
 	num = scandir(hyper_path, &list, NULL, NULL);
 	if (num < 0) {
-		/* No data in the volume yet, treat as non-file-volume */
+		/* No data in the volume yet, treat as new volume */
 		if (errno == ENOENT) {
-			return 0;
+			*newvolume = true;
+			goto out;
 		}
 		perror("scan path failed");
 		return -1;
-	} else if (num != 3) {
+	} else if (num == 2) {
+		*newvolume = true;
+	} else if (num > 3) {
 		fprintf(stdout, "%s has %d files/dirs\n", hyper_path, num - 2);
 		for (i = 0; i < num; i++) {
 			free(list[i]);
@@ -78,20 +79,36 @@ static int container_check_file_volume(char *hyper_path, const char **filename)
 		return 0;
 	}
 
-	sprintf(path, "%s/%s", hyper_path, INIT_VOLUME_FILENAME);
+	/* num is either 2 or 3 */
 	for (i = 0; i < num; i++) {
-		if (strcmp(list[i]->d_name, ".") != 0 &&
-		    strcmp(list[i]->d_name, "..") != 0 &&
-		    strcmp(list[i]->d_name, INIT_VOLUME_FILENAME) == 0 &&
-		    stat(path, &stbuf) == 0 && S_ISREG(stbuf.st_mode)) {
-			found++;
+		if (strcmp(list[i]->d_name, ".") == 0 ||
+		    strcmp(list[i]->d_name, "..") == 0) {
+			free(list[i]);
+			continue;
+		}
+
+		if (strcmp(list[i]->d_name, INIT_VOLUME_FILENAME) == 0) {
+			sprintf(path, "%s/%s", hyper_path, INIT_VOLUME_FILENAME);
+			if (stat(path, &stbuf) == 0 && S_ISREG(stbuf.st_mode))
+				found++;
+		} else if (strcmp(list[i]->d_name, LOST_AND_FOUND_DIR) == 0) {
+			sprintf(path, "%s/%s", hyper_path, LOST_AND_FOUND_DIR);
+			if (stat(path, &stbuf) == 0 && S_ISDIR(stbuf.st_mode) &&
+			    hyper_empty_dir(path)) {
+				*newvolume = true;
+			}
 		}
 		free(list[i]);
 	}
 	free(list);
 
-	fprintf(stdout, "%s %s a file volume\n", hyper_path, found > 0?"is":"is not");
-	*filename = found > 0 ? INIT_VOLUME_FILENAME : NULL;
+out:
+	if (found > 0) {
+		*filename = INIT_VOLUME_FILENAME;
+		fprintf(stdout, "%s is a file volume\n", hyper_path);
+	} else if (*newvolume) {
+		fprintf(stdout, "%s is a new volume\n", hyper_path);
+	}
 	return 0;
 }
 
@@ -107,6 +124,7 @@ static int container_setup_volume(struct hyper_pod *pod,
 		char mountpoint[512];
 		char *options = NULL;
 		const char *filevolume = NULL;
+		bool newvolume = false;
 		vol = &container->vols[i];
 
 		if (vol->scsiaddr)
@@ -149,7 +167,7 @@ static int container_setup_volume(struct hyper_pod *pod,
 			sprintf(volume, "/%s/_data", path);
 		}
 
-		if (container_check_file_volume(volume, &filevolume) < 0)
+		if (container_check_volume(volume, &filevolume, &newvolume) < 0)
 			return -1;
 
 		if (filevolume == NULL) {
@@ -157,8 +175,10 @@ static int container_setup_volume(struct hyper_pod *pod,
 				perror("create map dir failed");
 				return -1;
 			}
+			fprintf(stdout, "docker vol %d initialize %d newvolume %d\n",
+					vol->docker, container->initialize, newvolume);
 			if (vol->docker) {
-				if (container->initialize &&
+				if (container->initialize && newvolume &&
 				    (container_populate_volume(mountpoint, volume) < 0)) {
 					fprintf(stderr, "fail to populate volume %s\n", mountpoint);
 					return -1;
