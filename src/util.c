@@ -746,3 +746,23 @@ int hyper_mount_nfs(char *server, char *mountpoint)
 
 	return -1;
 }
+
+bool hyper_empty_dir(const char *path)
+{
+	struct dirent **list;
+	int i, num;
+	bool empty = false;
+
+	num = scandir(path, &list, NULL, NULL);
+	if (num == 2) {
+		empty = true;
+	} else if (num < 0) {
+		goto out;
+	}
+	for (i = 0; i < num; i++) {
+		free(list[i]);
+	}
+	free(list);
+out:
+	return empty;
+}
