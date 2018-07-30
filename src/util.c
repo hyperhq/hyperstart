@@ -370,7 +370,7 @@ void online_cpu(void)
 		ret = sscanf(entry->d_name, "cpu%d", &num);
 		if (ret < 1 || num == 0) /* skip none cpu%d and cpu0 */
 			continue;
-		sprintf(path, "/sys/devices/system/cpu/%s/online", entry->d_name);
+		sprintf(path, "/sys/devices/system/cpu/cpu%d/online", num);
 		fd = open(path, O_RDWR);
 		if (fd < 0) {
 			fprintf(stderr, "open %s failed\n", path);
@@ -406,7 +406,7 @@ void online_memory(void)
 		ret = sscanf(entry->d_name, "memory%d", &num);
 		if (ret < 1 || num == 0) /* skip none memory%d and memory0 */
 			continue;
-		sprintf(path, "/sys/devices/system/memory/%s/online", entry->d_name);
+		sprintf(path, "/sys/devices/system/memory/memory%d/online", num);
 		fd = open(path, O_RDWR);
 		if (fd < 0) {
 			fprintf(stderr, "open %s failed\n", path);
