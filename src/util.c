@@ -370,7 +370,7 @@ void online_cpu(void)
 		ret = sscanf(entry->d_name, "cpu%d", &num);
 		if (ret < 1 || num == 0) /* skip none cpu%d and cpu0 */
 			continue;
-		sprintf(path, "/sys/devices/system/cpu/%s/online", entry->d_name);
+		sprintf(path, "/sys/devices/system/cpu/cpu%d/online", num);
 		fd = open(path, O_RDWR);
 		if (fd < 0) {
 			fprintf(stderr, "open %s failed\n", path);
@@ -406,7 +406,7 @@ void online_memory(void)
 		ret = sscanf(entry->d_name, "memory%d", &num);
 		if (ret < 1 || num == 0) /* skip none memory%d and memory0 */
 			continue;
-		sprintf(path, "/sys/devices/system/memory/%s/online", entry->d_name);
+		sprintf(path, "/sys/devices/system/memory/memory%d/online", num);
 		fd = open(path, O_RDWR);
 		if (fd < 0) {
 			fprintf(stderr, "open %s failed\n", path);
@@ -745,4 +745,24 @@ int hyper_mount_nfs(char *server, char *mountpoint)
 	}
 
 	return -1;
+}
+
+bool hyper_empty_dir(const char *path)
+{
+	struct dirent **list;
+	int i, num;
+	bool empty = false;
+
+	num = scandir(path, &list, NULL, NULL);
+	if (num == 2) {
+		empty = true;
+	} else if (num < 0) {
+		goto out;
+	}
+	for (i = 0; i < num; i++) {
+		free(list[i]);
+	}
+	free(list);
+out:
+	return empty;
 }

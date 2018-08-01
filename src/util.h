@@ -44,4 +44,5 @@ struct group *hyper_getgrnam(const char *name);
 int hyper_getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroups);
 ssize_t nonblock_read(int fd, void *buf, size_t count);
 int hyper_mount_nfs(char *server, char *mountpoint);
+bool hyper_empty_dir(const char *path);
 #endif
