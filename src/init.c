@@ -640,10 +640,12 @@ static int hyper_new_container(struct hyper_pod *pod, char *json, int length)
 	return ret;
 }
 
-static int hyper_kill_container(struct hyper_pod *pod, char *json, int length)
+static int hyper_kill_container(struct hyper_pod *pod, char *json, int length, uint8_t **rmsg)
 {
 	struct hyper_container *c;
 	int ret = -1;
+	size_t message_len = 0;
+	const char *emsg = NULL;
 
 	JSON_Value *value = hyper_json_parse(json, length);
 	if (value == NULL) {
@@ -654,13 +656,36 @@ static int hyper_kill_container(struct hyper_pod *pod, char *json, int length)
 	c = hyper_find_container(pod, id);
 	if (c == NULL) {
 		fprintf(stderr, "can not find container whose id is %s\n", id);
+		emsg = "no such container";
 		goto out;
 	}
 
-	kill(c->exec.pid, (int)json_object_get_number(json_object(value), "signal"));
-	ret = 0;
+	ret = kill(c->exec.pid, (int)json_object_get_number(json_object(value), "signal"));
+	if (ret <0) {
+		switch(errno) {
+			case EINVAL:
+				emsg = "invalid signal";
+				break;
+			case EPERM:
+				emsg = "no permission";
+				break;
+			case ESRCH:
+				emsg = "no such process";
+				break;
+			default:
+				emsg = "kill failed";
+				break;
+		}
+	}
 out:
 	json_value_free(value);
+	if (emsg != NULL) {
+		message_len = strlen(emsg) + 1;
+		*rmsg = (uint8_t*)malloc(message_len);
+		if (*rmsg != NULL) {
+			strncpy((char*)*rmsg, emsg, message_len);
+		}
+	}
 	return ret;
 }
 
@@ -1209,7 +1234,10 @@ static int hyper_ctlmsg_handle(struct hyper_event *he, uint32_t len)
 		ret = hyper_new_container(pod, (char *)buf->data + 8, len - 8);
 		break;
 	case KILLCONTAINER:
-		ret = hyper_kill_container(pod, (char *)buf->data + 8, len - 8);
+		ret = hyper_kill_container(pod, (char *)buf->data + 8, len - 8, &data);
+		if (data != NULL) {
+			datalen = strlen((char*)data) + 1;
+		}
 		break;
 	case REMOVECONTAINER:
 		ret = hyper_remove_container(pod, (char *)buf->data + 8, len - 8);
