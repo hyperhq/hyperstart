@@ -48,7 +48,7 @@ do
 	ln -sf /sbin/iptables /tmp/hyperstart-rootfs/${bin}
 done
 
-LDD_BINARIES=(/init /sbin/ipvsadm /sbin/iptables)
+LDD_BINARIES=(/init /sbin/busybox /sbin/ipvsadm /sbin/iptables /sbin/socat /sbin/mount.nfs4)
 if [ -e $ARCHPATH/binary/rtas.tar ]; then
   LDD_BINARIES+=(/usr/sbin/rtas_errd)
 fi
