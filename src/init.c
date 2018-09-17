@@ -553,6 +553,7 @@ static void hyper_flush_channel()
 
 void hyper_pod_destroyed(struct hyper_pod *pod, int failed)
 {
+	hyper_cleanup_portmapping(pod);
 	hyper_cleanup_mounts(pod);
 	hyper_ctl_append_msg(&hyper_epoll.ctl, failed?ERROR:ACK, NULL, 0);
 	// Todo: this doesn't make sure peer receives the data

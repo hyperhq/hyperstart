@@ -258,14 +258,15 @@ int hyper_setup_container_portmapping(struct hyper_container *c, struct hyper_po
 	return 0;
 }
 
-void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper_pod *pod)
+// cleanup pod level portmapping configurations
+void hyper_cleanup_portmapping(struct hyper_pod *pod)
 {
 	if (pod->portmap_white_lists == NULL || (pod->portmap_white_lists->i_num == 0 &&
 			pod->portmap_white_lists->e_num == 0)) {
 		return;
 	}
 
-	int i = 0, j = 0;
+	int j = 0;
 	char rule[128] = {0};
 	for (j=0; j<pod->portmap_white_lists->i_num; j++) {
 		sprintf(rule, "-s %s -j ACCEPT",
@@ -280,7 +281,17 @@ void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper
 			fprintf(stderr, "cleanup accept_rule '%s' failed\n", rule);
 		}
 	}
+}
 
+void hyper_cleanup_container_portmapping(struct hyper_container *c, struct hyper_pod *pod)
+{
+	if (pod->portmap_white_lists == NULL || (pod->portmap_white_lists->i_num == 0 &&
+			pod->portmap_white_lists->e_num == 0)) {
+		return;
+	}
+
+	int i = 0, j = 0;
+	char rule[128] = {0};
 	if (c->ports_num == 0) {
 		return;
 	}
