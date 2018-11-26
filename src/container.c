@@ -146,7 +146,10 @@ static int container_setup_volume(struct hyper_pod *pod,
 			if (hyper_mount_nfs(vol->device, path) < 0)
 				return -1;
 			/* nfs export has implicitly included _data part of the volume */
-			sprintf(volume, "/%s/", path);
+			if (snprintf(volume, 512, "/%s/", path) < strlen("//")) {
+				fprintf(stderr, "something wrong with volume generation\n");
+				return -1;
+			}
 		} else {
 			fprintf(stdout, "mount %s to %s, tmp path %s\n",
 				dev, vol->mountpoint, path);
@@ -164,7 +167,10 @@ static int container_setup_volume(struct hyper_pod *pod,
 				perror("mount volume device failed");
 				return -1;
 			}
-			sprintf(volume, "/%s/_data", path);
+			if (snprintf(volume, 512, "/%s/_data", path) < strlen("/_data")) {
+				fprintf(stderr, "something wrong with volume generation\n");
+				return -1;
+			}
 		}
 
 		if (container_check_volume(volume, &filevolume, &newvolume) < 0)
@@ -193,7 +199,10 @@ static int container_setup_volume(struct hyper_pod *pod,
 				perror("create volume file failed");
 				return -1;
 			}
-			sprintf(volume, "/%s/_data/%s", path, filevolume);
+			if (snprintf(volume, 512, "/%s/_data/%s", path, filevolume) < strlen(path)) {
+				fprintf(stderr, "something wrong with volume generation\n");
+				return -1;
+			}
 			/* 0777 so that any user can read/write the new file volume */
 			if (chmod(volume, 0777) < 0) {
 				fprintf(stderr, "fail to chmod directory %s\n", volume);
@@ -235,7 +244,10 @@ static int container_setup_volume(struct hyper_pod *pod,
 			}
 			if (map->docker) {
 				/* converted from volume */
-				sprintf(volume, "%s/_data", path);
+				if (snprintf(volume, 512, "%s/_data", path) < strlen("/_data")) {
+					fprintf(stderr, "something wrong with volume generation\n");
+					return -1;
+				}
 				src = volume;
 				if (container->initialize &&
 				    (container_populate_volume(mountpoint, volume) < 0)) {
@@ -279,7 +291,10 @@ static int container_setup_modules(struct hyper_container *container)
 	}
 
 	sprintf(src, "/lib/modules/%s", uts.release);
-	sprintf(dst, "./%s", src);
+	if (snprintf(dst, 512, "./%s", src) < 3) {
+		fprintf(stderr, "something wrong with dst generation\n");
+		return -1;
+	}
 
 	if (stat(dst, &st) == 0) {
 		struct dirent **list;
@@ -657,7 +672,10 @@ static int hyper_setup_container_rootfs(void *data)
 	fprintf(stdout, "root directory for container is %s/%s, init task %s\n",
 		root, container->rootfs, container->exec.argv[0]);
 
-	sprintf(rootfs, "%s/%s/", root, container->rootfs);
+	if (snprintf(rootfs, 512, "%s/%s/", root, container->rootfs) < 2) {
+		fprintf(stderr, "something wrong with rootfs generation\n");
+		goto fail;
+	}
 	if (mount(rootfs, rootfs, NULL, MS_BIND|MS_REC, NULL) < 0) {
 		perror("failed to bind rootfs");
 		goto fail;
